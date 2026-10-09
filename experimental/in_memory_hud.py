@@ -41,7 +41,7 @@ class MemoryFrame:
 
 
 def iter_indexed_images(source, *, mode='bursts', span=Fraction(1, 8), workers=4,
-                        prefetch=8, stats=None, reader_factory=IndexedKeyframeReader):
+                        prefetch=8, stats=None, reader_factory=IndexedKeyframeReader,start_index=0):
     """Each worker owns one decoder; at most ``prefetch`` futures retain BGR.
 
     The caller must consume/release frames rather than retain this iterator's
@@ -59,6 +59,7 @@ def iter_indexed_images(source, *, mode='bursts', span=Fraction(1, 8), workers=4
         count=len(reader.keyframes)
         stats.update(keyframes=count, source_index_entries=reader.source_frames,
                      width=reader.width, height=reader.height)
+    if not 0<=start_index<=count: raise ValueError('Invalid starting keyframe index')
     local=threading.local(); readers=[]; lock=threading.Lock()
     def read(index):
         if not hasattr(local,'reader'):
@@ -76,7 +77,7 @@ def iter_indexed_images(source, *, mode='bursts', span=Fraction(1, 8), workers=4
             result.append(MemoryFrame(int(frame.pts),Fraction(frame.time_base),index,slot,reader.body_image(frame)))
         return result,packets,time.perf_counter()-started
     pool=ThreadPoolExecutor(max_workers=workers)
-    pending=deque(); next_index=0; previous=None
+    pending=deque(); next_index=start_index; previous=None
     stats.update(max_pending_keyframes=0, video_packets_submitted=0, decode_worker_seconds=0.,
                  yielded_frames=0, decoder_threads_per_worker=1)
     try:
@@ -148,7 +149,7 @@ def numeric_recognizer(backend=None):
     return ExactTextCache(engine.text_rec)
 
 
-def read_memory_frames(frames, features, recognizer, *, batch_frames=16, stats=None):
+def read_memory_frames(frames, features, recognizer, *, batch_frames=16, stats=None,on_batch=None,cancel=None):
     if not 1<=batch_frames<=64: raise ValueError('Numeric batch must contain 1..64 frames')
     stats=stats if stats is not None else {}
     stats.update(feature_seconds=0.,numeric_seconds=0.,max_prepared_frames=0,max_roi_bytes=0)
@@ -166,6 +167,7 @@ def read_memory_frames(frames, features, recognizer, *, batch_frames=16, stats=N
         started=time.perf_counter(); values,_=recognizer(images)
         stats['numeric_seconds']+=time.perf_counter()-started
         if len(values)!=len(images): raise ValueError('Numeric recognizer returned the wrong number of ROIs')
+        first_new=len(rows)
         for (row,_),positions in zip(prepared,slots):
             for key,index in positions.items():
                 text,confidence=('',0.) if index is None else values[index]
@@ -173,8 +175,10 @@ def read_memory_frames(frames, features, recognizer, *, batch_frames=16, stats=N
                 row[key]=ammo_number(text,confidence) if key=='ammo' else numeric(text,confidence,{'damage':20000,'kills':60}[key],.88)
             rows.append(row)
         prepared.clear()
+        if on_batch: on_batch(rows[first_new:])
     try:
         for frame in frames:
+            if cancel: cancel()
             started=time.perf_counter(); prepared.append(features.prepare(frame))
             stats['feature_seconds']+=time.perf_counter()-started
             stats['max_prepared_frames']=max(stats['max_prepared_frames'],len(prepared))

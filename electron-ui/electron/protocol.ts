@@ -12,7 +12,7 @@ export function safeOptions(value:any,legacy=false){
  const limits:Record<string,[number,number]>={fps:[legacy?.5:1,5],gap:[0,600],pre:[0,120],post:[0,180]};
  if(!legacy&&typeof value.fps==='number'&&value.fps<1)throw new Error('新任务细查频率至少需要1帧/秒');
  for(const [key,[a,b]] of Object.entries(limits))if(typeof value[key]!=='number'||!Number.isFinite(value[key])||value[key]<a||value[key]>b)throw new Error(`${key} 参数超出范围`);
- if(!['smart','complete'].includes(value.scan_mode)||!['cpu','dml'].includes(value.backend)||!['low','balanced','fast'].includes(value.gpu_load))throw new Error('识别选项无效');
+ if(!['smart','complete','indexed'].includes(value.scan_mode)||!['cpu','dml'].includes(value.backend)||!['low','balanced','fast'].includes(value.gpu_load))throw new Error('识别选项无效');
  for(const key of ['verify','delete_source','pipeline'])if(typeof value[key]!=='boolean')throw new Error('开关参数无效');
  return {fps:value.fps,gap:value.gap,pre:value.pre,post:value.post,scan_mode:value.scan_mode,backend:value.backend,gpu_load:value.gpu_load,delete_source:value.scan_mode==='complete'&&value.delete_source,verify:value.verify||value.delete_source,pipeline:value.scan_mode==='complete'&&value.pipeline};
 }

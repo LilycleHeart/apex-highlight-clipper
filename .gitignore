@@ -25,6 +25,8 @@ electron-ui/.playwright*/
 *.mp3
 *.ogg
 *.flac
+!/electron-ui/public/mascots/audio/disappear.wav
+!/electron-ui/public/mascots/audio/restore.wav
 *.zip
 *.local.json
 .env
@@ -53,4 +55,6 @@ electron-ui/.playwright*/
 !/electron-ui/tests/protocol.test.cjs
 !/electron-ui/tests/fluid-geometry.test.cjs
 !/electron-ui/tests/kaomoji-geometry.test.cjs
+!/electron-ui/tests/blanca-state.test.cjs
 /electron-ui/.test-build/
+/desktop/*.pre-*.tsx

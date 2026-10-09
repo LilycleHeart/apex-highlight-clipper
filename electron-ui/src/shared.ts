@@ -1,9 +1,10 @@
 export type Stage = 'idle'|'importing'|'probe'|'coarse'|'bisect'|'fine'|'audit'|'fallback'|'smart'|'sample'|'numeric'|'pipeline'|'cache'|'lifecycle'|'weapons'|'outcomes'|'combat_outcomes'|'export'|'verify'|'stopping'|'stopped'|'completed'|'error'|'unknown';
 export type State = 'empty'|'ready'|'starting'|'running'|'stopping'|'stopped'|'completed'|'completed_with_errors'|'failed';
-export interface Options {scan_mode:'smart'|'complete'; backend:'dml'|'cpu';gpu_load:'low'|'balanced'|'fast';fps:number;gap:number;pre:number;post:number;verify:boolean;delete_source:boolean;pipeline:boolean}
+export interface Options {scan_mode:'smart'|'complete'|'indexed'; backend:'dml'|'cpu';gpu_load:'low'|'balanced'|'fast';fps:number;gap:number;pre:number;post:number;verify:boolean;delete_source:boolean;pipeline:boolean}
 export const defaults:Options={scan_mode:'smart',backend:'dml',gpu_load:'low',fps:2,gap:35,pre:10,post:15,verify:true,delete_source:false,pipeline:false};
 export interface FileItem {id:string;path:string;name:string;bytes?:number;duration?:number;width?:number;height?:number;fps?:number;status:'pending'|'running'|'complete'|'stopped'|'error';error?:string;missing?:boolean}
-export interface ThemePreferences {mode:'system'|'light'|'dark';seed:string|null;reduceMotion:boolean}
+export type MascotStyle='flat'|'sketch';
+export interface ThemePreferences {mode:'system'|'light'|'dark';seed:string|null;reduceMotion:boolean;mascotStyle:MascotStyle;mascotEnabled:boolean}
 export interface SystemTheme {dark:boolean;accent:string;reduceMotion:boolean}
 export interface Clip {path:string;name:string;duration:number;kills:number|null;damage:number|null;weapons:string[];thumbnail?:string;start:number;end:number}
 export interface FilterSummary {kept:number;rejected:number;review:number;rule:string}

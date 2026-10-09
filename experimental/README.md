@@ -1,6 +1,6 @@
 # Indexed-reader prototype
 
-Opt-in research for reducing video decode work. **The production clipper does not use this module yet.** Sparse pairs do not establish that no combat or result notification occurred between them.
+Opt-in research for reducing video decode work. The application's selectable **indexed experimental mode** uses in-memory keyframes for coarse planning, then runs the existing dense local checks, result qualification and export. Default smart mode is unchanged. Sparse pairs alone do not establish that no combat or result notification occurred between them.
 
 Install the optional dependency in a project environment:
 
@@ -34,7 +34,7 @@ Both keyframe paths include in-memory scaling and hashing. All 672 timestamps an
 
 Synthetic-media tests compare keyframes and burst frames to independent sequential decoding. Six real native YUV frames from the first three bursts also matched an independent FFmpeg decode byte for byte. This does not prove whole-video detection equivalence.
 
-Before production adoption, the pipeline still needs bounded in-memory ROI processing, adaptive boundary checks, transient notification coverage, downed/team-continuation validation, and versioned resume support.
+Before replacing dense combat checks with sparse samples, the pipeline still needs reliable adaptive boundary checks, transient notification coverage, and downed/team-continuation validation. The selectable application mode retains those dense checks and uses separate, resumable coarse-HUD blocks.
 
 The separate remux experiment compares MP4 `faststart` enabled/disabled in ABBA order and removes its own generated clips after verification. On a 60-second, 158 MB section of the same source, the four exports took 0.37/0.34/0.81/1.06 seconds; all five tracks' compressed packets and timestamps matched across outputs, and payloads matched the source. Verification is excluded from these timings. This small, cache-uncontrolled test does not establish a consistent bottleneck or justify changing production export settings.
 

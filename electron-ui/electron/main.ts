@@ -14,7 +14,8 @@ function locateProject(){if(process.env.APEX_PROJECT_ROOT)return path.resolve(pr
 const project=locateProject();
 const development=!app.isPackaged||process.argv.includes('--preview');
 let win:BrowserWindow;let worker:ChildProcess|null=null;let launching=false;let stopFile='';let stopRequested=false;let closing=false;let terminal=false;let currentTask='';let currentSource='';let eventChain=Promise.resolve();
-let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false};let options:Options={...defaults};let output=path.join(project,'output');
+let workerExit:Promise<void>=Promise.resolve();let resolveWorkerExit:(()=>void)|null=null;
+let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:true};let options:Options={...defaults};let output=path.join(project,'output');
 const allowedPaths=new Set<string>();const allowedTasks=new Set<string>();const images=new Map<string,string>();const imageKeys=new Map<string,string>();
 const normalized=(p:string)=>path.resolve(p).toLowerCase();
 const within=(child:string,parent:string)=>{const relative=path.relative(parent,child);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
@@ -54,13 +55,13 @@ async function collectResults(p:string):Promise<Result[]>{
 }
 async function metadata(file:FileItem){await new Promise<void>(resolve=>{const executable=path.join(project,'.venv/Scripts/python.exe');const proc=spawn(executable,['app_ui_info.py',file.path],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});let result='';proc.stdout.setEncoding('utf8');proc.stdout.on('data',t=>result+=t);const timeout=setTimeout(()=>proc.kill(),20000);proc.on('error',()=>{clearTimeout(timeout);resolve();});proc.on('close',()=>{clearTimeout(timeout);try{const info=JSON.parse(result.trim());send({type:'metadata',source:file.path,...info} as WorkerEvent);}catch{send({type:'metadata',source:file.path,message:'无法读取录像信息'});}resolve();});});}
 async function imports(paths:unknown):Promise<{files:FileItem[];rejected:string[]}>{if(!Array.isArray(paths)||paths.length>500)throw new Error('录像清单无效');const files:FileItem[]=[];const rejected:string[]=[];const seen=new Set<string>();for(const raw of paths){if(typeof raw!=='string'||!raw)continue;const p=path.resolve(raw);if(seen.has(normalized(p)))continue;seen.add(normalized(p));try{const stat=await fs.stat(p);if(!stat.isFile()||!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error();allowedPaths.add(normalized(p));files.push({id:normalized(p),path:p,name:path.basename(p),bytes:stat.size,status:'pending'});}catch{rejected.push(path.basename(p));}}let next=0;const pump=async()=>{while(next<files.length)await metadata(files[next++]);};void pump();void pump();return{files,rejected};}
-async function start(payload:any,resume=false){if(worker||launching)throw new Error('已有批次正在处理');launching=true;stopRequested=false;terminal=false;
+async function start(payload:any,resume=false){if(worker&&terminal)await workerExit;if(worker||launching)throw new Error('已有批次正在处理');launching=true;stopRequested=false;terminal=false;
  try{let effective=safeOptions(payload.options,resume);let request:any;
   if(resume){if(!allowedTasks.has(normalized(payload.task)))throw new Error('请先选择续接任务');const info=await taskInfo(payload.task);request={resume_task:info.path,backend:effective.backend,gpu_load:effective.gpu_load,pipeline:effective.pipeline};currentTask=info.path;}
   else{if(!Array.isArray(payload.files)||!payload.files.length||payload.files.some((f:unknown)=>typeof f!=='string'||!allowedPaths.has(normalized(f))))throw new Error('请先导入录像');if(typeof payload.output!=='string'||!path.isAbsolute(payload.output))throw new Error('输出目录无效');options=effective;output=payload.output;await save();request={...effective,files:payload.files,output:payload.output};}
   const root=path.join(project,'validation/app-requests');await fs.mkdir(root,{recursive:true});const id=randomUUID();stopFile=path.join(root,id+'.stop');const requestPath=path.join(root,id+'.json');request.stop_file=stopFile;await fs.writeFile(requestPath,JSON.stringify(request),'utf8');if(stopRequested)await fs.writeFile(stopFile,'stop','utf8');
   const python=path.join(project,effective.backend==='dml'?'.gpu-venv/Scripts/python.exe':'.venv/Scripts/python.exe');if(!existsSync(python))throw new Error('未找到选定设备的 Python 环境');
-  const proc=spawn(python,['app_worker.py',requestPath],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1',PYTHONIOENCODING:'utf-8'}});worker=proc;
+  const proc=spawn(python,['app_worker.py',requestPath],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1',PYTHONIOENCODING:'utf-8'}});worker=proc;workerExit=new Promise<void>(resolve=>{resolveWorkerExit=resolve;});
   let stderr='';const lines=new JsonLines(e=>{eventChain=eventChain.then(async()=>{const event=e as unknown as WorkerEvent;
    if(event.type==='run'&&event.task_path){currentTask=event.task_path;await taskInfo(currentTask);}
    if(event.type==='file')currentSource=event.source||'';
@@ -70,7 +71,7 @@ async function start(payload:any,resume=false){if(worker||launching)throw new Er
   }).catch(error=>send({type:'log',message:'界面状态读取：'+error.message}));},line=>send({type:'log',message:'后台非状态输出：'+line}));
   proc.stdout!.on('data',chunk=>lines.push(chunk));proc.stderr!.setEncoding('utf8');proc.stderr!.on('data',chunk=>{stderr=(stderr+chunk).slice(-20000);send({type:'stderr',message:chunk});});
   proc.on('error',error=>{send({type:'fatal',message:'无法启动处理进程：'+error.message});});
-  proc.on('close',code=>{lines.end();eventChain=eventChain.then(()=>{worker=null;launching=false;stopFile='';if(!terminal){send({type:code===75?'stopped':'fatal',message:code===75?'断点已保存':`处理进程退出（${code}）。${stderr.slice(-1200)}`});}send({type:'exit'});if(closing){closing=false;win.close();}});});
+  proc.on('close',code=>{lines.end();eventChain=eventChain.then(()=>{worker=null;launching=false;stopFile='';resolveWorkerExit?.();resolveWorkerExit=null;if(!terminal){send({type:code===75?'stopped':'fatal',message:code===75?'断点已保存':`处理进程退出（${code}）。${stderr.slice(-1200)}`});}send({type:'exit'});if(closing){closing=false;win.close();}});});
  }catch(error){launching=false;throw error;}finally{if(worker)launching=false;}
 }
 async function stop(){stopRequested=true;if(stopFile)await fs.writeFile(stopFile,'stop','utf8');}
@@ -91,7 +92,7 @@ app.whenReady().then(async()=>{
  handle('choose-folder',async()=>{const result=await dialog.showOpenDialog(win,{properties:['openDirectory']});if(result.canceled)return{files:[],rejected:[]};const dir=result.filePaths[0];return imports((await fs.readdir(dir,{withFileTypes:true})).filter(e=>e.isFile()&&videoExtensions.has(path.extname(e.name).toLowerCase())).map(e=>path.join(dir,e.name)));});
  handle('import-files',imports);
  handle('choose-output',async()=>{const result=await dialog.showOpenDialog(win,{properties:['openDirectory','createDirectory'],defaultPath:output});if(result.canceled)return null;output=result.filePaths[0];allowedPaths.add(normalized(output));await save();return output;});
- handle('preferences',async(p:ThemePreferences)=>{if(!['system','light','dark'].includes(p.mode)||p.seed!==null&&!/^#[\da-f]{6}$/i.test(p.seed)||typeof p.reduceMotion!=='boolean')throw new Error('主题选项无效');preferences=p;await save();});
+ handle('preferences',async(p:ThemePreferences)=>{if(!['system','light','dark'].includes(p.mode)||p.seed!==null&&!/^#[\da-f]{6}$/i.test(p.seed)||typeof p.reduceMotion!=='boolean'||!['flat','sketch'].includes(p.mascotStyle)||typeof p.mascotEnabled!=='boolean')throw new Error('外观选项无效');preferences=p;await save();});
  handle('options',async(o:Options,p:string)=>{options=safeOptions(o);if(typeof p==='string'&&path.isAbsolute(p))output=p;await save();});
  handle('start',p=>start(p));handle('stop',stop);handle('resume',p=>start(p,true));handle('last-task',lastTask);
  handle('task',p=>{if(typeof p!=='string'||!allowedTasks.has(normalized(p)))throw new Error('请先选择任务');return taskInfo(p);});

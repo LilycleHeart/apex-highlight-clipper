@@ -265,7 +265,10 @@ def downed_intervals(rows, duration, gap=35, post=15, terminal_tail=2):
     return intervals
 
 
-def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,timestamps=None,resume=False,source_identity=None,frame_limit=None,expected_frames=None,partial=False,session=None,selected_names=None):
+HUD_BATCH_SIZE=16
+
+
+def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,timestamps=None,resume=False,source_identity=None,frame_limit=None,expected_frames=None,partial=False,session=None,selected_names=None,expected_names=None):
     backend=os.environ.get('APEX_OCR_BACKEND','cpu').lower()
     from engine_pool import pooled_engine
     def make_engine():
@@ -279,7 +282,12 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
     if backend!='cpu':
         print(f'OCR 后端: {engine.backend_info["providers"]}',flush=True)
     from ocr_cache import ExactTextCache
-    recognizer=ExactTextCache(engine.text_rec) if optimize else engine.text_rec
+    recognizer_key=(id(engine),optimize,backend,os.environ.get('APEX_GPU_LOAD','fast'))
+    if session is not None and session.get('recognizer_key')==recognizer_key:
+        recognizer=session['recognizer']
+    else:
+        recognizer=ExactTextCache(engine.text_rec) if optimize else engine.text_rec
+        if session is not None: session.update(recognizer_key=recognizer_key,recognizer=recognizer,recognizer_engine=engine)
     rows=[]; tic=time.perf_counter()
     # 名称已由原生 HUD 独立读取；基础 OCR 只保留三个数字区域。
     keys=['ammo','damage','kills']
@@ -289,10 +297,24 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
     lifecycle_id=lifecycle_signature(profile) if lifecycle_marker is not None else None
     frames=sorted(Path(samples).glob('*.jpg'))
     def frame_time(path): return timestamps[path.name] if timestamps is not None else (int(path.stem)-.5)/fps
-    selected=[p for p in frames if start <= frame_time(p) <= end]
-    if selected_names is not None: selected=[p for p in selected if p.name in selected_names]
-    expected=[Path(samples)/f'{i:06d}.jpg' for i in range(1,expected_frames+1)] if expected_frames is not None else list(selected)
-    if frame_limit is not None: selected=[p for p in selected if int(p.stem)<=frame_limit]
+    if expected_names is not None:
+        if expected_frames is not None or selected_names is not None: raise ValueError('明确采样计划不能混用计数或临时选择')
+        ids=[]
+        for name in expected_names:
+            if not isinstance(name,str) or not re.fullmatch(r'\d{6,}\.jpg',name): raise ValueError('采样计划文件名无效')
+            number=int(name[:-4])
+            if number<1 or name!=f'{number:06d}.jpg' or (ids and number<=ids[-1]): raise ValueError('采样计划必须按全局编号严格递增')
+            ids.append(number)
+        expected=[Path(samples)/name for name in expected_names]
+        selected=[p for p in expected if frame_limit is None or int(p.stem)<=frame_limit]
+        if any(not p.is_file() for p in selected): raise ValueError('已提交采样前缀有缺帧，不能提前完成识别')
+        if any(not start<=frame_time(p)<=end for p in selected): raise ValueError('采样计划与时间过滤不匹配')
+        if not partial and len(selected)!=len(expected): raise ValueError('尚未消费完整采样计划')
+    else:
+        selected=[p for p in frames if start <= frame_time(p) <= end]
+        if selected_names is not None: selected=[p for p in selected if p.name in selected_names]
+        expected=[Path(samples)/f'{i:06d}.jpg' for i in range(1,expected_frames+1)] if expected_frames is not None else list(selected)
+        if frame_limit is not None: selected=[p for p in selected if int(p.stem)<=frame_limit]
     display_duration=max((frame_time(p) for p in expected),default=0)+.5/fps
     journal=None
     if resume:
@@ -310,12 +332,12 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
             if session is not None: session.update(signature=signature,journal=journal)
         rows=list(journal.rows)
         if rows: print(f'OCR 续接：保留 {len(rows)} 帧，从 {rows[-1]["time"]:.2f} 秒后继续',flush=True)
-    for offset in range(len(rows),len(selected),16):
+    for offset in range(len(rows),len(selected),HUD_BATCH_SIZE):
         if resume:
             from app_cancel import check_cancel
             check_cancel()
         before_count=len(rows)
-        batch=selected[offset:offset+16]
+        batch=selected[offset:offset+HUD_BATCH_SIZE]
         crops=[]; slots=[]; signatures=[]; offsets=[]; inactive=[]; downed_scores=[]
         for path in batch:
             frame=cv2.imread(str(path))

@@ -24,8 +24,9 @@ def parse_options(request):
     from gpu_load import get_gpu_policy
     values['gpu_load']=get_gpu_policy(request.get('gpu_load','low'))['name']
     values['scan_mode']=request.get('scan_mode','complete')
-    if values['scan_mode'] not in ['complete','smart']: raise ValueError('识别方式必须是 complete 或 smart')
-    if values['scan_mode']=='smart': values['delete_source']=False
+    if values['scan_mode'] not in ['complete','smart','indexed']: raise ValueError('识别方式必须是 complete、smart 或 indexed')
+    if values['scan_mode'] in ['smart','indexed']: values['delete_source']=False
+    if values['scan_mode']=='indexed': values['pipeline']=False
     return values
 
 def recycle_source(source,identity,outputs,verification,review,segments,recycler=None):

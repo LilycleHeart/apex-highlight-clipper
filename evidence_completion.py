@@ -35,7 +35,7 @@ def merge_rows(existing, added, total, fps):
     return rows
 
 
-def complete_missing(source,job,samples,profile,fps,output,cuda=False,cpu_threads=None):
+def complete_missing(source,job,samples,profile,fps,output,cuda=False,cpu_threads=None,continuous=False):
     job=Path(job); samples=Path(samples); output=Path(output)
     cache=json.loads(output.read_text(encoding='utf-8'))
     duration=float(probe(source)[0]['format']['duration']); total=max(1,math.floor(duration*fps+.5))
@@ -56,14 +56,19 @@ def complete_missing(source,job,samples,profile,fps,output,cuda=False,cpu_thread
     ranges=missing_ranges(total,cache['rows'],fps)
     config={'source':identity,'fps':fps,'profile':profile,'samples':str(samples.resolve()),'ranges':ranges,
             'rows_sha256':hashlib.sha256(json.dumps(cache['rows'],sort_keys=True).encode()).hexdigest()}
+    if continuous: config['sampling_strategy']='continuous-v1'
     plan=root/'plan.json'
     if plan.exists():
         if json.loads(plan.read_text(encoding='utf-8'))!=config: raise ValueError('缺口补查断点与局部结果不匹配')
     else: write_json(plan,config)
     missing=root/'missing'; missing_hud=root/'missing-hud.json'
     if ranges:
-        sample_with_resume(source,missing,fps,cuda,frame_ranges=ranges,**({'cpu_threads':cpu_threads} if cpu_threads else {}))
-        added=read_hud(missing,profile,fps,missing_hud,resume=True,source_identity=identity)
+        if continuous:
+            from sparse_pipeline import sample_and_read_sparse
+            added=sample_and_read_sparse(source,missing,profile,fps,missing_hud,ranges,cuda=cuda,cpu_threads=cpu_threads)
+        else:
+            sample_with_resume(source,missing,fps,cuda,frame_ranges=ranges,**({'cpu_threads':cpu_threads} if cpu_threads else {}))
+            added=read_hud(missing,profile,fps,missing_hud,resume=True,source_identity=identity)
     else: added=[]
     rows=merge_rows(cache['rows'],added,total,fps)
     (assembled/'hud').mkdir(parents=True,exist_ok=True)

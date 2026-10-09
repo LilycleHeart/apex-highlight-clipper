@@ -217,7 +217,9 @@ def audit_counters(coarse,fine,duration,outcomes=None):
                 'passed':bool(near and min(near)<=endpoint<=max(near) and detected>=expected)})
     return {'passed':all(c['passed'] for c in checks),'checks':checks}
 
-def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=False,result_first=False):
+def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=False,result_first=False,indexed=False,continuous=False):
+    if continuous and not indexed: raise ValueError('连续局部流水线仅用于索引实验模式')
+    indexed_version='indexed-v2' if continuous else 'indexed-v1'
     timings={}
     def timed(name,call):
         start=time.perf_counter()
@@ -225,25 +227,29 @@ def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=
         finally: timings[name]=round(timings.get(name,0)+time.perf_counter()-start,3)
     identity=fingerprint(source); meta,video=probe(source); duration=float(meta['format']['duration'])
     job=Path(job); plan_path=job/'smart-plan.json'; full_count=max(1,math.floor(duration*fps+.5))
-    config={'source':identity,'profile':profile,'fps':fps,'gap':gap,'pre':pre,'post':post,'version':3 if result_first else 2}
+    config={'source':identity,'profile':profile,'fps':fps,'gap':gap,'pre':pre,'post':post,'version':indexed_version if indexed else (3 if result_first else 2)}
     token=hashlib.sha256(json.dumps(config,sort_keys=True).encode()).hexdigest()
     print('SMART_PROGRESS: 5',flush=True)
-    phase('coarse','正在寻找交战的蛛丝马迹……',5)
-    coarse=timed('coarse',lambda:coarse_scan(source,job,profile,fps))
+    phase('coarse','索引实验：正在内存读取关键帧计分……' if indexed else '正在寻找交战的蛛丝马迹……',5)
+    if indexed:
+        from indexed_coarse import indexed_coarse_scan
+        coarse=timed('coarse_indexed',lambda:indexed_coarse_scan(source,job,profile,fps))
+    else: coarse=timed('coarse',lambda:coarse_scan(source,job,profile,fps))
     print('SMART_PROGRESS: 20',flush=True)
     if plan_path.exists():
         plan=load(plan_path)
         if plan['signature']!=token: raise ValueError('智能识别断点参数不匹配')
         if plan.get('strategy') in ['evidence-v3','focused-v5','focused-v6']: coarse=refine_coarse(source,job,profile,fps,coarse)
     else:
-        phase('bisect','发现计数变化，正在复查附近已有画面……',20)
-        coarse=timed('refine',lambda:refine_coarse(source,job,profile,fps,coarse))
+        if not indexed:
+            phase('bisect','发现计数变化，正在复查附近已有画面……',20)
+            coarse=timed('refine',lambda:refine_coarse(source,job,profile,fps,coarse))
         seeds=activity_brackets(coarse['rows'])
         from adaptive_evidence import evidence_windows
         windows=evidence_windows(coarse['rows'],seeds,duration,merge_windows,gap)
         original_windows=windows
         early=None; excluded=[]
-        if result_first:
+        if result_first and not indexed:
             from early_round_end import inspect_early_round_ends,terminal_idle_ranges,subtract_windows
             from planning_evidence import classify_seed_strength,focused_windows
             phase('outcomes','先检查本局结束或换局证据，缩小细查范围……',22)
@@ -257,14 +263,15 @@ def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=
             if sum(b-a+1 for a,b in frame_ranges(windows,duration,fps))>=sum(b-a+1 for a,b in frame_ranges(original_trimmed,duration,fps)):
                 windows=original_trimmed
         ranges=frame_ranges(windows,duration,fps)
-        plan={'signature':token,'strategy':'focused-v6' if result_first else 'evidence-v3','windows':windows,'frame_ranges':ranges,'seed_count':len(seeds),'binary_probes':0,
+        plan={'signature':token,'strategy':indexed_version if indexed else ('focused-v6' if result_first else 'evidence-v3'),'windows':windows,'frame_ranges':ranges,'seed_count':len(seeds),'binary_probes':0,
             'refinement_numeric_frames':coarse.get('refinement_numeric_frames',0),
-            'coarse_frames':len(coarse['rows']),'coarse_numeric_frames':coarse['numeric_frames'],'full_frames':full_count,'mode':'smart','can_delete_source':False}
-        if result_first: plan.update(early_round_evidence=early,confirmed_idle_ranges=excluded)
+            'coarse_frames':len(coarse['rows']),'coarse_numeric_frames':coarse['numeric_frames'],'full_frames':full_count,'mode':'indexed' if indexed else 'smart','can_delete_source':False}
+        if result_first and not indexed: plan.update(early_round_evidence=early,confirmed_idle_ranges=excluded)
+        if indexed: plan.update(early_round_strategy='disabled_no_coarse_image_cache',coarse_frame_storage='memory_only',planning_strategy='evidence_windows')
         write_json(plan_path,plan)
     print('SMART_PROGRESS: 30',flush=True)
     decode_cuda,decode_threads=cuda,None
-    if plan.get('strategy') in ['evidence-v3','focused-v5','focused-v6']:
+    if plan.get('strategy') in ['evidence-v3','focused-v5','focused-v6','indexed-v1','indexed-v2']:
         from adaptive_evidence import decode_policy
         decode_cuda,decode_threads,plan['decode_strategy']=decode_policy(video,cuda)
         if decode_threads: print('低GPU档：4线程CPU提取细查画面，GPU按低占用节奏识别',flush=True)
@@ -274,10 +281,16 @@ def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=
         plan['fallback_reason']='活动或不确定区域过密，回退完整识别'; plan['frame_ranges']=[[1,full_count]]
     if not plan.get('need_full_fallback'):
         phase('fallback' if plan.get('fallback_reason') else 'fine',plan.get('fallback_reason') or '正在检查疑似交战区域……',30)
-        timed('sampling',lambda:sample_with_resume(source,samples,fps,decode_cuda,frame_ranges=plan['frame_ranges'],**({'cpu_threads':decode_threads} if decode_threads else {})))
-        print('SMART_PROGRESS: 55',flush=True)
-        phase('fine','正在读取交战区域的弹药、伤害和击杀……',55)
-        rows=timed('numeric',lambda:read_hud(samples,profile,fps,output,resume=True,source_identity=identity))
+        if continuous:
+            from sparse_pipeline import sample_and_read_sparse
+            phase('fine','连续解码交战区域，同时识别已保存的画面……',30)
+            rows=timed('fine_pipeline',lambda:sample_and_read_sparse(source,samples,profile,fps,output,
+                plan['frame_ranges'],cuda=decode_cuda,cpu_threads=decode_threads))
+        else:
+            timed('sampling',lambda:sample_with_resume(source,samples,fps,decode_cuda,frame_ranges=plan['frame_ranges'],**({'cpu_threads':decode_threads} if decode_threads else {})))
+            print('SMART_PROGRESS: 55',flush=True)
+            phase('fine','正在读取交战区域的弹药、伤害和击杀……',55)
+            rows=timed('numeric',lambda:read_hud(samples,profile,fps,output,resume=True,source_identity=identity))
         phase('outcomes','正在确认这段交战的结束画面……',60)
         detail=timed('outcomes',lambda:enrich_outcomes(load(output),samples,checkpoint=output)); write_json(output,detail)
         phase('audit','正在核对累计伤害与击杀，检查是否需要补查……',62)
@@ -287,9 +300,9 @@ def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=
     if plan.get('need_full_fallback'):
         phase('fallback','计分核对不一致，正在完整补查……',62)
         print('伤害/击杀终值核对不一致，补查全部剩余区间',flush=True)
-        if plan.get('strategy') in ['evidence-v3','focused-v5','focused-v6']:
+        if plan.get('strategy') in ['evidence-v3','focused-v5','focused-v6','indexed-v1','indexed-v2']:
             from evidence_completion import complete_missing
-            saved,samples=complete_missing(source,job,samples,profile,fps,output,decode_cuda,cpu_threads=decode_threads)
+            saved,samples=complete_missing(source,job,samples,profile,fps,output,decode_cuda,cpu_threads=decode_threads,**({'continuous':True} if continuous else {}))
             saved=enrich_outcomes(saved,samples,checkpoint=job/'gap-fill'/'audit.json')
             rows=saved['rows']; write_json(output,saved)
             plan['completion']=saved['evidence_completion']
@@ -304,7 +317,7 @@ def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=
             output_fallback=Path(output).with_name('hud-full-fallback.json')
             rows=read_hud(fallback,profile,fps,output_fallback,resume=True,source_identity=identity)
             write_json(output,load(output_fallback)); samples=fallback
-        plan['fallback_reason']='计分核对失败，已补齐未识别区间' if plan.get('strategy') in ['evidence-v3','focused-v5','focused-v6'] else '计分核对失败，已完整补查'
+        plan['fallback_reason']='计分核对失败，已补齐未识别区间' if plan.get('strategy') in ['evidence-v3','focused-v5','focused-v6','indexed-v1','indexed-v2'] else '计分核对失败，已完整补查'
     plan['fine_frames']=len(rows); plan['finished']=True; plan['timings_this_run']=timings; write_json(plan_path,plan)
     saved=load(output); saved['smart_plan']=plan; write_json(output,saved)
     if fingerprint(source)!=identity: raise ValueError('智能识别时源录像发生变化')

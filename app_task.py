@@ -68,7 +68,8 @@ def open_task(request):
                 'status':'pending','stage':'pending','record':None})
         if not items: raise ValueError('没有选择录像')
         task={'version':1,'directory':str(directory),'request':effective,'profile':profile,
-            'config_stamp':config_stamp(profile),'items':items,'finished':False,'smart_cache_version':'focused-v6',
+            'config_stamp':config_stamp(profile),'items':items,'finished':False,
+            'smart_cache_version':'indexed-v2' if options['scan_mode']=='indexed' else 'focused-v6',
             'result_filter_version':RULE_VERSION}
         write_json(path,task)
     if effective.get('backend') not in ['cpu','dml']: raise ValueError('识别后端不支持')

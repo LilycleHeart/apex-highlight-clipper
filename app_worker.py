@@ -49,8 +49,8 @@ class ProgressLog(io.TextIOBase):
                 percent=self.start+(self.end-self.start)*(self.decode_ratio+self.ocr_ratio)/2
             elif self.stage=='smart':
                 mark=re.search(r'SMART_PROGRESS: ([\d.]+)',line)
-                if mark: percent=float(mark[1])
-            emit('log',message=line,progress=round(percent))
+                percent=float(mark[1]) if mark else None
+            emit('log',message=line,**({'progress':round(percent)} if percent is not None else {}))
         return len(text)
     def flush(self): pass
 
@@ -98,6 +98,7 @@ def _run_task(request_path):
         os.environ['APEX_TASK_STOP_FILE']=str(stop_marker)
         save_task(task_path,task)
         emit('run',directory=str(run_root),task_path=str(task_path),message=('继续任务 · ' if incoming.get('resume_task') else '新任务 · ')+('GPU '+get_gpu_policy()['label'] if request['backend']=='dml' else 'CPU'),
+            scan_mode=options['scan_mode'],indexed_experimental=options['scan_mode']=='indexed',
             result_filter_version=task.get('result_filter_version'),
             result_filter_rule='击倒/助攻/消灭任一' if task.get('result_filter_version') else '沿用旧任务交战规则',
             sampling_warning='沿用旧任务低于 1 帧/秒的参数，可能漏掉交战候选；建议新建至少 1 帧/秒的任务' if fps<1 else None,
@@ -139,11 +140,14 @@ def _run_task(request_path):
                 meta,video=stage('probe','检查录像',0,5,lambda:probe(source))
                 width,height=profile['reference_size']
                 if abs(video['width']/video['height']-width/height)>.03: raise ValueError('当前版本适配 2560×1080 HUD，请先校准其他宽高比')
-                if options['scan_mode']=='smart' and (video['width'],video['height'])!=(width,height):
+                if options['scan_mode'] in ['smart','indexed'] and (video['width'],video['height'])!=(width,height):
                     raise ValueError('智能模式目前需要 2560×1080 录像，请切换完整扫描或先校准 HUD')
                 config={'source':identity,'profile':profile,'fps':fps}
                 planner_version=item.get('smart_cache_version',task.get('smart_cache_version','smart-v2'))
-                if options['scan_mode']=='smart': config.update(scan_mode=planner_version,gap=gap,pre=pre,post=post)
+                if options['scan_mode']=='indexed' and planner_version not in ['indexed-v1','indexed-v2']:
+                    raise ValueError('索引任务版本不支持，请保留原任务并新建批次')
+                if options['scan_mode'] in ['smart','indexed']: config.update(scan_mode=planner_version,gap=gap,pre=pre,post=post)
+                if planner_version=='indexed-v2': config['fine_pipeline']='continuous-v1'
                 old_digest=hashlib.sha256(json.dumps(config,sort_keys=True).encode()).hexdigest()[:16]
                 digest=hashlib.sha256(json.dumps({**config,'cache_version':'resume-v1'},sort_keys=True).encode()).hexdigest()[:16]
                 job=BASE/'validation/app-cache'/digest
@@ -169,11 +173,12 @@ def _run_task(request_path):
                         candidate=load(hud_path)
                         if candidate.get('complete') and candidate.get('source')==identity and candidate.get('fps')==fps and same_hud_profile(candidate['profile'],profile) and (options['scan_mode']=='complete' or candidate.get('smart_plan',{}).get('finished')): saved=candidate
                     if saved is None:
-                        if options['scan_mode']=='smart':
+                        if options['scan_mode'] in ['smart','indexed']:
                             from smart_scan import smart_read
-                            _,samples=stage('smart','智能识别：粗查、二分和局部细查',5,65,
+                            _,samples=stage('smart','索引实验：内存粗定位和局部细查' if options['scan_mode']=='indexed' else '智能识别：粗查、二分和局部细查',5,65,
                                 lambda:smart_read(source,job,samples,profile,fps,hud_path,gap,pre,post,cuda=request['backend']=='dml',
-                                    result_first=planner_version.startswith('focused-v6')))
+                                    result_first=planner_version.startswith('focused-v6'),indexed=options['scan_mode']=='indexed',
+                                    continuous=planner_version=='indexed-v2'))
                         elif options['pipeline']:
                             from sample_pipeline import sample_and_read
                             stage('pipeline','采样与数字识别并行（支持续接）',5,65,
@@ -190,7 +195,7 @@ def _run_task(request_path):
                         if saved['rows']:
                             row=saved['rows'][-1]; preview(samples/row['frame'],row['time'],force=True)
                     write_json(reference,{'samples':str(samples)})
-                    result_first=bool(task.get('result_filter_version') and planner_version.startswith('focused-v6'))
+                    result_first=bool(task.get('result_filter_version') and (planner_version.startswith('focused-v6') or planner_version in ['indexed-v1','indexed-v2']))
                     saved=stage('lifecycle','识别倒地状态',65,70 if result_first else 78,lambda:enrich_lifecycle(saved,samples,profile)); write_json(hud_path,saved)
                     if not result_first:
                         saved=stage('weapons','读取实际使用的枪械（支持续接）',78,82,lambda:enrich_weapon_labels(saved,samples,profile,tool('ffmpeg'),checkpoint=hud_path)); write_json(hud_path,saved)
