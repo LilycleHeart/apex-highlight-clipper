@@ -1,0 +1,2 @@
+# Optional indexed-reader prototype; not needed by the production pipeline.
+av==18.1.0

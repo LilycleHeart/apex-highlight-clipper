@@ -11,7 +11,7 @@
     "start": "electron .",
     "package": "npm run build && node scripts/package.cjs",
     "test": "node --test tests/protocol.test.cjs tests/fluid-geometry.test.cjs tests/kaomoji-geometry.test.cjs",
-    "validate": "node tests/electron-validation.cjs"
+    "validate": "npm run build && npm test"
   },
   "dependencies": {
     "@material/material-color-utilities": "0.4.0",
