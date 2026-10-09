@@ -11,6 +11,7 @@ electron-ui/node_modules/
 electron-ui/dist/
 electron-ui/dist-electron/
 electron-ui/release/
+electron-ui/release-*/
 electron-ui/output/
 electron-ui/.playwright*/
 *.exe
