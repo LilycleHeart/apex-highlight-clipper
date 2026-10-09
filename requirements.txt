@@ -1,0 +1,6 @@
+rapidocr-onnxruntime==1.4.4
+opencv-python==5.0.0.93
+numpy>=2.0,<3
+Pillow>=10
+Send2Trash==1.8.3; sys_platform == 'win32'
+pywin32==311; sys_platform == 'win32'

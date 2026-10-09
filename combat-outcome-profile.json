@@ -1,0 +1,84 @@
+{
+  "version": 2,
+  "context_padding_left": 100,
+  "calibration": {
+    "gate_threshold": 0.65,
+    "minimum_fps": 2,
+    "negative_decision_enabled": true,
+    "require_traditional_ui": true,
+    "scope": "2560x1080 traditional Chinese Apex HUD; full candidate coverage required",
+    "note": "Templates only select OCR frames; strong subtitle matches still require full-line grammar rejection."
+  },
+  "reference_size": [
+    2560,
+    1080
+  ],
+  "toast_roi": [
+    860,
+    680,
+    1700,
+    832
+  ],
+  "coordinate_format": "x1,y1,x2,y2",
+  "notes": [
+    "本配置独立于数字识别profile，修改结果提示规则不得无故使现有数字OCR缓存全部失效。",
+    "正例的第二行造成153點傷害不算独立有效结果。",
+    "多行字幕可能上移并占据此ROI，必须保留行上下文与布局，不能只匹配擊倒关键词。",
+    "只统计本人视角，排除观战中的其他玩家结果提示。",
+    "识别成功任一knock/assist/elimination即可保留整个候选交战；assist优先分类，避免助攻擊倒被当作本人单独击倒。"
+  ],
+  "prefix_templates": [
+    {
+      "kind": "knock",
+      "locale": "zh-TW",
+      "path": "templates/combat-outcomes/knock-tc.png",
+      "gray": "templates/combat-outcomes/knock-tc-gray.png",
+      "mask": "templates/combat-outcomes/knock-tc-mask.png",
+      "sample_size": [
+        1280,
+        540
+      ],
+      "use": "priority_gate_only_until_calibrated",
+      "sha256": "f6f9b691b7abcee88f7ad85dd8b48251c0abc693d58b6a6d83e122aeef82e131"
+    },
+    {
+      "kind": "elimination",
+      "locale": "zh-TW",
+      "path": "templates/combat-outcomes/elimination-tc.png",
+      "gray": "templates/combat-outcomes/elimination-tc-gray.png",
+      "mask": "templates/combat-outcomes/elimination-tc-mask.png",
+      "sample_size": [
+        1280,
+        540
+      ],
+      "use": "priority_gate_only_until_calibrated",
+      "sha256": "237837532a3b8404bf6405b320831bece6bf35ae6aab2ea3af3193c2197d8f28"
+    },
+    {
+      "kind": "assist",
+      "locale": "zh-TW",
+      "path": "templates/combat-outcomes/assist-knock-tc.png",
+      "gray": "templates/combat-outcomes/assist-knock-tc-gray.png",
+      "mask": "templates/combat-outcomes/assist-knock-tc-mask.png",
+      "sample_size": [
+        1280,
+        540
+      ],
+      "use": "priority_gate_only_until_calibrated",
+      "sha256": "19d8ae7275f967337cb12fc28f528c6739f98c21a95a8c555905942bff23ea09"
+    },
+    {
+      "kind": "assist",
+      "locale": "zh-TW",
+      "path": "templates/combat-outcomes/assist-elimination-tc.png",
+      "gray": "templates/combat-outcomes/assist-elimination-tc-gray.png",
+      "mask": "templates/combat-outcomes/assist-elimination-tc-mask.png",
+      "sample_size": [
+        1280,
+        540
+      ],
+      "use": "priority_gate_only_until_calibrated",
+      "sha256": "2c651be0e96ecb184e12f8764fc1c9d858bbf8bb6ccb4d90095dcd0803083994"
+    }
+  ]
+}

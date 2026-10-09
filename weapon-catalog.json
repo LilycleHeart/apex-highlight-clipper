@@ -1,0 +1,647 @@
+{
+  "version": 2,
+  "checked_date": "2026-10-08",
+  "sources": [
+    "https://help.ea.com/en/articles/apex-legends/guns-and-weapons/",
+    "https://help.ea.com/zh-hant/articles/apex-legends/guns-and-weapons/",
+    "https://help.ea.com/zh/articles/apex-legends/guns-and-weapons/",
+    "https://www.ea.com/games/apex-legends/apex-legends/news/28-1-designers-notes"
+  ],
+  "base_weapon_count": 29,
+  "notes": "官方指南29种基础武器；双持和精英变体按基础武器归类。名称识别使用HUD文字，图标模板仅作实拍辅助。",
+  "weapons": [
+    {
+      "id": "havoc",
+      "name": "哈博克",
+      "category": "assault",
+      "english_name": "HAVOC Rifle",
+      "traditional_name": "哈博克步槍",
+      "hud_english": "HAVOC",
+      "aliases": [
+        "哈博克",
+        "HAVOC Rifle",
+        "哈博克步槍",
+        "HAVOC",
+        "哈沃克",
+        "哈沃克步枪",
+        "哈博克步枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "flatline",
+      "name": "平行",
+      "category": "assault",
+      "english_name": "VK-47 Flatline",
+      "traditional_name": "V-47 平行步槍",
+      "hud_english": "FLATLINE",
+      "aliases": [
+        "平行",
+        "VK-47 Flatline",
+        "V-47 平行步槍",
+        "FLATLINE",
+        "VK-47",
+        "VK47",
+        "VK47平行步枪",
+        "平行步枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "hemlok",
+      "name": "汗洛",
+      "category": "assault",
+      "english_name": "Hemlok Burst AR",
+      "traditional_name": "汗洛連發突擊步槍",
+      "hud_english": "HEMLOK",
+      "aliases": [
+        "汗洛",
+        "Hemlok Burst AR",
+        "汗洛連發突擊步槍",
+        "HEMLOK",
+        "Hemlock",
+        "Hemlok Breach AR",
+        "Hemlok Breach",
+        "赫姆洛克",
+        "汗洛连发突击步枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false,
+      "variants": [
+        "burst",
+        "breach"
+      ]
+    },
+    {
+      "id": "r301",
+      "name": "R301",
+      "category": "assault",
+      "english_name": "R-301 Carbine",
+      "traditional_name": "R-301 卡賓槍",
+      "hud_english": "R-301",
+      "aliases": [
+        "R301",
+        "R-301 Carbine",
+        "R-301 卡賓槍",
+        "R-301",
+        "R301卡宾枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "nemesis",
+      "name": "死敌",
+      "category": "assault",
+      "english_name": "Nemesis Burst AR",
+      "traditional_name": "死敵連發突擊步槍",
+      "hud_english": "NEMESIS",
+      "aliases": [
+        "死敌",
+        "Nemesis Burst AR",
+        "死敵連發突擊步槍",
+        "NEMESIS",
+        "死敵",
+        "Nemesis",
+        "复仇女神",
+        "复仇女神连发突击步枪"
+      ],
+      "prototypes": [
+        "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"
+      ],
+      "calibration_times": [
+        170.25,
+        176.75,
+        318.75,
+        337.75,
+        434.25,
+        455.75
+      ],
+      "real_video_validated": true
+    },
+    {
+      "id": "alternator",
+      "name": "转换者",
+      "category": "smg",
+      "english_name": "Alternator SMG",
+      "traditional_name": "轉換者衝鋒槍",
+      "hud_english": "ALTERNATOR",
+      "aliases": [
+        "转换者",
+        "Alternator SMG",
+        "轉換者衝鋒槍",
+        "ALTERNATOR",
+        "轉換者",
+        "转换者冲锋枪"
+      ],
+      "prototypes": [
+        "AAAAAEDAIHBAAAAAAAAAAF+AP8/4AAAAAAAAAMEDgBBIAAAAAAAAAJ/wAJCIAAAAAAAAAIARv7CIAAAAAAAAAN/hEJ0IAAAAAAAAAEAK/iVIAAAAAAAAAE/ygAVQAAAAAAAAACACg+UQAAAAAAAAACJzgkGwAAAAAAAAACJSgUEgAAAAAAAAACJS4UggAAAAAAAAACAFMchAAAAAAAAAADv8kChAAAAAAAAAAAQDkChAAAAAAAAAAAAAGGCAAAAAAAAAAAAACFGAAAAAAAAAAAAACFMAAAAAAAAAAAAABIYAAAAAAAAAAAAACSQAAAAAAAAAAAAACAwAAAAAAAAAAAAACJgAAAAAAAAAAAAAEDAAAAAAAAAAAAAAH+AAAAAAAAAAADwAYBAAAAAAAAAAANQBgAwAAAAAAAAAAYQBP+QAAAAAAAAAAQABQBIAAAAA",
+        "AAAAACDB4HBAAAAAAAAAAE+APZ/wAAAAAAAAAMADgRAYAAAAAAAAAL/0ANCIAAAAAAAAAIARn5iIAAAAAAAAAN/hEIyIAAAAAAAAAEAK/gUIAAAAAAAAAE+ygAVQAAAAAAAAACAKgc0QAAAAAAAAACNzgUEwAAAAAAAAACJSgUEgAAAAAAAAACITYUkgAAAAAAAAACAEMchAAAAAAAAAADP+kWhAAAAAAAAAAAwBkCjAAAAAAAAAAAAAGCCAAAAAAAAAAAAACEOAAAAAAAAAAAAACFIAAAAAAAAAAAAABKYAAAAAAAAAAAAACyQAAAAAAAAAAAAACAwAAAAAAAAAAAAACBgAAAAAAAAAAAAACDAAAAAAAAAAAAAAD+AAAAAAAAAAAAAAYBgAAAAAAAAAAAABgAwAAAAAAAAAAAABP+QAAAAAAAAAAAABQBQAAAAA",
+        "AAAAAEBB4HBkAAAAAAAAAF+APY+4AAAAAAAAAMADgBAIAAAAAAAAAJ/0AJDIAAAAAAAAAIAVnrCIAAAAAAAAANfhEZzIAAAAAAAAAEAK/iVIAAAAAAAAAC+SgAXQAAAAAAAAACADge0QAAAAAAAAACNygUEwAAAAAAAAACJSgUEgAAAAAAAAACID4UggAAAAAAAAACAEMchAAAAAAAAAADP+0ChAAAAAAAAAAAwBEChAAAAAAAAAAAAAGGiAAAAAAAAAAAAACFGAAAAAAAAAAAAACMMAAAAAAAAAAAAABKYAAAAAAAAAAAAACyQAAAAAAAAAAAAACAwAAAAAAAAAAAAACBgAAAAAAAAAAAAAEDAAAAAAAAAAAAAAH+AAAAAAAAAAAAAAQBgAAAAAAAAAAAABoAwAAAAAD8AAAAABF+QAAAAABGAAAAABSBQAAAAA"
+      ],
+      "calibration_times": [
+        201.25,
+        204.25,
+        205.25
+      ],
+      "real_video_validated": true
+    },
+    {
+      "id": "prowler",
+      "name": "猎兽",
+      "category": "smg",
+      "english_name": "Prowler Burst PDW",
+      "traditional_name": "獵獸連發個人防衛武器",
+      "hud_english": "PROWLER",
+      "aliases": [
+        "猎兽",
+        "Prowler Burst PDW",
+        "獵獸連發個人防衛武器",
+        "PROWLER",
+        "獵獸",
+        "猎兽冲锋枪",
+        "猎兽连发个人防卫武器"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "r99",
+      "name": "R99",
+      "category": "smg",
+      "english_name": "R-99 SMG",
+      "traditional_name": "R-99 衝鋒槍",
+      "hud_english": "R-99",
+      "aliases": [
+        "R99",
+        "R-99 SMG",
+        "R-99 衝鋒槍",
+        "R-99"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "volt",
+      "name": "电能冲锋枪",
+      "category": "smg",
+      "english_name": "Volt SMG",
+      "traditional_name": "電能衝鋒槍",
+      "hud_english": "VOLT",
+      "aliases": [
+        "电能冲锋枪",
+        "Volt SMG",
+        "電能衝鋒槍",
+        "VOLT",
+        "Volt"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "car",
+      "name": "CAR",
+      "category": "smg",
+      "english_name": "C.A.R. SMG",
+      "traditional_name": "C.A.R. 衝鋒槍",
+      "hud_english": "C.A.R.",
+      "aliases": [
+        "CAR",
+        "C.A.R. SMG",
+        "C.A.R. 衝鋒槍",
+        "C.A.R."
+      ],
+      "prototypes": [
+        "AAAGwAAAAQgAAAAAAAH8f////y4AAAAAAAEAAAAAAAHAAAAAAAGJ+kABAYB//AAAAACGBmADAHAAA/AAAA+D/DgAIAAgABAAAAgEAAQAIgcg/BAAAAgABwwDzfh5hBAAAA+Q9QsaUAnBBxAAAACIlQoyWByBARAAAACQ9AoigAABARAAAACAAgITh+HBARAAAACAAgBUBLFBwRAAAABAAD8VBJFAMxAAAABgAcGFhjGfjhAAAAA+HwCEg4Aw4BAAAAACMADEBDAgHCAAAAABIABBj9ggA+AAAAABIABmWAwgAAAAAAABIAAkEAQgAAAAAAABIAAgEAYgAAAAAAABIAAwEAJgAAAAAAABIAAQMAPAAAAAAAAB4AAP4AAAAADfAAAAEBAAAAAAAAHqAAD+HO/4AAAAAAEuAAGABYAMAAAH/wEgAAEABQAEAAAEAQEu",
+        "AAAGwAAAAQgAAAAAAAH8f////y8AAAAAAAEAAAAAAADAAAAAAAGJ+AAKAcBh/AAAAACGB2P2AHgeA/AAAA+D/DgQIAAgABAAAAgAAMjEIgMh/BAAAAgABzwj3f5hBBAAAA+Q9QgaMAiBBxAAAACIFQAiWP6BASAAAACI9AAigAABASAAAACAAgAbh4HBASAAAACAAgBQBPFBwSAAAADAAD8UBBFAOxAAAABgAcGEBzHfjhAAAAA+HwCMIgAQ4BAAAAACMADEBDAgHCAAAAACIABpj9ggA+AAAAABIAAmWAwgAAAAAAABIAAkIAQgAAAAAAABIAAgEAYgAAAAAAABIAAwEAJgAAAAAAABIAAYMAPAAAAAAAAB4AAH4AAAAAAAAAA+AD/AAAAAAAHgAAHAGcAwAAAAAAEgAAEALwAMAAAH/wEgAAEAJQAEAAAEAQEg"
+      ],
+      "calibration_times": [
+        442.25,
+        461.75
+      ],
+      "real_video_validated": true
+    },
+    {
+      "id": "devotion",
+      "name": "专注",
+      "category": "lmg",
+      "english_name": "Devotion LMG",
+      "traditional_name": "專注輕機槍",
+      "hud_english": "DEVOTION",
+      "aliases": [
+        "专注",
+        "Devotion LMG",
+        "專注輕機槍",
+        "DEVOTION",
+        "專注",
+        "专注轻机枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "lstar",
+      "name": "LSTAR",
+      "category": "lmg",
+      "english_name": "L-STAR EMG",
+      "traditional_name": "L-STAR 電磁機槍",
+      "hud_english": "L-STAR",
+      "aliases": [
+        "LSTAR",
+        "L-STAR EMG",
+        "L-STAR 電磁機槍",
+        "L-STAR"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "spitfire",
+      "name": "喷火",
+      "category": "lmg",
+      "english_name": "M600 Spitfire",
+      "traditional_name": "M600 噴火槍",
+      "hud_english": "SPITFIRE",
+      "aliases": [
+        "喷火",
+        "M600 Spitfire",
+        "M600 噴火槍",
+        "SPITFIRE",
+        "M600",
+        "噴火",
+        "喷火轻机枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "rampage",
+      "name": "狂暴",
+      "category": "lmg",
+      "english_name": "Rampage LMG",
+      "traditional_name": "狂暴輕機槍",
+      "hud_english": "RAMPAGE",
+      "aliases": [
+        "狂暴",
+        "Rampage LMG",
+        "狂暴輕機槍",
+        "RAMPAGE",
+        "Rampage",
+        "狂暴轻机枪",
+        "暴走",
+        "暴走轻机枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "g7",
+      "name": "G7",
+      "category": "marksman",
+      "english_name": "G7 Scout",
+      "traditional_name": "G7 斥候",
+      "hud_english": "G7 SCOUT",
+      "aliases": [
+        "G7",
+        "G7 Scout",
+        "G7 斥候",
+        "G7 SCOUT",
+        "G7侦察枪",
+        "G7侦察",
+        "G7斥候"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "triple_take",
+      "name": "三重击",
+      "category": "marksman",
+      "english_name": "Triple Take",
+      "traditional_name": "三重擊",
+      "hud_english": "TRIPLE TAKE",
+      "aliases": [
+        "三重击",
+        "Triple Take",
+        "三重擊",
+        "TRIPLE TAKE",
+        "TripleTake",
+        "三重狙击枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "repeater3030",
+      "name": "3030",
+      "category": "marksman",
+      "english_name": "30-30 Repeater",
+      "traditional_name": "30-30 連發槍",
+      "hud_english": "30-30",
+      "aliases": [
+        "3030",
+        "30-30 Repeater",
+        "30-30 連發槍",
+        "30-30",
+        "30-30连发枪",
+        "30-30杠杆式步枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "bocek",
+      "name": "博切克",
+      "category": "marksman",
+      "english_name": "Bocek 2.0",
+      "traditional_name": "博切克 2.0",
+      "hud_english": "BOCEK",
+      "aliases": [
+        "博切克",
+        "Bocek 2.0",
+        "博切克 2.0",
+        "BOCEK",
+        "Bocek",
+        "Bocek Compound Bow",
+        "Bocek Bow",
+        "波塞克",
+        "波塞克复合弓",
+        "博切克复合弓"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "charge_rifle",
+      "name": "电能步枪",
+      "category": "sniper",
+      "english_name": "Charge Rifle",
+      "traditional_name": "電能步槍",
+      "hud_english": "CHARGE RIFLE",
+      "aliases": [
+        "电能步枪",
+        "Charge Rifle",
+        "電能步槍",
+        "CHARGE RIFLE",
+        "ChargeRifle",
+        "充能步枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "longbow",
+      "name": "长弓",
+      "category": "sniper",
+      "english_name": "Longbow DMR",
+      "traditional_name": "長弓 DMR",
+      "hud_english": "LONGBOW",
+      "aliases": [
+        "长弓",
+        "Longbow DMR",
+        "長弓 DMR",
+        "LONGBOW",
+        "Longbow",
+        "長弓",
+        "长弓精确射手步枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "kraber",
+      "name": "克莱博",
+      "category": "sniper",
+      "english_name": "Kraber .50-Cal Sniper",
+      "traditional_name": "克萊博 50 口徑狙擊槍",
+      "hud_english": "KRABER",
+      "aliases": [
+        "克莱博",
+        "Kraber .50-Cal Sniper",
+        "克萊博 50 口徑狙擊槍",
+        "KRABER",
+        "Kraber",
+        "克萊博",
+        "克雷贝尔",
+        "克雷贝尔狙击枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "sentinel",
+      "name": "哨兵",
+      "category": "sniper",
+      "english_name": "Sentinel",
+      "traditional_name": "哨兵",
+      "hud_english": "SENTINEL",
+      "aliases": [
+        "哨兵",
+        "Sentinel",
+        "SENTINEL",
+        "哨兵狙击枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "eva8",
+      "name": "EVA8",
+      "category": "shotgun",
+      "english_name": "EVA-8 Auto",
+      "traditional_name": "EVA-8 自動",
+      "hud_english": "EVA-8",
+      "aliases": [
+        "EVA8",
+        "EVA-8 Auto",
+        "EVA-8 自動",
+        "EVA-8",
+        "EVA8自动霰弹枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "mastiff",
+      "name": "獒犬",
+      "category": "shotgun",
+      "english_name": "Mastiff",
+      "traditional_name": "獒犬霰彈槍",
+      "hud_english": "MASTIFF",
+      "aliases": [
+        "獒犬",
+        "Mastiff",
+        "獒犬霰彈槍",
+        "MASTIFF",
+        "獒犬霰弹枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "mozambique",
+      "name": "莫桑比克",
+      "category": "shotgun",
+      "english_name": "Mozambique Shotgun",
+      "traditional_name": "莫三比克霰彈槍",
+      "hud_english": "MOZAMBIQUE",
+      "aliases": [
+        "莫桑比克",
+        "Mozambique Shotgun",
+        "莫三比克霰彈槍",
+        "MOZAMBIQUE",
+        "莫三比克",
+        "莫三比克霰弹枪",
+        "莫桑比克霰弹枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false,
+      "variants": [
+        "single",
+        "akimbo"
+      ]
+    },
+    {
+      "id": "peacekeeper",
+      "name": "和平使者",
+      "category": "shotgun",
+      "english_name": "Peacekeeper",
+      "traditional_name": "和平使者",
+      "hud_english": "PEACEKEEPER",
+      "aliases": [
+        "和平使者",
+        "Peacekeeper",
+        "PEACEKEEPER",
+        "和平捍卫者"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    },
+    {
+      "id": "re45",
+      "name": "RE45",
+      "category": "pistol",
+      "english_name": "RE-45 Auto",
+      "traditional_name": "RE-45 自動",
+      "hud_english": "RE-45",
+      "aliases": [
+        "RE45",
+        "RE-45 Auto",
+        "RE-45 自動",
+        "RE-45",
+        "RE-45 Burst",
+        "RE45 Burst",
+        "RE45自动手枪",
+        "RE-45自動"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false,
+      "variants": [
+        "auto_legacy",
+        "burst"
+      ]
+    },
+    {
+      "id": "p2020",
+      "name": "P2020",
+      "category": "pistol",
+      "english_name": "P2020",
+      "traditional_name": "P2020",
+      "hud_english": "P2020",
+      "aliases": [
+        "P2020"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false,
+      "variants": [
+        "single",
+        "akimbo"
+      ]
+    },
+    {
+      "id": "wingman",
+      "name": "小帮手",
+      "category": "pistol",
+      "english_name": "Wingman",
+      "traditional_name": "小幫手",
+      "hud_english": "WINGMAN",
+      "aliases": [
+        "小帮手",
+        "Wingman",
+        "小幫手",
+        "WINGMAN",
+        "辅助手枪"
+      ],
+      "prototypes": [],
+      "calibration_times": [],
+      "real_video_validated": false
+    }
+  ],
+  "supplemental_weapons": [
+    {
+      "id": "epg1",
+      "name": "EPG1",
+      "category": "event",
+      "aliases": [
+        "EPG-1",
+        "EPG1"
+      ],
+      "source": "https://www.ea.com/zh-tw/inside-ea/news/winters-haunt-event"
+    },
+    {
+      "id": "sheila",
+      "name": "席拉",
+      "category": "legend",
+      "aliases": [
+        "Sheila",
+        "席拉",
+        "希拉"
+      ],
+      "source": "https://www.ea.com/games/apex-legends/apex-legends/seasons/marked"
+    },
+    {
+      "id": "snipers_mark",
+      "name": "狙击标记",
+      "category": "legend",
+      "aliases": [
+        "Sniper's Mark",
+        "Sniper’s Mark",
+        "狙击标记",
+        "狙擊標記"
+      ],
+      "source": "https://www.ea.com/en-gb/inside-ea/news/hunted-patch-notes"
+    }
+  ]
+}

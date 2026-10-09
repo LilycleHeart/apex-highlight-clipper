@@ -1,0 +1,13 @@
+# Installed independently of the CPU .venv. RapidOCR is installed --no-deps
+# by setup_gpu.ps1 so its CPU onnxruntime dependency cannot overwrite DirectML.
+onnxruntime-directml==1.24.4
+opencv-python==5.0.0.93
+numpy>=2.0,<3
+Pillow>=10
+pyclipper>=1.2.0
+six>=1.15.0
+Shapely!=2.0.4,>=1.7.1
+PyYAML
+tqdm
+Send2Trash==1.8.3
+pywin32==311

@@ -1,0 +1,20 @@
+{
+  "name": "2560x1080 Apex HUD / OBS test",
+  "reference_size": [2560, 1080],
+  "ammo": [2368, 964, 2429, 1004],
+  "weapon": [2350, 1035, 2450, 1066],
+  "weapon_icon": [2190, 963, 2355, 1004],
+  "damage": [2362, 94, 2402, 122],
+  "kills": [2136, 94, 2162, 124],
+  "counter_marker": "templates/damage-marker.png",
+  "counter_marker_origin": [2328, 94],
+  "counter_marker_search": [2290, 76, 2410, 140],
+  "banner": [960, 640, 1580, 725],
+  "spectator": [750, 1005, 1840, 1078],
+  "downed_marker": "templates/knockdown-shield.png",
+  "downed_marker_search": [1040, 880, 1580, 1030],
+  "downed_marker_threshold": 0.86,
+  "weapon_native_crop": [1920, 900, 640, 180],
+  "weapon_name_boxes": [[2198, 1037, 2318, 1059], [2330, 1037, 2478, 1059]],
+  "weapon_name_metrics": [[2210, 1039, 2288, 1060], [2364, 1039, 2438, 1060]]
+}

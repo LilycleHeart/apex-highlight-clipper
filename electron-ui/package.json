@@ -1,0 +1,34 @@
+{
+  "name": "apex-highlight-clipper",
+  "productName": "Apex Highlight Clipper",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
+    "build": "npm run typecheck && vite build --base=./ && tsc -p tsconfig.electron.json",
+    "start": "electron .",
+    "package": "npm run build && node scripts/package.cjs",
+    "test": "node --test tests/protocol.test.cjs tests/fluid-geometry.test.cjs tests/kaomoji-geometry.test.cjs",
+    "validate": "node tests/electron-validation.cjs"
+  },
+  "dependencies": {
+    "@material/material-color-utilities": "0.4.0",
+    "lucide-react": "1.53.0",
+    "motion": "14.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@playwright/cli": "0.1.22",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "electron": "44.7.0",
+    "playwright-core": "1.64.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
+  }
+}
