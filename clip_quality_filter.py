@@ -1,14 +1,18 @@
 """按最终单段战绩过滤，严格区分确定不足与计数下限/未知。"""
-VERSION='clip-quality-v1'
+import math
+VERSION='clip-quality-v2'
 
 def assess(record,options):
-    limits={key:options.get('min_'+key,0) for key in ['damage','kills','assists']}
+    limits={key:options.get('min_'+key,0) for key in ['damage','kills','assists','duration']}
     enabled={key:value for key,value in limits.items() if value>0}
     if not options.get('filter_enabled',False) or not enabled:
         return {'status':'kept','reason':'未启用战绩阈值','fields':{}}
     fields={}
     for key,limit in enabled.items():
         value=record['counts'].get(key)
+        if key=='duration':
+            start,end=record.get('start'),record.get('end')
+            value=end-start if isinstance(start,(int,float)) and isinstance(end,(int,float)) and math.isfinite(start) and math.isfinite(end) and end>=start else None
         fields[key]='unknown' if value is None else 'pass' if value>=limit else 'unknown' if record.get('partial',{}).get(key,False) else 'fail'
     if options.get('filter_mode','any')=='all':
         status='rejected' if 'fail' in fields.values() else 'review' if 'unknown' in fields.values() else 'kept'
@@ -28,6 +32,6 @@ def apply_thresholds(aligned,statistics,options):
         elif decision['status']=='rejected':rejected.append(decision)
         else:review.append({**decision,'review_reason':decision['reason']})
     report={'version':VERSION,'enabled':options.get('filter_enabled',False),'mode':options.get('filter_mode','any'),
-            'thresholds':{key:options.get('min_'+key,0) for key in ['damage','kills','assists']},'decisions':decisions,
+            'thresholds':{key:options.get('min_'+key,0) for key in ['damage','kills','assists','duration']},'decisions':decisions,
             'summary':{'kept':len(indices),'rejected':len(rejected),'review':len(review)}}
     return [aligned[i] for i in indices],{**statistics,'segments':[statistics['segments'][i] for i in indices]},report,rejected,review

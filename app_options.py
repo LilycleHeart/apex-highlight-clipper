@@ -31,7 +31,7 @@ def parse_options(request,legacy=False):
     if not isinstance(enabled,bool):raise ValueError('过滤开关必须是布尔值')
     values['filter_enabled']=enabled;values['filter_mode']=request.get('filter_mode','any')
     if values['filter_mode'] not in ['any','all']:raise ValueError('过滤条件必须是 any 或 all')
-    for key,limit in [('min_damage',20000),('min_kills',60),('min_assists',99)]:
+    for key,limit in [('min_damage',20000),('min_kills',60),('min_assists',99),('min_duration',86400)]:
         value=request.get(key,0)
         if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value!=int(value) or not 0<=value<=limit:raise ValueError(key+'必须是范围内的非负整数')
         values[key]=int(value)

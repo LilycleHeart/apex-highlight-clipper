@@ -14,8 +14,8 @@ export function safeOptions(value:any,legacy=false){
  for(const [key,[a,b]] of Object.entries(limits))if(typeof value[key]!=='number'||!Number.isFinite(value[key])||value[key]<a||value[key]>b)throw new Error(`${key} 参数超出范围`);
  if(!['smart','complete','indexed'].includes(value.scan_mode)||!['cpu','dml'].includes(value.backend)||!['low','balanced','fast'].includes(value.gpu_load))throw new Error('识别选项无效');
  for(const key of ['verify','delete_source','pipeline'])if(typeof value[key]!=='boolean')throw new Error('开关参数无效');
- const filters={filter_enabled:value.filter_enabled??false,filter_mode:value.filter_mode??'any',min_damage:value.min_damage??0,min_kills:value.min_kills??0,min_assists:value.min_assists??0};
+ const filters={filter_enabled:value.filter_enabled??false,filter_mode:value.filter_mode??'any',min_damage:value.min_damage??0,min_kills:value.min_kills??0,min_assists:value.min_assists??0,min_duration:value.min_duration??0};
  if(typeof filters.filter_enabled!=='boolean'||!['any','all'].includes(filters.filter_mode))throw new Error('过滤选项无效');
- for(const [key,max] of [['min_damage',20000],['min_kills',60],['min_assists',99]] as const)if(!Number.isInteger(filters[key])||filters[key]<0||filters[key]>max)throw new Error('过滤阈值超出范围');
+ for(const [key,max] of [['min_damage',20000],['min_kills',60],['min_assists',99],['min_duration',86400]] as const)if(!Number.isInteger(filters[key])||filters[key]<0||filters[key]>max)throw new Error('过滤阈值超出范围');
  return {fps:value.fps,gap:value.gap,pre:value.pre,post:value.post,scan_mode:legacy?value.scan_mode:'indexed',backend:value.backend,gpu_load:value.gpu_load,delete_source:value.delete_source,verify:value.verify,pipeline:legacy&&value.scan_mode==='complete'&&value.pipeline,...filters};
 }

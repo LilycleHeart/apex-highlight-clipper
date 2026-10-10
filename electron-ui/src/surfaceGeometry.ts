@@ -2,6 +2,13 @@
 export const NAV={duration:.5,decay:13.7755052,omega:14.0538264};
 export const PRESS={duration:.15,decay:7.033412493122591/.15,omega:6.2028867749790555/.15};
 export const clamp=(x:number)=>Math.max(0,Math.min(1,x));
+export const VIEW_HEAD=[.25,1,.5,1] as const,VIEW_TAIL=[.25,.2,.5,1] as const,MENU_EASE=[.2,.9,.25,1] as const;
+export function bezierProgress(x:number,curve:readonly number[]){
+ x=clamp(x);if(x===0||x===1)return x;const [x1,y1,x2,y2]=curve;let low=0,high=1,t=x;
+ for(let i=0;i<18;i++){const u=1-t,px=3*u*u*t*x1+3*u*t*t*x2+t*t*t;if(px>x)high=t;else low=t;t=(low+high)/2;}
+ return 3*(1-t)**2*t*y1+3*(1-t)*t*t*y2+t*t*t;
+}
+export function connectedTabPath(q:number,w=116){q=clamp(q);const h=30*q,b=36,r=Math.min(12,h),foot=14*q;return plate(16,w,b-h,h,r)+corner(16,b,foot,true)+corner(16+w,b,foot,false);}
 export function sampleSpring(from:number,to:number,elapsed:number,p=NAV){
  if(elapsed>=p.duration)return to;
  const a=to-from,b=p.decay*a/p.omega;

@@ -31,6 +31,13 @@ class QualityTests(unittest.TestCase):
     def test_invalid_thresholds_are_rejected(self):
         for request in [{'min_damage':-1},{'min_kills':1.5},{'min_assists':True},{'filter_mode':'maybe'},{'filter_enabled':'yes'}]:
             with self.assertRaises(ValueError):parse_options(request)
+    def test_duration_uses_actual_aligned_interval_and_three_value_logic(self):
+        options=parse_options({'filter_enabled':True,'filter_mode':'all','min_kills':1,'min_duration':30})
+        self.assertEqual(assess(dict(start=10,end=40,**self.stats(kills=1)),options)['status'],'kept')
+        self.assertEqual(assess(dict(start=10,end=39.9,**self.stats(kills=1)),options)['status'],'rejected')
+        self.assertEqual(assess(dict(start=10,end=40,**self.stats(kills=None)),options)['status'],'review')
+        self.assertEqual(assess(dict(start=10,end=40,**self.stats(kills=0,partial={'kills':True})),options)['status'],'review')
+        self.assertEqual(assess(self.stats(kills=1),options)['status'],'review')
     def test_resume_freezes_filter_settings_instead_of_using_new_global_values(self):
         with tempfile.TemporaryDirectory() as tmp,patch.dict('os.environ',{'APEX_DISABLE_LAST_TASK':'1'}):
             source=Path(tmp)/'clip.mp4';source.write_bytes(b'fixture')

@@ -1,6 +1,8 @@
 import {contextBridge,ipcRenderer,webUtils} from 'electron';
 import type {DesktopAPI,WorkerEvent,SystemTheme,UpdateInfo} from '../src/shared';
 const api:DesktopAPI={
+ library:()=>ipcRenderer.invoke('library'),
+ chooseLibraryRoot:()=>ipcRenderer.invoke('choose-library-root'),
  ready:()=>ipcRenderer.invoke('ui-ready'),chrome:(color,foreground)=>ipcRenderer.invoke('chrome',color,foreground),
  bootstrap:()=>ipcRenderer.invoke('bootstrap'),chooseFiles:()=>ipcRenderer.invoke('choose-files'),chooseFolder:()=>ipcRenderer.invoke('choose-folder'),
  importFiles:files=>ipcRenderer.invoke('import-files',files.map(file=>webUtils.getPathForFile(file))),

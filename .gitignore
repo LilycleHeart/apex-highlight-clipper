@@ -63,7 +63,9 @@ electron-ui/.playwright*/
 !/electron-ui/tests/updates.test.cjs
 !/electron-ui/tests/media.test.cjs
 !/electron-ui/tests/surface-geometry.test.cjs
-!/electron-ui/tests/v3-ui-validation.cjs
 !/electron-ui/tests/titlebar-ui-validation.cjs
 !/docs/third-party.md
-!/electron-ui/tests/theme-ui-validation.cjs
+!/electron-ui/tests/library.test.cjs
+!/electron-ui/tests/media-geometry.test.cjs
+!/electron-ui/tests/v5-ui-validation.cjs
+!/electron-ui/tests/v5-theme-validation.cjs

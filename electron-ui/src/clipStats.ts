@@ -15,7 +15,7 @@ export function recordingTimeLabel(value:string|null|undefined):string{
  if(!value)return'—';const m=value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}(?::\d{2})?)/);
  return m?`${m[1]}年${Number(m[2])}月${Number(m[3])}日 ${m[4]}`:'—';
 }
-/** 战果核查遇到第一个正例便停止，提示数量是已确认下限，不能冒充全段总数。 */
+/** 新统计完整扫描本段提示；旧缓存可能只保留正例下限，按字段状态展示。 */
 export function clipStatistics(clip:any,candidates:any[]=[]){
  const summary=clip.summary||{};const segment=clip.segment||{};
  const start=segment.requested_start??segment.start,end=segment.requested_end??segment.end;

@@ -56,7 +56,9 @@ def validate_worker(target):
 
 def build(args):
     version = json.loads((ROOT/'electron-ui/package.json').read_text('utf-8'))['version']
-    target = OUT / f'Apex-Clipper-{version}-Windows-x64'
+    out=OUT/args.stage if args.stage else OUT
+    if not out.resolve().is_relative_to(OUT.resolve()): raise ValueError('暂存目录超出publish范围')
+    target = out / f'Apex-Clipper-{version}-Windows-x64'
     if target.exists() and not args.refresh:
         raise RuntimeError('目标包目录已存在，保留已有包；请先改名备份再重新构建。')
     target.mkdir(parents=True, exist_ok=args.refresh)
@@ -113,17 +115,18 @@ def build(args):
     (target/'Start.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\nif not exist "tools\\ffmpeg.exe" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\setup-ffmpeg.ps1"\r\nif not exist "tools\\ffmpeg.exe" (echo FFmpeg setup failed. See README.md. & pause & exit /b 1)\r\nstart "" "%~dp0app\\Apex Highlight Clipper.exe" %*\r\n','utf-8')
     inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in release_files(target)}
     (target/'FILES.sha256.json').write_text(json.dumps(inventory,indent=2),'utf-8')
-    archive=OUT/(target.name+'.zip')
+    archive=out/(target.name+'.zip')
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
         for p in [*release_files(target),target/'FILES.sha256.json']:
             z.write(p,Path(target.name)/p.relative_to(target))
-    (OUT/'SHA256SUMS.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  '+archive.name+'\n','utf-8')
+    (out/'SHA256SUMS.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  '+archive.name+'\n','utf-8')
     print(archive)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--cpu',default=str(ROOT/'.venv'))
     parser.add_argument('--gpu',default=str(ROOT/'.gpu-venv'))
-    parser.add_argument('--electron',default='release-v3-final')
+    parser.add_argument('--electron',default='release-v5')
+    parser.add_argument('--stage',default='v5',help='publish内独立暂存目录，避免覆盖旧运行包')
     parser.add_argument('--refresh',action='store_true',help='更新本次未发布暂存包的产品文件，保留已验证runtime并重写校验和ZIP')
     build(parser.parse_args())

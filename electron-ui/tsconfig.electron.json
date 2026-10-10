@@ -14,6 +14,8 @@
     "src/shared.ts",
     "src/state.ts",
     "src/surfaceGeometry.ts",
+    "src/mediaGeometry.ts",
+    "src/eventTimeline.ts",
     "src/blancaState.ts"
   ]
 }

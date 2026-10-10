@@ -10,8 +10,9 @@
     "build": "npm run typecheck && vite build --base=./ && tsc -p tsconfig.electron.json",
     "start": "electron .",
     "package": "npm run build && node scripts/package.cjs",
-    "test": "node --test tests/protocol.test.cjs tests/clip-stats.test.cjs tests/updates.test.cjs tests/media.test.cjs tests/blanca-state.test.cjs tests/surface-geometry.test.cjs",
-    "validate": "npm run build && npm test"
+    "test": "node --test tests/protocol.test.cjs tests/clip-stats.test.cjs tests/updates.test.cjs tests/media.test.cjs tests/blanca-state.test.cjs tests/surface-geometry.test.cjs tests/library.test.cjs tests/media-geometry.test.cjs",
+    "validate": "npm run lint && npm run build && npm test",
+    "lint": "tsc -p tsconfig.json --noEmit false --rootDir src --outDir output/lint-renderer && tsc -p tsconfig.electron.json --outDir output/lint-electron && node scripts/lint.cjs"
   },
   "dependencies": {
     "@material/material-color-utilities": "0.4.0",
@@ -27,6 +28,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "electron": "44.7.0",
+    "eslint": "10.12.0",
     "playwright-core": "1.64.0",
     "typescript": "7.0.2",
     "vite": "8.3.4"

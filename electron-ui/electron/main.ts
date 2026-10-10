@@ -9,12 +9,15 @@ import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,S
 import {clipStatistics,recordingTime} from '../src/clipStats';
 import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo} from './updates';
 import {VideoRegistry} from './media';
+import {LibraryStore,mergeLibrary} from './library';
+import {mediaGeometry} from '../src/mediaGeometry';
 
 protocol.registerSchemesAsPrivileged([{scheme:'apex-media',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
 if(process.env.APEX_UI_TEST_HOME)app.setPath('userData',process.env.APEX_UI_TEST_HOME);
 else {const legacy=path.join(app.getPath('appData'),'Apex交战剪辑');if(existsSync(path.join(legacy,'preferences.json')))app.setPath('userData',legacy);}
 function locateProject(){if(process.env.APEX_PROJECT_ROOT)return path.resolve(process.env.APEX_PROJECT_ROOT);for(const base of [__dirname,app.getAppPath(),path.dirname(app.getPath('exe'))]){let dir=base;for(let i=0;i<8;i++){if(existsSync(path.join(dir,'app_worker.py')))return dir;const next=path.dirname(dir);if(next===dir)break;dir=next;}}throw new Error('未找到剪辑内核。请将程序保留在项目目录内，或设置 APEX_PROJECT_ROOT。');}
 const project=locateProject();
+const libraryStore=new LibraryStore(path.join(app.getPath('userData'),'library.json'));
 function pythonFor(backend:'cpu'|'dml'='cpu'){const bundled=path.join(project,'runtime',backend,'python.exe');return existsSync(bundled)?bundled:path.join(project,backend==='dml'?'.gpu-venv/Scripts/python.exe':'.venv/Scripts/python.exe');}
 const development=!app.isPackaged||process.argv.includes('--preview');
 let win:BrowserWindow;let worker:ChildProcess|null=null;let launching=false;let stopFile='';let stopRequested=false;let closing=false;let terminal=false;let currentTask='';let currentSource='';let eventChain=Promise.resolve();
@@ -36,7 +39,7 @@ async function save(){const snapshot=JSON.stringify({preferences,options,output,
 async function imageUrl(p:string){
  const real=await fs.realpath(p);if(!['.jpg','.jpeg','.png'].includes(path.extname(real).toLowerCase()))throw new Error('预览格式无效');
  const validation=await fs.realpath(path.join(project,'validation'));if(!within(real,validation))throw new Error('预览路径不属于分析缓存');
- let key=imageKeys.get(real);if(!key){key=randomUUID();images.set(key,real);imageKeys.set(real,key);if(images.size>300){const oldest=images.keys().next().value!;imageKeys.delete(images.get(oldest)!);images.delete(oldest);}}
+ let key=imageKeys.get(real);if(!key){key=randomUUID();images.set(key,real);imageKeys.set(real,key);if(images.size>6000){const oldest=images.keys().next().value!;imageKeys.delete(images.get(oldest)!);images.delete(oldest);}}
  return `apex-media://image/${key}`;
 }
 async function taskInfo(p:string):Promise<TaskInfo>{const task=await readJson(p);if(task.version!==1||normalized(task.directory)!==normalized(path.dirname(p))||!Array.isArray(task.items))throw new Error('任务记录格式不正确');allowedTasks.add(normalized(p));allowedPaths.add(normalized(task.directory));for(const item of task.items)allowedPaths.add(normalized(item.source));return{path:p,directory:task.directory,output:task.request.output||path.dirname(task.directory),finished:task.finished,legacyRule:!task.result_filter_version,samplingWarning:task.request.fps<1?'旧任务低采样率可能漏掉交战；新建任务建议至少1帧/秒':'',options:safeOptions({...defaults,...task.request},true),items:task.items.map((i:any)=>({id:normalized(i.source),path:i.source,name:path.basename(i.source),status:i.status==='error'?'error':i.status==='complete'?'complete':i.status==='running'?'stopped':'pending',missing:!existsSync(i.source),error:i.record?.error}))};}
@@ -68,12 +71,17 @@ async function collectResults(p:string,repair=true):Promise<Result[]>{
     allowedClips.add(normalized(target));const start=Number(c.segment.start),end=Number(c.segment.end);const rate=record.parameters?.fps||2;const targetTime=(start+end)/2;
     const inside=frames.filter(f=>{const t=(Number(path.parse(f).name)-.5)/rate;return t>=start&&t<=end;});const frame=inside.sort((a,b)=>Math.abs((Number(path.parse(a).name)-.5)/rate-targetTime)-Math.abs((Number(path.parse(b).name)-.5)/rate-targetTime))[0];let thumbnail:string|undefined;
     if(frame)try{thumbnail=await imageUrl(path.join(samples,frame));}catch{}
-    result.clips.push({path:target,name:path.basename(target),recordedAt:recordingTime(item.source)||recordingTime(path.basename(target)),duration:Number(c.metadata?.format?.duration)||end-start,start,end,...clipStatistics(c,candidates),thumbnail});
+    result.clips.push({media:mediaGeometry(c.metadata),taskPath:p,source:item.source,exportedAt:(await fs.stat(path.join(item.destination,'export.json'))).mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(item.source)||recordingTime(path.basename(target)),duration:Number(c.metadata?.format?.duration)||end-start,start,end,...clipStatistics(c,candidates),thumbnail});
    }
   }catch{}
   allowedPaths.add(normalized(item.destination));results.push(result);
  }
  return results;
+}
+let libraryRead:Promise<{results:Result[];tasks:number;errors:number}>|null=null;
+async function collectLibrary(){
+ if(libraryRead)return libraryRead;
+ libraryRead=(async()=>{const last=await lastTask();if(last)await libraryStore.remember(last.path);const paths=await libraryStore.discover([output]);let errors=0,tasks=0;const results:Result[]=[];for(const p of paths){try{await taskInfo(p);results.push(...await collectResults(p,false));tasks++;}catch{errors++;}}return{results:mergeLibrary(results),tasks,errors};})().finally(()=>{libraryRead=null;});return libraryRead;
 }
 async function metadata(file:FileItem){await new Promise<void>(resolve=>{const executable=pythonFor();const proc=spawn(executable,['app_ui_info.py',file.path],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});let result='';proc.stdout.setEncoding('utf8');proc.stdout.on('data',t=>result+=t);const timeout=setTimeout(()=>proc.kill(),20000);proc.on('error',()=>{clearTimeout(timeout);resolve();});proc.on('close',()=>{clearTimeout(timeout);try{const info=JSON.parse(result.trim());send({type:'metadata',source:file.path,...info} as WorkerEvent);}catch{send({type:'metadata',source:file.path,message:'无法读取录像信息'});}resolve();});});}
 async function imports(paths:unknown):Promise<{files:FileItem[];rejected:string[]}>{if(!Array.isArray(paths)||paths.length>500)throw new Error('录像清单无效');const files:FileItem[]=[];const rejected:string[]=[];const seen=new Set<string>();for(const raw of paths){if(typeof raw!=='string'||!raw)continue;const p=path.resolve(raw);if(seen.has(normalized(p)))continue;seen.add(normalized(p));try{const stat=await fs.stat(p);if(!stat.isFile()||!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error();allowedPaths.add(normalized(p));files.push({id:normalized(p),path:p,name:path.basename(p),bytes:stat.size,status:'pending'});}catch{rejected.push(path.basename(p));}}let next=0;const pump=async()=>{while(next<files.length)await metadata(files[next++]);};void pump();void pump();return{files,rejected};}
@@ -85,7 +93,7 @@ async function start(payload:any,resume=false){if(worker&&terminal)await workerE
   const python=pythonFor(effective.backend);if(!existsSync(python))throw new Error('未找到选定设备的 Python 环境');
   const proc=spawn(python,['app_worker.py',requestPath],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1',PYTHONIOENCODING:'utf-8'}});worker=proc;workerExit=new Promise<void>(resolve=>{resolveWorkerExit=resolve;});
   let stderr='';const lines=new JsonLines(e=>{eventChain=eventChain.then(async()=>{const event=e as unknown as WorkerEvent;
-   if(event.type==='run'&&event.task_path){currentTask=event.task_path;await taskInfo(currentTask);}
+   if(event.type==='run'&&event.task_path){currentTask=event.task_path;await taskInfo(currentTask);await libraryStore.remember(currentTask);}
    if(event.type==='file')currentSource=event.source||'';
    if(event.type==='preview'&&event.sample_path){try{event.imageUrl=await imageUrl(event.sample_path);}catch{return;}delete event.sample_path;}
    if(event.type==='result'&&currentTask){const list=await collectResults(currentTask);event.result=list.find(r=>normalized(r.source)===normalized(event.source||currentSource));}
@@ -100,6 +108,7 @@ async function stop(){stopRequested=true;if(stopFile)await fs.writeFile(stopFile
 function trusted(event:Electron.IpcMainInvokeEvent){if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)throw new Error('不允许的界面请求');}
 function handle(name:string,fn:(...args:any[])=>any){ipcMain.handle(name,(event,...args)=>{trusted(event);return fn(...args);});}
 app.whenReady().then(async()=>{
+ await libraryStore.load();
  try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences};options=safeOptions({...defaults,...saved.options,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
  protocol.handle('apex-media',async request=>{try{const url=new URL(request.url);if(url.hostname==='video')return videos.respond(request);const p=images.get(url.pathname.slice(1));if(url.hostname!=='image'||!p)return new Response('Not found',{status:404});const data=await fs.readFile(p);return new Response(data,{headers:{'Content-Type':p.endsWith('.png')?'image/png':'image/jpeg','Cache-Control':'private, max-age=60'}});}catch{return new Response('Unavailable',{status:404});}});
  const initial=theme();const dark=preferences.mode==='dark'||(preferences.mode==='system'&&initial.dark);
@@ -122,8 +131,9 @@ app.whenReady().then(async()=>{
  handle('options',async(o:Options,p:string)=>{options=safeOptions(o);if(typeof p==='string'&&path.isAbsolute(p))output=p;await save();});
  handle('start',p=>start(p));handle('stop',stop);handle('resume',p=>start(p,true));handle('last-task',lastTask);
  handle('task',p=>{if(typeof p!=='string'||!allowedTasks.has(normalized(p)))throw new Error('请先选择任务');return taskInfo(p);});
- handle('choose-task',async()=>{const result=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'任务记录 task.json',extensions:['json']}]});if(result.canceled)return null;return taskInfo(result.filePaths[0]);});
- handle('results',collectResults);
+ handle('choose-task',async()=>{const result=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'任务记录 task.json',extensions:['json']}]});if(result.canceled)return null;const info=await taskInfo(result.filePaths[0]);await libraryStore.remember(info.path);return info;});
+ handle('results',collectResults);handle('library',collectLibrary);
+ handle('choose-library-root',async()=>{const selected=await dialog.showOpenDialog(win,{title:'添加历史输出目录',properties:['openDirectory']});if(selected.canceled)return false;await libraryStore.addRoot(selected.filePaths[0]);return true;});
  handle('video-url',file=>videos.url(file));
  handle('open',async(p:string,folder=false)=>{if(typeof p!=='string'||!allowedPaths.has(normalized(p)))throw new Error('只允许打开本任务的录像或成片');const stat=await fs.stat(p);if(!stat.isDirectory()&&!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error('只允许打开录像或输出文件夹');if(folder)shell.showItemInFolder(p);else{const error=await shell.openPath(p);if(error)throw new Error(error);}});
  if(process.env.APEX_UI_VALIDATE==='1'){

@@ -1,0 +1,1 @@
+export default function DesignIcon({name}:{name:'detail'|'grid'|'list'}){return <span className="design-icon" aria-hidden="true" style={{maskImage:`url(${import.meta.env.BASE_URL}ui-icons/${name}.svg)`}}/>;}
