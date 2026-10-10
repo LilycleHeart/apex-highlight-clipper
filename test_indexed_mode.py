@@ -19,10 +19,10 @@ from test_core import row
 
 
 class IndexedModeTests(unittest.TestCase):
-    def test_indexed_cannot_recycle_or_enable_full_pipeline(self):
+    def test_indexed_recycle_is_independent_and_full_pipeline_is_removed(self):
         options=parse_options({'scan_mode':'indexed','delete_source':True,'pipeline':True})
         self.assertEqual(options['scan_mode'],'indexed')
-        self.assertFalse(options['delete_source']); self.assertFalse(options['pipeline'])
+        self.assertTrue(options['delete_source']); self.assertFalse(options['pipeline'])
 
     def test_new_indexed_namespace_and_resume_freeze(self):
         with tempfile.TemporaryDirectory() as temp,patch.dict(os.environ,{'APEX_DISABLE_LAST_TASK':'1'}):
@@ -35,7 +35,10 @@ class IndexedModeTests(unittest.TestCase):
             task['smart_cache_version']='indexed-v1';save_task(path,task)
             _,old,_,_=open_task({'resume_task':str(path)})
             self.assertEqual(old['smart_cache_version'],'indexed-v1')
-            path,task,_,_=open_task({**request,'scan_mode':'smart'}); save_task(path,task)
+            path,task,_,_=open_task({**request,'scan_mode':'smart'})
+            self.assertEqual(task['request']['scan_mode'],'indexed')
+            # 模拟已经存在的旧智能任务，恢复时保留缓存格式。
+            task['request']['scan_mode']='smart';task['smart_cache_version']='focused-v6';save_task(path,task)
             _,_,_,options=open_task({'resume_task':str(path),'scan_mode':'indexed'})
             self.assertEqual(options['scan_mode'],'smart')
 

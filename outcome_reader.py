@@ -13,7 +13,7 @@ def compact(text):
 
 def result_kind(text,inactive):
     value=compact(text)
-    if any(x in value for x in ['YOUARETHECHAMPION','你已成为冠军','你已成為冠軍']): return 'win'
+    if any(x in value for x in ['YOUARETHECHAMPION','你已成为冠军','你已成為冠軍','你是冠军','你是冠軍']): return 'win'
     if inactive and any(x in value for x in ['小队全灭','小隊全滅','游戏结束','遊戲結束','SQUADELIMINATED','GAMEOVER']): return 'end'
     return None
 
@@ -27,7 +27,7 @@ def friend_view(image,inactive):
     return bool(len(xx)>=80 and xx.max()-xx.min()>=banner.shape[1]*.40)
 
 def enrich_outcomes(cache,samples,checkpoint=None):
-    signature=hashlib.sha256(('outcome-v2-'+MODEL_SHA).encode()).hexdigest()
+    signature=hashlib.sha256(('outcome-v3-'+MODEL_SHA).encode()).hexdigest()
     if cache.get('outcome_signature')==signature: return cache
     rows=cache['rows']; chosen=set()
     for i,r in enumerate(rows):

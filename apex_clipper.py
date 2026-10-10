@@ -631,23 +631,26 @@ def recording_prefix(source):
 
 
 def informative_filename(source, index, summary):
-    kills=f"{summary['kills']}杀" if summary['kills'] is not None else '未知杀'
-    damage=f"{summary['damage']}伤" if summary['damage'] is not None else '未知伤'
-    weapons='+'.join(summary['weapons'][:3])+('等' if len(summary['weapons'])>3 else '')
+    kills=f"{summary['kills']}杀" if summary['kills'] is not None else '—杀'
+    damage=f"{summary['damage']}伤" if summary['damage'] is not None else '—伤'
+    weapons='+'.join('—枪' if w=='未知枪' else w for w in summary['weapons'][:3])+('等' if len(summary['weapons'])>3 else '')
     weapons=re.sub(r'[<>:"/\\|?*\x00-\x1f]','_',weapons).strip(' .') or '未知枪'
     return f'{recording_prefix(source)} 第{index}段 {kills} {weapons} {damage}.mp4'
 
 
-def export_lossless(source, segments, output, events=None,resume=False):
+def export_lossless(source, segments, output, events=None,resume=False,statistics=None):
     if resume:
         from resume_media import export_with_resume
-        return export_with_resume(source,segments,output,events)
+        return export_with_resume(source,segments,output,events,statistics=statistics)
     output=Path(output).resolve(); output.mkdir(parents=True,exist_ok=True)
     if not segments: raise ValueError('没有片段；不会生成空视频')
     source=Path(source).resolve()
     meta,_=probe(source); duration=float(meta['format']['duration'])
     aligned=align_segments(segments,keyframes(source),duration)
     summaries=[segment_summary(events,s) for s in aligned]
+    if statistics is not None:
+        from combat_statistics import overlay_summaries
+        summaries=overlay_summaries(summaries,aligned,statistics)
     targets=[output/informative_filename(source,i+1,summaries[i]) for i in range(len(aligned))]
     if (output/'export.json').exists(): raise FileExistsError('此目录已有导出清单，请使用新目录')
     for target in targets:

@@ -1,120 +1,94 @@
+<div align="center">
+
 # Apex Highlight Clipper
 
-本地运行的 Apex Legends 自动交战剪辑工具，采用 Electron + React + TypeScript 界面与 Python 分析内核。
+**交战留下，空档交给我。**
 
-批量导入录像，定位交战，确认本人击倒、助攻或消灭提示，按交战分别无损导出。原始视频与音轨使用 FFmpeg stream copy，不重新编码。
+本地批量识别 Apex Legends 交战 · 每段独立输出 · 视频与全部音轨无损复制
 
-## 功能
+[下载 Windows 版](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) · [开发说明](docs/development.md) · [第三方资源](docs/third-party.md)
 
-- 拖入录像、多选文件、导入文件夹与批量队列。
-- 智能局部识别，保留长 TTK 拉扯、倒地后的有效队友续战。
-- 可选「索引加速 · 实验」：内存关键帧粗定位，连续区间持续解码、分块保存断点并同时识别，再确认本人战果。
-- 本人击倒／助攻／消灭至少出现一种才保留；只有伤害的候选跳过，无法可靠判断的候选标为待复核。
-- 独立 MP4 输出，中文日期时间、击杀、枪械与伤害命名。
-- GPU 负载档位、细查频率、交战合并间隔、前后保留时长可调。
-- 分阶段断点、继续原批次、已完成输出不重复导出。
-- Material 动态配色，跟随系统主题与强调色；双样式角色、阶段动作与开关音效、阶段播报和真实采样缩略图。
-- 可选逐包无损校验。完整模式支持校验后移入回收站；智能模式保留原片。
+![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-1274ff) ![Release](https://img.shields.io/github/v/release/LilycleHeart/apex-highlight-clipper) ![Validate](https://github.com/LilycleHeart/apex-highlight-clipper/actions/workflows/validate.yml/badge.svg)
+
+</div>
+
+![整理片段 · 真实运行截图](docs/assets/clips-detail.png)
+
+<table><tr><td><img src="docs/assets/start.png" alt="开始：导入录像与队列"></td><td><img src="docs/assets/statistics.png" alt="当前任务统计"></td></tr><tr><td><img src="docs/assets/clips-grid.png" alt="紧凑网格"></td><td><img src="docs/assets/clips-list.png" alt="列表视图"></td></tr></table>
+
+以上为实际 Electron 应用截图。战绩和缩略图来自验证用的已导出录像，展示的是当前片段样本。
+
+## 下载即用
+
+1. 在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载 Apex-Clipper-0.2.0-Windows-x64.zip，完整解压到可写目录。
+2. 双击 **Start.cmd**。包内已附 CPU / DirectML Python 运行环境和 OCR 模型，无需另装 Python 或 Node.js。
+3. 首次启动联网准备 FFmpeg 9.0.2，下载后核对固定 SHA256。也可自行将 ffmpeg.exe、ffprobe.exe 放进包内 tools/，之后可离线剪辑。
+4. 选择录像或文件夹，设置输出位置，点击“开始整理”。停止时保存断点，下次继续原批次。
+
+支持 Windows 10 / 11 x64。GPU 使用 DirectML，默认低占用；识别设备可以改为 CPU。发布包未签名，附 SHA256SUMS.txt 及包内文件校验清单。程序不会上传录像。
+
+## 交战与片段
+
+- **最新索引算法默认启用**：关键帧定位、区间细查、伤害 / 击杀终值审计和本人战果提示共同判断，支持拉扯、长 TTK 和本人倒地后的队友续战。
+- **按本人战果保留**：至少确认击倒、助攻或消灭之一；只有伤害的候选跳过，矛盾或无法确定的候选留待复核。
+- **每场交战一段 MP4**：FFmpeg stream copy，不重编码、不合并成长视频。保留全部音轨，关键帧对齐可能略向外扩展起止时间。
+- **三种片段视图**：详细卡片、紧凑网格、列表共用来源、时间排序和选择状态。完整文件名、日期时间、枪械、段位、原片区间、校验状态和战果证据均可查看。
+- **应用内播放**：点击当前卡片展开为整行，邻卡让位。原生进度、音量、暂停与全屏；切换片段停止旧播放器，切换视图保留当前播放位置。
+
+![应用内播放 · 实际 MP4](docs/assets/player.png)
+
+## 可调，也能续接
+
+| 选项 | 行为 |
+| --- | --- |
+| GPU 负载 | 低占用 / 均衡 / 全速；控制工作节奏，不是固定百分比上限 |
+| 细查频率 | 默认 2 帧/秒，独立于源视频 FPS；新任务最低 1 帧/秒 |
+| 合并间隔、前后保留 | 按你的拉扯节奏调整，内核继续判断倒地后的战斗延续 |
+| 最低伤害、击杀、助攻 | 0 为不限，可选任一项或全部设置项达标；确定未达标不导出，不确定则待复核 |
+| 无损校验 | 核对视频与全部音轨的压缩包 |
+| 导出后回收原录像 | 与校验独立。成功导出且没有待复核内容时移入 Windows 回收站；失败或缺片保留原录像 |
+| 断点续接 | 原任务参数和算法版本冻结，已完成输出不重复导出；运行时追加录像进入下一批 |
+
+窗口关闭时先保存断点再退出，不会在关闭窗口后假称后台继续处理。
+
+## 看懂识别结果
+
+战绩栏使用原有游戏图形，依次为 **击杀 / 助攻 / 击倒 / 伤害**。鼠标悬停显示中文说明。
+
+- 2：可靠的本段增量。
+- ≥2：已经确认至少 2 次，证据不足以断言完整总数。
+- —：暂无可靠计数，不会把缺失数据填成 0。
+
+最后一队结束时，优先使用可靠结算增量；没有结算页时补查中下方本人提示。缓存中缺失计数可以从已有画面补读，原片已回收时也不需要重新导出。模糊、遮挡或矛盾的数据仍可能保持“—”。
+
+段位来自录像中本人的 HUD，不确定时显示“未识别”。统计页只汇总当前任务已导出的片段，枪械次数表示片段样本中的出现次数。
+
+## 界面与动效
+
+36px 标题栏、慢速斜向手柄图案、三页导航和圆体排版。导航由页面边缘升起，抽屉与卡片在边界舒展；视频、文字和数字保持正常比例。途中反向从可见状态继续，切到后台暂停时钟，减少动效时直接收敛。
+
+两套 Blanca 角色可切换或关闭。以转身更换贴图，降低动作频率；开关沿人物 → 虚线轮廓 → 消失的过程往返，并使用“消失”“复原”音效。角色固定在页面内。
+
+设置提供手动更新检查及启动检查开关，每 24 小时最多自动查询一次本项目正式 Release，不自动安装更新。
 
 ## 当前适配范围
 
-这是 Windows x64 的本地应用。当前主要校准于 **2560×1080、繁体中文 Apex HUD**。其他宽高比、语言、HUD 缩放或布局需要额外校准，不能保证直接识别。
+识别主要按 **2560 × 1080 HUD** 校准，其他分辨率、比例、语言或 HUD 布局需要校准 profile / 模板。硬件视频解码已在 NVIDIA CUDA 路径验证；其他硬件可以使用 CPU 解码 / 识别。
 
-GPU OCR 使用 DirectML；硬件视频解码路径当前按 NVIDIA CUDA 验证。其他显卡建议先使用 CPU 模式。低占用档控制工作节奏，不是固定的 GPU 利用率上限。
+这是本地视觉识别工具，画面完全遮住战绩时无法恢复不存在的证据。阈值筛选对未知值和已确认下限采用保守规则，不会为了凑数伪造统计。
 
-无损切割依赖关键帧，实际边界可能略向外扩展。记录中的击杀、伤害来自本人 HUD 识别，模糊或矛盾的计数仍可能需要人工复核。
+## 从源码运行
 
-## 本机安装
+需要 Python 3.11、Node.js 24，以及 FFmpeg / FFprobe。
 
-需要 Python 3.11、Node.js 22.12 或更新版本，以及包含 `ffmpeg` 和 `ffprobe` 的 FFmpeg 安装。项目在 Python 3.11 / Node.js 24 上验证。
+先创建 .venv 并安装 requirements.txt，运行 setup_weapon_model.py 下载并校验模型。GPU 使用 setup_gpu.ps1 建立独立 .gpu-venv。scripts/setup-ffmpeg.ps1 可准备固定版本工具，已有安装可通过 APEX_FFMPEG_DIR 指定。
 
-在仓库根目录创建 CPU 环境：
+在 electron-ui/ 运行 npm ci、npm run build、npm start。Python 回归使用 python -m unittest discover -p "test_*.py"，界面回归使用 npm run validate。
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe setup_weapon_model.py
-```
+桌面打包目录本身仅包含 Electron 界面。发布用的完整运行包由 scripts/build-portable.py 收集内核、必要模板、模型、运行环境和许可证；具体见 [开发约定](docs/development.md)。
 
-GPU 环境与 CPU 环境分开，避免 ONNX Runtime 包互相覆盖：
+录像、分析缓存、开发环境、诊断输出、本机配置与临时设计交接包均排除于仓库和发布包。保留可复现构建与必要回归测试。
 
-```powershell
-.\setup_gpu.ps1 -Python python
-.\.gpu-venv\Scripts\python.exe setup_weapon_model.py
-```
+## 资源与许可
 
-FFmpeg 可放在 `tools/ffmpeg.exe` 和 `tools/ffprobe.exe`，或放入 PATH。也可设置 `APEX_FFMPEG_DIR`，或创建本机专用、不会提交的 `ffmpeg.local.json`：
-
-```json
-{"directory": "D:/Tools/ffmpeg/bin"}
-```
-
-模型由安装脚本下载并校验。仓库不包含录像、模型权重、虚拟环境、node_modules 或成品运行包。
-
-构建界面：
-
-```powershell
-cd electron-ui
-npm ci
-npm run build
-npm start
-```
-
-构建 Windows 应用目录：
-
-```powershell
-npm run package
-```
-
-生成 `electron-ui/release/Apex Highlight Clipper-win32-x64/`。双击根目录的 `启动Electron界面.cmd`，优先打开该运行包；`预览Electron界面.cmd` 可查看明确标记的模拟阶段。
-
-**目前运行包仍需本项目的 Python、模型与 FFmpeg，请保留整个项目目录。它不是可任意复制到其他电脑的独立安装包。**
-
-## 使用
-
-1. 导入录像并选择输出文件夹。
-2. 默认智能模式、2帧/秒和低GPU负载即可开始。
-3. 每场有效交战独立导出。结果中区分保留、跳过和待复核。
-4. 中断时选择停止并保存进度；继续任务时沿用原队列与剪辑参数。
-
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| 细查频率 | 2帧/秒 | 算法采样精度，新任务范围1–5；不改变成片帧率 |
-| 合并间隔 | 35秒 | 相邻交战信号可合并的间隔 |
-| 前置 / 收尾 | 10 / 15秒 | 交战前后额外保留的内容 |
-| GPU负载 | 低占用 | 低占用、均衡、全速；不保证每份录像的总耗时按档位严格递减 |
-
-更旧的任务沿用原业务规则，旧成片不会自动重筛或删除。已处理和已有缓存的录像保留原断点；符合相同业务规则的未开始录像可以使用新版规划。
-
-### 试用索引加速
-
-在「剪辑设置 → 识别方式」选择「索引加速 · 实验」，然后新建录像任务。继续旧批次会沿用该批次原来的算法。实验模式保留原录像，使用独立分析缓存，并沿用局部细查、本人击倒／助攻／消灭确认、独立无损导出和校验。
-
-新建实验任务使用连续解码与局部OCR流水线；包括早期实验批次在内的已有任务继续沿用原版本。断点保存不需要关闭连续区间的解码进程，暂停时仍保留已完成的采样块和识别行。采样频率、图片像素和战果保留条件沿用原规则。
-
-索引读取目前针对起始 PTS 为零的 MP4/MOV H.264 视频；不支持时会提示切换智能模式。所选 Python 环境需要额外安装 `requirements-experimental.txt`，例如 GPU 环境：
-
-```powershell
-.\.gpu-venv\Scripts\python.exe -m pip install --no-deps -r requirements-experimental.txt
-```
-
-实验模式还不能保证与原算法的边界完全一致，也不保证一分钟完成全片。读取原型的 21–41 秒测量不包含完整细查、战果确认、枪名、导出和校验；实际耗时取决于需要补查的范围。
-
-高级命令行工具 `apex_clipper.py` 用于底层诊断；完整桌面流程由 `app_worker.py` 执行，包括最新战果筛选与任务续接。
-
-## 验证与开发
-
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -p "test_*.py"
-cd electron-ui
-npm run build
-npm test
-```
-
-实拍验证素材与内部运行记录不进入公开仓库。不能把模拟测试或缓存续接耗时当成冷启动性能。
-
-- [模块与事件协议](docs/architecture.md)
-- [性能记录与边界](docs/performance.md)
-- [开发约定](docs/development.md)
-
-![颜文字助手的关键姿态](docs/assets/kaomoji-mascot-reference.svg)
+第三方字体、模型、游戏图形和角色素材各自遵守原许可，详见 [第三方资源](docs/third-party.md)。本项目是非官方社区工具，与 EA / Respawn 无隶属关系。

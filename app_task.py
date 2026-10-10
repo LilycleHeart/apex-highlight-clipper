@@ -48,7 +48,7 @@ def open_task(request):
         effective=dict(task['request'])
         for key in ['backend','gpu_load','pipeline']:
             if key in request: effective[key]=request[key]
-        options=parse_options(effective)
+        options=parse_options(effective,legacy=True)
         task['request']=effective; task['finished']=False
     else:
         from combat_outcome_reader import RULE_VERSION

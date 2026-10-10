@@ -5,9 +5,9 @@ export const CYCLE_MS=11800;
 export const PUPPET_TURN_MS=600;
 export function actionForStage(stage:Stage):BlancaAction{
  if(stage==='bisect')return'locate';
- if(stage==='weapons')return'weapons';
+ if(stage==='weapons'||stage==='rank')return'weapons';
  if(stage==='export')return'export';
- if(['audit','verify','combat_outcomes'].includes(stage))return'verify';
+ if(['audit','verify','combat_outcomes','statistics'].includes(stage))return'verify';
  if(['stopping','stopped','error'].includes(stage))return'save';
  if(stage==='completed')return'completed';
  if(['probe','fine','numeric','lifecycle','outcomes','unknown'].includes(stage))return'detail';

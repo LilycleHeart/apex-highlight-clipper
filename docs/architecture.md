@@ -16,13 +16,14 @@ Electron 主进程负责文件选择、系统配色、Python 子进程与受限�
 | evidence_completion | 计分审计失败时只补缺失画面和识别行 |
 | combat_outcome_reader | 本人中下方击倒、助攻、消灭提示及字幕排除 |
 | weapon_reader / outcome_reader | 枪械名称、全灭与队友交战尾部 |
+| rank_reader | 复用已有本人 HUD 画面，模板匹配徽章与罗马分级，双帧一致确认 |
 | verify_export | 视频及全部音轨的压缩包、时间戳检查 |
 
 最终输出是 stream copy。检测采样帧率与成片帧率分离。
 
 ## Worker 请求
 
-新任务字段为 `files`、`output`、`backend`（cpu/dml）、`scan_mode`（smart/complete）、`gpu_load`（low/balanced/fast）、`fps`、`gap`、`pre`、`post`、`verify`、`delete_source`、`pipeline`。
+新任务字段为 `files`、`output`、`backend`（cpu/dml）、`scan_mode`（统一 indexed）、`gpu_load`（low/balanced/fast）、`fps`、`gap`、`pre`、`post`、`verify`、`delete_source`。两个布尔开关互不改写；新任务的 `pipeline` 固定为false，索引算法自行管理局部流水线。旧任务恢复仍兼容原 smart/complete 规划。
 
 停止标记必须位于项目 `validation/app-requests/`，使用唯一 `.stop` 文件名，并在启动前确定。创建该文件请求协作停止；收到 `stopped` 才表示进度已保存。正常停止退出码是75。
 

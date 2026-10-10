@@ -121,18 +121,26 @@ def sample_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_checkpoint=
         if on_checkpoint: on_checkpoint(state)
     write_json(complete,info)
 
-def export_with_resume(source,segments,output,events=None,on_checkpoint=None):
+def export_with_resume(source,segments,output,events=None,on_checkpoint=None,statistics=None):
     from apex_clipper import probe,fingerprint,write_json,tool,run,align_segments,keyframes,segment_summary,informative_filename
     import csv
     from app_cancel import check_cancel
     source=Path(source).resolve(); output=Path(output).resolve(); output.mkdir(parents=True,exist_ok=True)
     meta,_=probe(source); aligned=align_segments(segments,keyframes(source),float(meta['format']['duration']))
     summaries=[segment_summary(events,s) for s in aligned]
+    if statistics is not None:
+        from combat_statistics import overlay_summaries
+        summaries=overlay_summaries(summaries,aligned,statistics)
     targets=[output/informative_filename(source,i+1,summary) for i,summary in enumerate(summaries)]
     signature=digest({'source':fingerprint(source),'segments':aligned,'targets':[str(p) for p in targets],'summaries':summaries})
     checkpoint=output/'export-checkpoint.json'
     state=load(checkpoint) if checkpoint.exists() else {'signature':signature,'clips':[],'commands':[]}
-    if state['signature']!=signature: raise ValueError('导出断点与分析参数不匹配，请新建任务')
+    if state['signature']!=signature:
+        # 旧断点冻结原统计；仅兼容显示占位符改名，不改动已导出文件。
+        legacy=[p.with_name(p.name.replace('—杀','未知杀').replace('—伤','未知伤').replace('—枪','未知枪')) for p in targets]
+        legacy_signature=digest({'source':fingerprint(source),'segments':aligned,'targets':[str(p) for p in legacy],'summaries':summaries})
+        if state['signature']==legacy_signature:targets=legacy;signature=legacy_signature
+        else:raise ValueError('导出断点与分析参数不匹配，请新建任务')
     write_json(checkpoint,state); clips=[]; commands=[]
     for i,(segment,target,summary) in enumerate(zip(aligned,targets,summaries)):
         check_cancel()

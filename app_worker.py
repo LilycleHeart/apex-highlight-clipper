@@ -77,7 +77,7 @@ def _run_task(request_path):
     from app_options import recycle_source
     from apex_clipper import (BASE,VIDEO_EXTENSIONS,fingerprint,probe,sample_video,read_hud,
         same_hud_profile,enrich_lifecycle,enrich_weapon_labels,tool,detect_events,label_event_weapons,
-        downed_intervals,segments_from_events,classify_combat_candidates,export_lossless,write_json)
+        downed_intervals,segments_from_events,classify_combat_candidates,export_lossless,write_json,align_segments,keyframes)
     from outcome_reader import enrich_outcomes,cap_segment_ends,preserve_team_continuation
     from verify_export import validate
     incoming=load(request_path)
@@ -141,7 +141,7 @@ def _run_task(request_path):
                 width,height=profile['reference_size']
                 if abs(video['width']/video['height']-width/height)>.03: raise ValueError('当前版本适配 2560×1080 HUD，请先校准其他宽高比')
                 if options['scan_mode'] in ['smart','indexed'] and (video['width'],video['height'])!=(width,height):
-                    raise ValueError('智能模式目前需要 2560×1080 录像，请切换完整扫描或先校准 HUD')
+                    raise ValueError('当前索引识别需要 2560×1080 录像；其他画面布局需要先校准 HUD')
                 config={'source':identity,'profile':profile,'fps':fps}
                 planner_version=item.get('smart_cache_version',task.get('smart_cache_version','smart-v2'))
                 if options['scan_mode']=='indexed' and planner_version not in ['indexed-v1','indexed-v2']:
@@ -230,6 +230,11 @@ def _run_task(request_path):
                                 lambda:inspect_combat_outcomes(saved,samples,final_candidates,checkpoint=job/'combat-outcomes-final.json'))
                         segments,rejected,review=filter_combat_outcomes(final_candidates,result_filter)
                     destination.mkdir(exist_ok=True)
+                    from rank_reader import recognize_segments
+                    rank_report=stage('rank','复用已有画面识别本人当前段位',90,90,
+                        lambda:recognize_segments(saved,samples,segments,destination/'rank.json'))
+                    for segment,rank_record in zip(segments,rank_report['segments']):
+                        segment['rank']=rank_record['rank']
                     analysis={'source':identity,'duration':duration,'parameters':{'gap':gap,'pre':pre,'post':post,'fps':fps},'events':events,
                         'segments':segments,'review_candidates':review,'lifecycle_intervals':lifecycle,'outcome_events':saved['outcome_events'],'combat_filter_version':2}
                     if result_filter:
@@ -240,21 +245,55 @@ def _run_task(request_path):
                         analysis['counter_review_reason']=smart_plan['counter_review_reason']
                         analysis['counter_audit_after_completion']=smart_plan.get('audit_after_completion')
                     write_json(destination/'analysis.json',analysis); write_json(destination/'review-candidates.json',review)
-                    outputs=[]; verified=False; verification=None
+                    outputs=[]; verified=False; verification=None; quality_report=None; quality_rejected=[]
                     if segments:
-                        outputs=stage('export','无损导出独立交战视频（支持续接）',90 if result_filter else 86,95,lambda:export_lossless(source,segments,destination,events,resume=True))
-                        if options['verify']:
-                            verification=stage('verify','校验视频与全部音轨（支持续接）',95,99,lambda:validate(source,destination))
-                            verified=verification.get('passed') is True
-                            if not verified: raise ValueError('成片校验未通过')
+                        from combat_statistics import collect_statistics
+                        aligned=align_segments(segments,keyframes(source),duration)
+                        frozen_statistics=None
+                        if (destination/'export-checkpoint.json').exists() and (destination/'statistics.json').exists():
+                            candidate=load(destination/'statistics.json')
+                            if candidate.get('source')==saved['source'] and [(s['start'],s['end']) for s in candidate.get('segments',[])]==[(s['start'],s['end']) for s in aligned]:frozen_statistics=candidate
+                        statistics=stage('statistics','核对整段本人击杀、助攻、击倒与末队结算',90,90,
+                            lambda:frozen_statistics or collect_statistics(saved,samples,aligned,profile,job/'statistics-report.json'))
+                        write_json(destination/'statistics.json',statistics)
+                        from clip_quality_filter import apply_thresholds
+                        export_segments,export_statistics,quality_report,quality_rejected,quality_review=apply_thresholds(aligned,statistics,options)
+                        review.extend(quality_review)
+                        analysis['quality_filter']=quality_report
+                        write_json(destination/'quality-filter.json',quality_report)
+                        write_json(destination/'analysis.json',analysis);write_json(destination/'review-candidates.json',review)
+                        if options['filter_enabled']:emit('log',message=f"战绩过滤：保留 {len(export_segments)} 段，未达标 {len(quality_rejected)} 段，待复核 {len(quality_review)} 段",progress=90)
+                        if export_segments:
+                            export_input=export_segments if options['filter_enabled'] and any(options[k]>0 for k in ['min_damage','min_kills','min_assists']) else segments
+                            outputs=stage('export','无损导出独立交战视频（支持续接）',90 if result_filter else 86,95,lambda:export_lossless(source,export_input,destination,events,resume=True,statistics=export_statistics))
+                            manifest=load(destination/'export.json')
+                            for clip_index,clip in enumerate(manifest['clips']):
+                                bound=clip['segment'];left=bound.get('requested_start',bound['start']);right=bound.get('requested_end',bound['end'])
+                                related=[s for s in segments if s['start']<right and s['end']>left]
+                                unique={}
+                                for event in [e for s in related for e in s.get('own_result_filter',{}).get('events',[])]:
+                                    if event.get('ownership')=='self' and bound['start']<=event['time']<bound['end']:
+                                        unique[(event['kind'],event['time'],event.get('text',''))]=event
+                                evidence=[e for e in export_statistics['segments'][clip_index]['events'] if e['confirmed']];ranks=[s.get('rank') for s in related]
+                                rank=ranks[0] if ranks and all(ranks) and all((r['tier'],r['division'])==(ranks[0]['tier'],ranks[0]['division']) for r in ranks) else None
+                                clip['recognition']={'scope':'self','rank':rank,'outcome_evidence':evidence,
+                                    'assists_minimum':sum(e['kind']=='assist' for e in evidence) or None,
+                                    'knockdowns_minimum':sum(e['kind']=='knock' for e in evidence) or None,
+                                    'outcome_counts_complete':not any(export_statistics['segments'][clip_index]['partial'].values()),
+                                    'statistics':export_statistics['segments'][clip_index]}
+                            write_json(destination/'export.json',manifest)
+                            if options['verify']:
+                                verification=stage('verify','校验视频与全部音轨（支持续接）',95,99,lambda:validate(source,destination))
+                                verified=verification.get('passed') is True
+                                if not verified: raise ValueError('成片校验未通过')
                     record={'source':str(source),'status':'complete','outputs':[str(p) for p in outputs],
                         'output_identities':[fingerprint(p) for p in outputs],'review_count':len(review),'directory':str(destination),
                         'verified':verified,'parameters':options,'stage_seconds':dict(_STAGE_TIMINGS),'sample_directory':str(samples),
-                        'planner_version':planner_version,'analysis_cache':str(job),
+                        'planner_version':planner_version,'analysis_cache':str(job),'quality_rejected_count':len(quality_rejected),'quality_filter_summary':quality_report['summary'] if quality_report else None,
                         'source_cleanup':{'status':'kept','reason':'未开启输出后删除'}}
                     if analysis.get('counter_review_reason'): record['counter_review_reason']=analysis['counter_review_reason']
                     record.update(result_filter_version=result_filter['version'] if result_filter else None,rejected_count=len(rejected),
-                        result_filter_summary={'kept':len(segments),'rejected':len(rejected),'review':len(review),
+                        result_filter_summary={'kept':len(outputs),'rejected':len(rejected),'review':len(review),
                                                'rule':'击倒/助攻/消灭任一' if result_filter else '沿用旧任务交战规则'})
                     item['record']=record
                     if options['delete_source']:

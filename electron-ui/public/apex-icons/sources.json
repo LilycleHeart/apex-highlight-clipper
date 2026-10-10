@@ -1,0 +1,995 @@
+{
+  "description": "Apex 游戏 HUD 图形的社区 Wiki SVG 镜像；并非 EA 官方发布的 SVG 资源包。原始 SVG 字节完整保留。",
+  "assets": [
+    {
+      "id": "havoc",
+      "name": "哈博克",
+      "aliases": [
+        "哈博克",
+        "HAVOC Rifle",
+        "哈博克步槍",
+        "HAVOC",
+        "哈沃克",
+        "哈沃克步枪",
+        "哈博克步枪"
+      ],
+      "title": "File:HAVOC Rifle Icon.svg",
+      "group": "weapons",
+      "file": "weapons/havoc.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/3/3f/HAVOC_Rifle_Icon.svg/revision/latest?cb=20230201222529",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:HAVOC_Rifle_Icon.svg",
+      "sha256": "37491e21c52a93e906ccd1d0ec3dd0f324f20c2002c94fc8eedc0828b0f30a93",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:25:29Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "HAVOC Rifle Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "flatline",
+      "name": "平行",
+      "aliases": [
+        "平行",
+        "VK-47 Flatline",
+        "V-47 平行步槍",
+        "FLATLINE",
+        "VK-47",
+        "VK47",
+        "VK47平行步枪",
+        "平行步枪"
+      ],
+      "title": "File:VK-47 Flatline Icon.svg",
+      "group": "weapons",
+      "file": "weapons/flatline.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/9/93/VK-47_Flatline_Icon.svg/revision/latest?cb=20230201222720",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:VK-47_Flatline_Icon.svg",
+      "sha256": "348b39a862220dca29f8fb1de4e18e542dce4c13c063593d2640878ec35dcacd",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:27:20Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "VK-47 Flatline Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "hemlok",
+      "name": "汗洛",
+      "aliases": [
+        "汗洛",
+        "Hemlok Burst AR",
+        "汗洛連發突擊步槍",
+        "HEMLOK",
+        "Hemlock",
+        "Hemlok Breach AR",
+        "Hemlok Breach",
+        "赫姆洛克",
+        "汗洛连发突击步枪"
+      ],
+      "title": "File:Hemlok Burst AR Icon.svg",
+      "group": "weapons",
+      "file": "weapons/hemlok.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/9/9b/Hemlok_Burst_AR_Icon.svg/revision/latest?cb=20230201222813",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Hemlok_Burst_AR_Icon.svg",
+      "sha256": "9b4b3070632f820cc2100f0ddeea29226598976ab4bb301e8cfcd2eac9123e8c",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:28:13Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Hemlok Burst AR Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "r301",
+      "name": "R301",
+      "aliases": [
+        "R301",
+        "R-301 Carbine",
+        "R-301 卡賓槍",
+        "R-301",
+        "R301卡宾枪"
+      ],
+      "title": "File:R-301 Carbine Icon.svg",
+      "group": "weapons",
+      "file": "weapons/r301.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/1/1e/R-301_Carbine_Icon.svg/revision/latest?cb=20230201222845",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:R-301_Carbine_Icon.svg",
+      "sha256": "47509b8677a5221893ba39dc3a6738bd6b71ec0638c35081ad897ec80bbcdee6",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:28:45Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "R-301 Carbine Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "nemesis",
+      "name": "死敌",
+      "aliases": [
+        "死敌",
+        "Nemesis Burst AR",
+        "死敵連發突擊步槍",
+        "NEMESIS",
+        "死敵",
+        "Nemesis",
+        "复仇女神",
+        "复仇女神连发突击步枪"
+      ],
+      "title": "File:Nemesis Burst AR Icon.svg",
+      "group": "weapons",
+      "file": "weapons/nemesis.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/43/Nemesis_Burst_AR_Icon.svg/revision/latest?cb=20230228165655",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Nemesis_Burst_AR_Icon.svg",
+      "sha256": "1157bfaf4fb57b56624f3bab1823406b62d79ae685ffc2bd1630337d1e01a5c4",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-28T16:56:55Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Nemesis Burst AR Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "alternator",
+      "name": "转换者",
+      "aliases": [
+        "转换者",
+        "Alternator SMG",
+        "轉換者衝鋒槍",
+        "ALTERNATOR",
+        "轉換者",
+        "转换者冲锋枪"
+      ],
+      "title": "File:Alternator SMG Icon.svg",
+      "group": "weapons",
+      "file": "weapons/alternator.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/8/86/Alternator_SMG_Icon.svg/revision/latest?cb=20230201223552",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Alternator_SMG_Icon.svg",
+      "sha256": "fa5642e281818a98c206646094c6f6c9fec63f079a2ca09bbeef764bc9bea1f4",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:35:52Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Alternator SMG Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "prowler",
+      "name": "猎兽",
+      "aliases": [
+        "猎兽",
+        "Prowler Burst PDW",
+        "獵獸連發個人防衛武器",
+        "PROWLER",
+        "獵獸",
+        "猎兽冲锋枪",
+        "猎兽连发个人防卫武器"
+      ],
+      "title": "File:Prowler Burst PDW Icon.svg",
+      "group": "weapons",
+      "file": "weapons/prowler.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/1/13/Prowler_Burst_PDW_Icon.svg/revision/latest?cb=20230201223559",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Prowler_Burst_PDW_Icon.svg",
+      "sha256": "df5411cbbbc816815024cef294f721bf70526e52b4a67ab10aefe05a970e1f41",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:35:59Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Prowler Burst PDW Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "r99",
+      "name": "R99",
+      "aliases": [
+        "R99",
+        "R-99 SMG",
+        "R-99 衝鋒槍",
+        "R-99"
+      ],
+      "title": "File:R-99 SMG Icon.svg",
+      "group": "weapons",
+      "file": "weapons/r99.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/9/99/R-99_SMG_Icon.svg/revision/latest?cb=20230201223602",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:R-99_SMG_Icon.svg",
+      "sha256": "1300f7b0d1395778eaa49631ba2a5cc041472d84a36e7513e8ef59d517c851cf",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:36:02Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "R-99 SMG Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "volt",
+      "name": "电能冲锋枪",
+      "aliases": [
+        "电能冲锋枪",
+        "Volt SMG",
+        "電能衝鋒槍",
+        "VOLT",
+        "Volt"
+      ],
+      "title": "File:Volt SMG Icon.svg",
+      "group": "weapons",
+      "file": "weapons/volt.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/d/dd/Volt_SMG_Icon.svg/revision/latest?cb=20230201223606",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Volt_SMG_Icon.svg",
+      "sha256": "eca98da2054aa01aa391cbbdc7328e7b38d5f3218f1c546876785ebc52234949",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:36:06Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Volt SMG Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "car",
+      "name": "CAR",
+      "aliases": [
+        "CAR",
+        "C.A.R. SMG",
+        "C.A.R. 衝鋒槍",
+        "C.A.R."
+      ],
+      "title": "File:C.A.R. SMG Icon.svg",
+      "group": "weapons",
+      "file": "weapons/car.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/2/27/C.A.R._SMG_Icon.svg/revision/latest?cb=20230201221758",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:C.A.R._SMG_Icon.svg",
+      "sha256": "373f7ffe0f73bc745475dd0ea5c51d10c1eb45b25153b6508a7d0ea1417df816",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:17:58Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "C.A.R. SMG Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "devotion",
+      "name": "专注",
+      "aliases": [
+        "专注",
+        "Devotion LMG",
+        "專注輕機槍",
+        "DEVOTION",
+        "專注",
+        "专注轻机枪"
+      ],
+      "title": "File:Devotion LMG Icon.svg",
+      "group": "weapons",
+      "file": "weapons/devotion.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/c/cb/Devotion_LMG_Icon.svg/revision/latest?cb=20230201225714",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Devotion_LMG_Icon.svg",
+      "sha256": "ee669d6cafe9c252a259da0ae95fcd373398e769b2dc44ca79a0c609f308eb80",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:57:14Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Devotion LMG Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "lstar",
+      "name": "LSTAR",
+      "aliases": [
+        "LSTAR",
+        "L-STAR EMG",
+        "L-STAR 電磁機槍",
+        "L-STAR"
+      ],
+      "title": "File:L-STAR EMG Icon.svg",
+      "group": "weapons",
+      "file": "weapons/lstar.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/3/39/L-STAR_EMG_Icon.svg/revision/latest?cb=20230201225717",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:L-STAR_EMG_Icon.svg",
+      "sha256": "a5a784abee2bb56f0ff8c93987e7924c2ce4dd555f1fd66b2687b21e590fc5ad",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:57:17Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "L-STAR EMG Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "spitfire",
+      "name": "喷火",
+      "aliases": [
+        "喷火",
+        "M600 Spitfire",
+        "M600 噴火槍",
+        "SPITFIRE",
+        "M600",
+        "噴火",
+        "喷火轻机枪"
+      ],
+      "title": "File:M600 Spitfire Icon.svg",
+      "group": "weapons",
+      "file": "weapons/spitfire.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f4/M600_Spitfire_Icon.svg/revision/latest?cb=20230201225721",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:M600_Spitfire_Icon.svg",
+      "sha256": "75db2640d6c70e6b828104df3dc35cb02916164a513d449ddead0a4b7d591f1c",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:57:21Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "M600 Spitfire Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "rampage",
+      "name": "狂暴",
+      "aliases": [
+        "狂暴",
+        "Rampage LMG",
+        "狂暴輕機槍",
+        "RAMPAGE",
+        "Rampage",
+        "狂暴轻机枪",
+        "暴走",
+        "暴走轻机枪"
+      ],
+      "title": "File:Rampage LMG Icon.svg",
+      "group": "weapons",
+      "file": "weapons/rampage.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/2/21/Rampage_LMG_Icon.svg/revision/latest?cb=20230201225725",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Rampage_LMG_Icon.svg",
+      "sha256": "4de81e0b8e37f7d0f4656a44689b276f3a68acaa81e98621e3115e6e729738ba",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T22:57:25Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Rampage LMG Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "g7",
+      "name": "G7",
+      "aliases": [
+        "G7",
+        "G7 Scout",
+        "G7 斥候",
+        "G7 SCOUT",
+        "G7侦察枪",
+        "G7侦察",
+        "G7斥候"
+      ],
+      "title": "File:G7 Scout Icon.svg",
+      "group": "weapons",
+      "file": "weapons/g7.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/5/57/G7_Scout_Icon.svg/revision/latest?cb=20230201230239",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:G7_Scout_Icon.svg",
+      "sha256": "3b195a5dc14ca9a9bf991f982f436ddddb3284efdf8a0a65ff467e86f4cabb38",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:02:39Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "G7 Scout Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "triple_take",
+      "name": "三重击",
+      "aliases": [
+        "三重击",
+        "Triple Take",
+        "三重擊",
+        "TRIPLE TAKE",
+        "TripleTake",
+        "三重狙击枪"
+      ],
+      "title": "File:Triple Take Icon.svg",
+      "group": "weapons",
+      "file": "weapons/triple_take.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/6/6a/Triple_Take_Icon.svg/revision/latest?cb=20230201230244",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Triple_Take_Icon.svg",
+      "sha256": "80097bfd848b3f28f0f2f56db9138f2845d819c9d27a5482f334b2f5b9e80ea8",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:02:44Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Triple Take Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "repeater3030",
+      "name": "3030",
+      "aliases": [
+        "3030",
+        "30-30 Repeater",
+        "30-30 連發槍",
+        "30-30",
+        "30-30连发枪",
+        "30-30杠杆式步枪"
+      ],
+      "title": "File:30-30 Repeater Icon.svg",
+      "group": "weapons",
+      "file": "weapons/repeater3030.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/8/8c/30-30_Repeater_Icon.svg/revision/latest?cb=20230201230251",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:30-30_Repeater_Icon.svg",
+      "sha256": "e6866edafc02bfc9faf173a38ec6df979d51124808a330e5348fdf7dee270fea",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:02:51Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "30-30 Repeater Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "bocek",
+      "name": "博切克",
+      "aliases": [
+        "博切克",
+        "Bocek 2.0",
+        "博切克 2.0",
+        "BOCEK",
+        "Bocek",
+        "Bocek Compound Bow",
+        "Bocek Bow",
+        "波塞克",
+        "波塞克复合弓",
+        "博切克复合弓"
+      ],
+      "title": "File:Bocek Compound Bow Icon.svg",
+      "group": "weapons",
+      "file": "weapons/bocek.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/07/Bocek_Compound_Bow_Icon.svg/revision/latest?cb=20230201230257",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Bocek_Compound_Bow_Icon.svg",
+      "sha256": "182c133190b05a7479899cc63467e106fbdb24b76479e9606d8211be6dd15ee0",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:02:57Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Bocek Compound Bow Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "charge_rifle",
+      "name": "电能步枪",
+      "aliases": [
+        "电能步枪",
+        "Charge Rifle",
+        "電能步槍",
+        "CHARGE RIFLE",
+        "ChargeRifle",
+        "充能步枪"
+      ],
+      "title": "File:Charge Rifle Icon.svg",
+      "group": "weapons",
+      "file": "weapons/charge_rifle.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/1/1e/Charge_Rifle_Icon.svg/revision/latest?cb=20230201232522",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Charge_Rifle_Icon.svg",
+      "sha256": "56589a319a6c3ee61f6e2c82ec1579934d598ea2b7883fc80adc799224ea1813",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:25:22Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Charge Rifle Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "longbow",
+      "name": "长弓",
+      "aliases": [
+        "长弓",
+        "Longbow DMR",
+        "長弓 DMR",
+        "LONGBOW",
+        "Longbow",
+        "長弓",
+        "长弓精确射手步枪"
+      ],
+      "title": "File:Longbow DMR Icon.svg",
+      "group": "weapons",
+      "file": "weapons/longbow.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/4a/Longbow_DMR_Icon.svg/revision/latest?cb=20230201232528",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Longbow_DMR_Icon.svg",
+      "sha256": "e4ae49b6c05902f64d8fb22fe82aa49ee7f1f682b91ee1365c1981a199428dc8",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:25:28Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Longbow DMR Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "kraber",
+      "name": "克莱博",
+      "aliases": [
+        "克莱博",
+        "Kraber .50-Cal Sniper",
+        "克萊博 50 口徑狙擊槍",
+        "KRABER",
+        "Kraber",
+        "克萊博",
+        "克雷贝尔",
+        "克雷贝尔狙击枪"
+      ],
+      "title": "File:Kraber .50-Cal Sniper Icon.svg",
+      "group": "weapons",
+      "file": "weapons/kraber.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/45/Kraber_.50-Cal_Sniper_Icon.svg/revision/latest?cb=20230201232536",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Kraber_.50-Cal_Sniper_Icon.svg",
+      "sha256": "341e504ea5cd6bbacd84d89afd8cce93944868adc2b88ae155b4d7e8b121878b",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:25:36Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Kraber .50-Cal Sniper Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "sentinel",
+      "name": "哨兵",
+      "aliases": [
+        "哨兵",
+        "Sentinel",
+        "SENTINEL",
+        "哨兵狙击枪"
+      ],
+      "title": "File:Sentinel Icon.svg",
+      "group": "weapons",
+      "file": "weapons/sentinel.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/7/7a/Sentinel_Icon.svg/revision/latest?cb=20230201232542",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Sentinel_Icon.svg",
+      "sha256": "66fb4b31e38998f7911d81a32798a96bc7196ceb08799aa8decf76c95c4656fe",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:25:42Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Sentinel Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "eva8",
+      "name": "EVA8",
+      "aliases": [
+        "EVA8",
+        "EVA-8 Auto",
+        "EVA-8 自動",
+        "EVA-8",
+        "EVA8自动霰弹枪"
+      ],
+      "title": "File:EVA-8 Auto Icon.svg",
+      "group": "weapons",
+      "file": "weapons/eva8.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/7/7b/EVA-8_Auto_Icon.svg/revision/latest?cb=20230201233015",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:EVA-8_Auto_Icon.svg",
+      "sha256": "477f50c7290c4de0f897095a812ff02ea2949b5fb67b66e21fbee99c8a59f962",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:30:15Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "EVA-8 Auto Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "mastiff",
+      "name": "獒犬",
+      "aliases": [
+        "獒犬",
+        "Mastiff",
+        "獒犬霰彈槍",
+        "MASTIFF",
+        "獒犬霰弹枪"
+      ],
+      "title": "File:Mastiff Shotgun Icon.svg",
+      "group": "weapons",
+      "file": "weapons/mastiff.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/d/df/Mastiff_Shotgun_Icon.svg/revision/latest?cb=20230201233018",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Mastiff_Shotgun_Icon.svg",
+      "sha256": "b3c7bb83ad6144bad9780dd2cab40f43056669d15aab5609bad63da1e78456c7",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:30:18Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Mastiff Shotgun Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "mozambique",
+      "name": "莫桑比克",
+      "aliases": [
+        "莫桑比克",
+        "Mozambique Shotgun",
+        "莫三比克霰彈槍",
+        "MOZAMBIQUE",
+        "莫三比克",
+        "莫三比克霰弹枪",
+        "莫桑比克霰弹枪"
+      ],
+      "title": "File:Mozambique Shotgun Icon.svg",
+      "group": "weapons",
+      "file": "weapons/mozambique.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/c/c8/Mozambique_Shotgun_Icon.svg/revision/latest?cb=20230201233022",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Mozambique_Shotgun_Icon.svg",
+      "sha256": "31c7c8a8aae91b21f22e7a8796807c740b260a58fe699c883ce4df64a2e6aaef",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:30:22Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Mozambique Shotgun Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "peacekeeper",
+      "name": "和平使者",
+      "aliases": [
+        "和平使者",
+        "Peacekeeper",
+        "PEACEKEEPER",
+        "和平捍卫者"
+      ],
+      "title": "File:Peacekeeper Icon.svg",
+      "group": "weapons",
+      "file": "weapons/peacekeeper.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/0d/Peacekeeper_Icon.svg/revision/latest?cb=20230201233027",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Peacekeeper_Icon.svg",
+      "sha256": "01ccff36a9da7717f83364de91f69827edcd8cc2e204713c3b4bb5426992923e",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:30:27Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Peacekeeper Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "re45",
+      "name": "RE45",
+      "aliases": [
+        "RE45",
+        "RE-45 Auto",
+        "RE-45 自動",
+        "RE-45",
+        "RE-45 Burst",
+        "RE45 Burst",
+        "RE45自动手枪",
+        "RE-45自動"
+      ],
+      "title": "File:RE-45 Auto Icon.svg",
+      "group": "weapons",
+      "file": "weapons/re45.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/3/34/RE-45_Auto_Icon.svg/revision/latest?cb=20230201233031",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:RE-45_Auto_Icon.svg",
+      "sha256": "e5cb98b2b81ff60a7095a853868c337607fd5424089f01fb2e81433be545cbb5",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:30:31Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "RE-45 Auto Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "p2020",
+      "name": "P2020",
+      "aliases": [
+        "P2020"
+      ],
+      "title": "File:P2020 Icon.svg",
+      "group": "weapons",
+      "file": "weapons/p2020.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/9/97/P2020_Icon.svg/revision/latest?cb=20230201233035",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:P2020_Icon.svg",
+      "sha256": "ef34bd5e478db0faef7b2383d5d3702da16bd734e95b1bf1f7c5d396c4787142",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:30:35Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "P2020 Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "wingman",
+      "name": "小帮手",
+      "aliases": [
+        "小帮手",
+        "Wingman",
+        "小幫手",
+        "WINGMAN",
+        "辅助手枪"
+      ],
+      "title": "File:Wingman Icon.svg",
+      "group": "weapons",
+      "file": "weapons/wingman.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/c/c4/Wingman_Icon.svg/revision/latest?cb=20230201233039",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Wingman_Icon.svg",
+      "sha256": "27f9746a313039bd948b3a0521fcf707f479ee8ae88d32ada4b20f5b3bae8298",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-01T23:30:39Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Wingman Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "kills",
+      "title": "File:Kills Icon.svg",
+      "group": "stats",
+      "file": "stats/kills.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/c/c4/Kills_Icon.svg/revision/latest?cb=20230406072746",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Kills_Icon.svg",
+      "sha256": "e06b84f262a9cbad4c1777ab3be9bdf472c767e861b48e5cff8b4e08c816e1dd",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-04-06T07:27:46Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Kills Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "assists",
+      "title": "File:Assists Icon.svg",
+      "group": "stats",
+      "file": "stats/assists.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/8/81/Assists_Icon.svg/revision/latest?cb=20230406061558",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Assists_Icon.svg",
+      "sha256": "7c69713448048b33cf4752a8256f937edb467133ce915ed9937f74b9f444a055",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-04-06T06:15:58Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Assists Icon",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "damage",
+      "title": "File:Damage.svg",
+      "group": "stats",
+      "file": "stats/damage.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f3/Damage.svg/revision/latest?cb=20230407074400",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Damage.svg",
+      "sha256": "063e3199ec0d7f5f39216e98522fe47cabe85e43e8799d336d4cc036540c8897",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-04-07T07:44:00Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Damage",
+          "source": "mediawiki-metadata"
+        }
+      }
+    },
+    {
+      "id": "knockdowns",
+      "title": "File:Knockdown Shield.svg",
+      "group": "stats",
+      "file": "stats/knockdowns.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/3/34/Knockdown_Shield.svg/revision/latest?cb=20230203010221",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Knockdown_Shield.svg",
+      "sha256": "ed25f614e84118120abb94b2813d7df3d08637f1b29fbffcefc1aa60000bfdbc",
+      "metadata": {
+        "DateTime": {
+          "value": "2023-02-03T01:02:21Z",
+          "source": "mediawiki-metadata",
+          "hidden": ""
+        },
+        "ObjectName": {
+          "value": "Knockdown Shield",
+          "source": "mediawiki-metadata"
+        }
+      }
+    }
+  ],
+  "ranks": [
+    {
+      "id": "rookie",
+      "name": "菜鸟",
+      "file": "rookie.png",
+      "url": "https://api.mozambiquehe.re/assets/ranks/rookie4.png",
+      "source_page": "https://apexlegendsapi.com/",
+      "sha256": "4b803d36c10a34da60b44f0038cede52143d0a8e2c7818d086bfd1c15751d67e"
+    },
+    {
+      "id": "bronze",
+      "name": "青铜",
+      "file": "bronze.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/45/Ranked_Tier1_Bronze.png/revision/latest?cb=20190902181259",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier1_Bronze.png",
+      "sha256": "b021aa1811b2d5f8a1e1605337b7fbf4cdf93ed7c5b444a3634d493d51dba3f4"
+    },
+    {
+      "id": "silver",
+      "name": "白银",
+      "file": "silver.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/4c/Ranked_Tier2_Silver.png/revision/latest?cb=20190902181319",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier2_Silver.png",
+      "sha256": "7673db0af1b3d22d48ca6cc11e0fc01590a2b7a5809ce17529cb826a3aa0fc6f"
+    },
+    {
+      "id": "gold",
+      "name": "黄金",
+      "file": "gold.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/7/75/Ranked_Tier3_Gold.png/revision/latest?cb=20190902181335",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier3_Gold.png",
+      "sha256": "42522ba903f12133b344b9f53118e94ee41df3bb0a9233c1778269db6b29ee1a"
+    },
+    {
+      "id": "platinum",
+      "name": "白金",
+      "file": "platinum.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/1/18/Ranked_Tier4_Platinum.png/revision/latest?cb=20190902181349",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier4_Platinum.png",
+      "sha256": "024cfe50c74a92b2bd277ef29e1a45ed175119a5e9b4eecb364dbf9e9caf3e4d"
+    },
+    {
+      "id": "diamond",
+      "name": "钻石",
+      "file": "diamond.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/1/1e/Ranked_Tier5_Diamond.png/revision/latest?cb=20190902181402",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier5_Diamond.png",
+      "sha256": "0e92e54eb039e30c878b47a2dcb58ae1c760d05cb58f7b2249b82be773c380fd"
+    },
+    {
+      "id": "master",
+      "name": "大师",
+      "file": "master.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/7/70/Ranked_Tier6_Master.png/revision/latest?cb=20200204044914",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier6_Master.png",
+      "sha256": "2c47a23507a5e26722809cd83cd032f2868f725901b5d86715d3a56b2facfa71"
+    },
+    {
+      "id": "predator",
+      "name": "猎杀",
+      "file": "predator.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/43/Ranked_Tier7_Apex_Predator.png/revision/latest?cb=20190902181417",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier7_Apex_Predator.png",
+      "sha256": "e71c685d2861842fd4262077d46d45d74ba9a2fa472a65ee940f16945f8f7c71"
+    }
+  ]
+}

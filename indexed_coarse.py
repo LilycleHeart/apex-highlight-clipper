@@ -24,7 +24,7 @@ def _runtime_version():
     try:
         import av
     except ImportError as error:
-        raise RuntimeError('索引实验需要 PyAV；请安装 requirements-experimental.txt，或切换智能模式') from error
+        raise RuntimeError('索引识别需要 PyAV；请安装 requirements-experimental.txt') from error
     return av.__version__
 
 
@@ -38,7 +38,7 @@ def indexed_coarse_scan(source,job,profile,fps):
             entries=[(e.dts,e.position,e.size) for e in reader.keyframes]
             total=len(entries)
     except (UnsupportedIndexedVideo,IndexError) as error:
-        raise RuntimeError('索引实验无法读取此录像的可靠 MP4/H.264 索引，请切换智能模式：'+str(error)) from error
+        raise RuntimeError('无法读取此录像的可靠 MP4/H.264 索引；当前需要起始 PTS 为零的 H.264 MP4/MOV 录像：'+str(error)) from error
     import rapidocr_onnxruntime
     model=Path(rapidocr_onnxruntime.__file__).parent/'models/ch_PP-OCRv4_rec_infer.onnx'
     config={'version':'indexed-coarse-v1','source':identity,'profile':profile,'fps':fps,'pyav':version,

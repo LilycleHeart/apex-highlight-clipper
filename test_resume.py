@@ -50,7 +50,7 @@ class TaskTests(unittest.TestCase):
             resumed,again,request,options=open_task({'resume_task':str(path),'backend':'dml','gpu_load':'low','gap':99,'delete_source':False})
             self.assertEqual(resumed,path); self.assertEqual(options['gap'],25)
             self.assertTrue(options['delete_source']); self.assertEqual(request['backend'],'dml')
-            self.assertEqual(again['smart_cache_version'],'focused-v6')
+            self.assertEqual(again['smart_cache_version'],'indexed-v2')
             self.assertEqual(again['result_filter_version'],'own-center-result-v4')
 
     def test_old_task_keeps_old_smart_cache_namespace(self):

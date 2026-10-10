@@ -40,8 +40,15 @@ def parse_result_line(text):
     for kind,pattern in patterns:
         match=re.match(pattern,clean,re.IGNORECASE)
         if not match: continue
-        target=re.sub(r'\s*[+＋]\s*\d+\s*$','',match.group(1)).strip()
-        return {'kind':kind,'target_text':target,'text':clean}
+        target=re.sub(r'\s*[+＋]\s*[0-9OIl]{2,4}.*$','',match.group(1)).strip()
+        action=('elimination' if re.search(r'消[滅灭]|ELIMINAT',clean,re.IGNORECASE) else
+                'knock' if re.search(r'[擊击]倒|KNOCK',clean,re.IGNORECASE) else 'unknown')
+        if kind=='assist':target=re.sub(r'^(?:[擊击擎驛驿]倒|消[滅灭減减])\s*','',target)
+        if kind=='assist':
+            suffix=re.sub(r'^(?:助攻|ASSIST)\s*[,，:]?\s*','',clean,flags=re.I)
+            if re.match(r'^.倒',suffix):action='knock';target=re.sub(r'^.倒\s*','',target)
+            elif re.match(r'^消.',suffix):action='elimination';target=re.sub(r'^消.\s*','',target)
+        return {'kind':kind,'action':action,'target_text':target,'text':clean}
     return None
 
 
@@ -70,8 +77,14 @@ class PrefixGate:
             ratio=image.shape[1]/entry['sample_size'][0]
             if ratio!=1: template=cv2.resize(template,None,fx=ratio,fy=ratio)
             result=cv2.matchTemplate(gray,template,cv2.TM_CCOEFF_NORMED)
-            _,score,_,loc=cv2.minMaxLoc(result)
-            found.append({'kind':entry['kind'],'score':float(score),'box':[loc[0]+roi[0],loc[1]+roi[1],loc[0]+roi[0]+template.shape[1],loc[1]+roi[1]+template.shape[0]]})
+            action='knock' if 'knock' in entry.get('path','') else 'elimination' if 'elimination' in entry.get('path','') else entry['kind']
+            # 同时出现多个同类提示时保留多个行位置，避免只支持最高匹配的一行。
+            for n in range(4):
+                _,score,_,loc=cv2.minMaxLoc(result)
+                if n and score<self.profile.get('calibration',{}).get('gate_threshold',.65):break
+                found.append({'kind':entry['kind'],'action':action,'score':float(score),'box':[loc[0]+roi[0],loc[1]+roi[1],loc[0]+roi[0]+template.shape[1],loc[1]+roi[1]+template.shape[0]]})
+                x,y=loc;th,tw=template.shape
+                result[max(0,y-th//2):min(result.shape[0],y+th//2+1),max(0,x-tw//2):min(result.shape[1],x+tw//2+1)]=-2
         return found
 
 
@@ -91,7 +104,7 @@ def group_lines(detections):
         items=sorted(line['items'],key=lambda x:x['left'])
         groups=[]
         for item in items:
-            if groups and item['left']-groups[-1][-1]['right']<=40: groups[-1].append(item)
+            if groups and item['left']-groups[-1][-1]['right']<=80: groups[-1].append(item)
             else: groups.append([item])
         for items in groups:
             result.append({'text':' '.join(i['text'] for i in items),'confidence':min(i['confidence'] for i in items),
@@ -169,13 +182,13 @@ def _locale_confirmed(cache,observations,profile):
     return False
 
 
-def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=None,_allow_upgrade=True,_only_existing=False):
+def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=None,_allow_upgrade=True,_only_existing=False,_stop_after_positive=True):
     """先在已有帧寻找任一强正例；只为未确认候选补齐画面并核查不存在。"""
     from app_cancel import check_cancel
     from resume_io import RowJournal
     from ui_observer import preview
     profile=profile or load_profile(); samples=Path(samples); fps=cache['fps']
-    if fps<2 and _allow_upgrade:
+    if fps<2 and _allow_upgrade and _stop_after_positive:
         return _inspect_low_frequency(cache,samples,candidates,profile,checkpoint)
     source=Path(cache['source']['path']); identity=fingerprint(source)
     if identity!=cache['source']: raise ValueError('原录像发生变化，不能复用结果提示')
@@ -183,7 +196,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
     checkpoint.parent.mkdir(parents=True,exist_ok=True)
     templates={str(BASE/e['gray']):hashlib.sha256((BASE/e['gray']).read_bytes()).hexdigest() for e in profile.get('prefix_templates',[])}
     signature=hashlib.sha256(json.dumps({'version':RULE_VERSION,'source':identity,'fps':fps,'samples':str(samples.resolve()),
-        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,
+        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,'stop_after_positive':_stop_after_positive,'reader_version':'toast-lines-v6',
         'bounds':[(c['start'],c['end']) for c in candidates]},sort_keys=True).encode()).hexdigest()
     if checkpoint.exists():
         saved=json.loads(checkpoint.read_text(encoding='utf-8'))
@@ -214,10 +227,30 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
             if best>=threshold:
                 if engine is None: engine=new_engine()
                 result=recognize_frame(image,profile,engine); ocr_new+=1
+                if not _stop_after_positive:
+                    # 统计阶段：文字常把“擊”读成“擎/驿”或漏掉，但必须由行首的强图形匹配支持修正。
+                    for line in result['lines']:
+                        if parse_result_line(line['text']):continue
+                        supports=[m for m in matches if m['score']>=.88 and abs(m['box'][0]-line['box'][0])<=8 and
+                                  abs((m['box'][1]+m['box'][3]-line['box'][1]-line['box'][3])/2)<=8]
+                        for match in sorted(supports,key=lambda m:-m['score']):
+                            fixed=line['text']
+                            if match['kind']=='knock' and re.match(r'^(?:[擎驛驿擊击]倒|倒)',fixed):
+                                fixed=re.sub(r'^(?:[擎驛驿擊击]倒|倒)','擊倒',fixed)
+                            else:continue
+                            parsed=parse_result_line(fixed)
+                            if parsed and not is_known_dialogue(fixed):
+                                result['events'].append({**parsed,'confidence':max(line['prefix_confidence'],.86),
+                                    'text_confidence':line['confidence'],'box':line['box'],'prefix_repair':'strong_prefix_template'})
+                                break
                 item.update(lines=result['lines'],known_dialogue=result['known_dialogue'])
                 possible=[]
                 for event in result['events']:
                     support=_same_line_gate(event,matches)
+                    matching=[m for m in matches if m['kind']==event['kind'] and abs((m['box'][1]+m['box'][3])/2-(event['box'][1]+event['box'][3])/2)<=10 and event['box'][0]-5<=m['box'][0]<=event['box'][2]+5]
+                    if matching:
+                        strongest=max(matching,key=lambda m:m['score']);event['prefix_box']=strongest['box']
+                        if event['kind']=='assist' and event.get('action')=='unknown':event['action']=strongest.get('action','unknown')
                     if event['confidence']>=.85 and support>=threshold:
                         item['events'].append({**event,'time':item['time'],'frame':item['frame'],'template_score':support,'ownership':'self'})
                     elif event['confidence']>=.65 and support>=.9:
@@ -240,8 +273,10 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
         for index in indices:
             if index not in present: continue
             item=observe(index,present[index])
-            if item['events']: found=item['events']; break
-        if not found:
+            if item['events']:
+                found.extend(item['events'])
+                if _stop_after_positive: break
+        if not found or not _stop_after_positive:
             missing=[i for i in indices if i not in present]
             if missing and not _only_existing:
                 from resume_media import sample_with_resume
@@ -255,7 +290,9 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
                 sampled_new+=len(missing)
                 for index in missing:
                     item=observe(index,extra/f'{index:06d}.jpg')
-                    if item['events']: found=item['events']; break
+                    if item['events']:
+                        found.extend(item['events'])
+                        if _stop_after_positive: break
         covered=[observations[i] for i in indices if i in observations]
         uncertain=[r for r in covered if r['status']=='ambiguous']
         calibration=profile.get('calibration',{})
@@ -269,7 +306,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
             'coverage':{'expected_frames':len(indices),'checked_frames':len(covered),'fps':fps,
                         'ambiguous_frames':[r['frame'] for r in uncertain],'reliable_absence':reliable_absence,
                         'calibrated_style_confirmed':supported_style,
-                        'stopped_after_positive':bool(found)}})
+                        'stopped_after_positive':bool(found) and _stop_after_positive}})
         print(f'本人战果提示: {position+1}/{len(candidates)} 段，{status}，新增文字识别 {ocr_new} 帧',flush=True)
     report={'signature':signature,'version':RULE_VERSION,'complete':True,'source':identity,
         'policy':sorted(KINDS),'decisions':decisions,'stats':{'checked_new_frames':checked_new,'ocr_new_frames':ocr_new,'extra_sample_frames':sampled_new,'restored_frames':len(journal.rows)-checked_new}}

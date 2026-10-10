@@ -1,0 +1,382 @@
+[
+  {
+    "id": "havoc",
+    "name": "哈博克",
+    "aliases": [
+      "哈博克",
+      "HAVOC Rifle",
+      "哈博克步槍",
+      "HAVOC",
+      "哈沃克",
+      "哈沃克步枪",
+      "哈博克步枪"
+    ],
+    "file": "weapons/havoc.svg"
+  },
+  {
+    "id": "flatline",
+    "name": "平行",
+    "aliases": [
+      "平行",
+      "VK-47 Flatline",
+      "V-47 平行步槍",
+      "FLATLINE",
+      "VK-47",
+      "VK47",
+      "VK47平行步枪",
+      "平行步枪"
+    ],
+    "file": "weapons/flatline.svg"
+  },
+  {
+    "id": "hemlok",
+    "name": "汗洛",
+    "aliases": [
+      "汗洛",
+      "Hemlok Burst AR",
+      "汗洛連發突擊步槍",
+      "HEMLOK",
+      "Hemlock",
+      "Hemlok Breach AR",
+      "Hemlok Breach",
+      "赫姆洛克",
+      "汗洛连发突击步枪"
+    ],
+    "file": "weapons/hemlok.svg"
+  },
+  {
+    "id": "r301",
+    "name": "R301",
+    "aliases": [
+      "R301",
+      "R-301 Carbine",
+      "R-301 卡賓槍",
+      "R-301",
+      "R301卡宾枪"
+    ],
+    "file": "weapons/r301.svg"
+  },
+  {
+    "id": "nemesis",
+    "name": "死敌",
+    "aliases": [
+      "死敌",
+      "Nemesis Burst AR",
+      "死敵連發突擊步槍",
+      "NEMESIS",
+      "死敵",
+      "Nemesis",
+      "复仇女神",
+      "复仇女神连发突击步枪"
+    ],
+    "file": "weapons/nemesis.svg"
+  },
+  {
+    "id": "alternator",
+    "name": "转换者",
+    "aliases": [
+      "转换者",
+      "Alternator SMG",
+      "轉換者衝鋒槍",
+      "ALTERNATOR",
+      "轉換者",
+      "转换者冲锋枪"
+    ],
+    "file": "weapons/alternator.svg"
+  },
+  {
+    "id": "prowler",
+    "name": "猎兽",
+    "aliases": [
+      "猎兽",
+      "Prowler Burst PDW",
+      "獵獸連發個人防衛武器",
+      "PROWLER",
+      "獵獸",
+      "猎兽冲锋枪",
+      "猎兽连发个人防卫武器"
+    ],
+    "file": "weapons/prowler.svg"
+  },
+  {
+    "id": "r99",
+    "name": "R99",
+    "aliases": [
+      "R99",
+      "R-99 SMG",
+      "R-99 衝鋒槍",
+      "R-99"
+    ],
+    "file": "weapons/r99.svg"
+  },
+  {
+    "id": "volt",
+    "name": "电能冲锋枪",
+    "aliases": [
+      "电能冲锋枪",
+      "Volt SMG",
+      "電能衝鋒槍",
+      "VOLT",
+      "Volt"
+    ],
+    "file": "weapons/volt.svg"
+  },
+  {
+    "id": "car",
+    "name": "CAR",
+    "aliases": [
+      "CAR",
+      "C.A.R. SMG",
+      "C.A.R. 衝鋒槍",
+      "C.A.R."
+    ],
+    "file": "weapons/car.svg"
+  },
+  {
+    "id": "devotion",
+    "name": "专注",
+    "aliases": [
+      "专注",
+      "Devotion LMG",
+      "專注輕機槍",
+      "DEVOTION",
+      "專注",
+      "专注轻机枪"
+    ],
+    "file": "weapons/devotion.svg"
+  },
+  {
+    "id": "lstar",
+    "name": "LSTAR",
+    "aliases": [
+      "LSTAR",
+      "L-STAR EMG",
+      "L-STAR 電磁機槍",
+      "L-STAR"
+    ],
+    "file": "weapons/lstar.svg"
+  },
+  {
+    "id": "spitfire",
+    "name": "喷火",
+    "aliases": [
+      "喷火",
+      "M600 Spitfire",
+      "M600 噴火槍",
+      "SPITFIRE",
+      "M600",
+      "噴火",
+      "喷火轻机枪"
+    ],
+    "file": "weapons/spitfire.svg"
+  },
+  {
+    "id": "rampage",
+    "name": "狂暴",
+    "aliases": [
+      "狂暴",
+      "Rampage LMG",
+      "狂暴輕機槍",
+      "RAMPAGE",
+      "Rampage",
+      "狂暴轻机枪",
+      "暴走",
+      "暴走轻机枪"
+    ],
+    "file": "weapons/rampage.svg"
+  },
+  {
+    "id": "g7",
+    "name": "G7",
+    "aliases": [
+      "G7",
+      "G7 Scout",
+      "G7 斥候",
+      "G7 SCOUT",
+      "G7侦察枪",
+      "G7侦察",
+      "G7斥候"
+    ],
+    "file": "weapons/g7.svg"
+  },
+  {
+    "id": "triple_take",
+    "name": "三重击",
+    "aliases": [
+      "三重击",
+      "Triple Take",
+      "三重擊",
+      "TRIPLE TAKE",
+      "TripleTake",
+      "三重狙击枪"
+    ],
+    "file": "weapons/triple_take.svg"
+  },
+  {
+    "id": "repeater3030",
+    "name": "3030",
+    "aliases": [
+      "3030",
+      "30-30 Repeater",
+      "30-30 連發槍",
+      "30-30",
+      "30-30连发枪",
+      "30-30杠杆式步枪"
+    ],
+    "file": "weapons/repeater3030.svg"
+  },
+  {
+    "id": "bocek",
+    "name": "博切克",
+    "aliases": [
+      "博切克",
+      "Bocek 2.0",
+      "博切克 2.0",
+      "BOCEK",
+      "Bocek",
+      "Bocek Compound Bow",
+      "Bocek Bow",
+      "波塞克",
+      "波塞克复合弓",
+      "博切克复合弓"
+    ],
+    "file": "weapons/bocek.svg"
+  },
+  {
+    "id": "charge_rifle",
+    "name": "电能步枪",
+    "aliases": [
+      "电能步枪",
+      "Charge Rifle",
+      "電能步槍",
+      "CHARGE RIFLE",
+      "ChargeRifle",
+      "充能步枪"
+    ],
+    "file": "weapons/charge_rifle.svg"
+  },
+  {
+    "id": "longbow",
+    "name": "长弓",
+    "aliases": [
+      "长弓",
+      "Longbow DMR",
+      "長弓 DMR",
+      "LONGBOW",
+      "Longbow",
+      "長弓",
+      "长弓精确射手步枪"
+    ],
+    "file": "weapons/longbow.svg"
+  },
+  {
+    "id": "kraber",
+    "name": "克莱博",
+    "aliases": [
+      "克莱博",
+      "Kraber .50-Cal Sniper",
+      "克萊博 50 口徑狙擊槍",
+      "KRABER",
+      "Kraber",
+      "克萊博",
+      "克雷贝尔",
+      "克雷贝尔狙击枪"
+    ],
+    "file": "weapons/kraber.svg"
+  },
+  {
+    "id": "sentinel",
+    "name": "哨兵",
+    "aliases": [
+      "哨兵",
+      "Sentinel",
+      "SENTINEL",
+      "哨兵狙击枪"
+    ],
+    "file": "weapons/sentinel.svg"
+  },
+  {
+    "id": "eva8",
+    "name": "EVA8",
+    "aliases": [
+      "EVA8",
+      "EVA-8 Auto",
+      "EVA-8 自動",
+      "EVA-8",
+      "EVA8自动霰弹枪"
+    ],
+    "file": "weapons/eva8.svg"
+  },
+  {
+    "id": "mastiff",
+    "name": "獒犬",
+    "aliases": [
+      "獒犬",
+      "Mastiff",
+      "獒犬霰彈槍",
+      "MASTIFF",
+      "獒犬霰弹枪"
+    ],
+    "file": "weapons/mastiff.svg"
+  },
+  {
+    "id": "mozambique",
+    "name": "莫桑比克",
+    "aliases": [
+      "莫桑比克",
+      "Mozambique Shotgun",
+      "莫三比克霰彈槍",
+      "MOZAMBIQUE",
+      "莫三比克",
+      "莫三比克霰弹枪",
+      "莫桑比克霰弹枪"
+    ],
+    "file": "weapons/mozambique.svg"
+  },
+  {
+    "id": "peacekeeper",
+    "name": "和平使者",
+    "aliases": [
+      "和平使者",
+      "Peacekeeper",
+      "PEACEKEEPER",
+      "和平捍卫者"
+    ],
+    "file": "weapons/peacekeeper.svg"
+  },
+  {
+    "id": "re45",
+    "name": "RE45",
+    "aliases": [
+      "RE45",
+      "RE-45 Auto",
+      "RE-45 自動",
+      "RE-45",
+      "RE-45 Burst",
+      "RE45 Burst",
+      "RE45自动手枪",
+      "RE-45自動"
+    ],
+    "file": "weapons/re45.svg"
+  },
+  {
+    "id": "p2020",
+    "name": "P2020",
+    "aliases": [
+      "P2020"
+    ],
+    "file": "weapons/p2020.svg"
+  },
+  {
+    "id": "wingman",
+    "name": "小帮手",
+    "aliases": [
+      "小帮手",
+      "Wingman",
+      "小幫手",
+      "WINGMAN",
+      "辅助手枪"
+    ],
+    "file": "weapons/wingman.svg"
+  }
+]

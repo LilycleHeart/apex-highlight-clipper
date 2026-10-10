@@ -6,10 +6,17 @@ from app_options import parse_options,recycle_source
 from apex_clipper import fingerprint
 
 class AppOptionsTests(unittest.TestCase):
-    def test_defaults_and_delete_force_verification(self):
+    def test_defaults_and_delete_verification_are_independent(self):
         self.assertEqual(parse_options({})['gap'],35)
         self.assertFalse(parse_options({})['delete_source'])
-        self.assertTrue(parse_options({'delete_source':True,'verify':False})['verify'])
+        self.assertFalse(parse_options({'delete_source':True,'verify':False})['verify'])
+        for verify in [True,False]:
+            for delete in [True,False]:
+                options=parse_options({'verify':verify,'delete_source':delete})
+                self.assertEqual((options['verify'],options['delete_source']),(verify,delete))
+        self.assertEqual(parse_options({})['scan_mode'],'indexed')
+        self.assertEqual(parse_options({'scan_mode':'smart'})['scan_mode'],'indexed')
+        self.assertEqual(parse_options({'scan_mode':'smart'},legacy=True)['scan_mode'],'smart')
         custom=parse_options({'gap':20,'pre':8,'post':10,'fps':3})
         self.assertEqual([custom[k] for k in ['gap','pre','post','fps']],[20,8,10,3])
 
@@ -60,6 +67,12 @@ class AppOptionsTests(unittest.TestCase):
     def test_confirmed_success_invokes_only_selected_source(self):
         self.recycler.side_effect=lambda path:Path(path).unlink()
         self.assertEqual(self.recycle()['status'],'recycled')
+        self.recycler.assert_called_once_with(str(self.source.resolve()))
+        self.assertTrue(self.output.exists())
+
+    def test_success_without_optional_packet_verification_can_recycle(self):
+        self.recycler.side_effect=lambda path:Path(path).unlink()
+        self.assertEqual(self.recycle(verification=None)['status'],'recycled')
         self.recycler.assert_called_once_with(str(self.source.resolve()))
         self.assertTrue(self.output.exists())
 

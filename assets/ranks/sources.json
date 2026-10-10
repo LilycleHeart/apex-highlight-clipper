@@ -1,0 +1,66 @@
+[
+  {
+    "id": "rookie",
+    "name": "菜鸟",
+    "file": "rookie.png",
+    "url": "https://api.mozambiquehe.re/assets/ranks/rookie4.png",
+    "source_page": "https://apexlegendsapi.com/",
+    "sha256": "4b803d36c10a34da60b44f0038cede52143d0a8e2c7818d086bfd1c15751d67e"
+  },
+  {
+    "id": "bronze",
+    "name": "青铜",
+    "file": "bronze.png",
+    "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/45/Ranked_Tier1_Bronze.png/revision/latest?cb=20190902181259",
+    "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier1_Bronze.png",
+    "sha256": "b021aa1811b2d5f8a1e1605337b7fbf4cdf93ed7c5b444a3634d493d51dba3f4"
+  },
+  {
+    "id": "silver",
+    "name": "白银",
+    "file": "silver.png",
+    "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/4c/Ranked_Tier2_Silver.png/revision/latest?cb=20190902181319",
+    "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier2_Silver.png",
+    "sha256": "7673db0af1b3d22d48ca6cc11e0fc01590a2b7a5809ce17529cb826a3aa0fc6f"
+  },
+  {
+    "id": "gold",
+    "name": "黄金",
+    "file": "gold.png",
+    "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/7/75/Ranked_Tier3_Gold.png/revision/latest?cb=20190902181335",
+    "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier3_Gold.png",
+    "sha256": "42522ba903f12133b344b9f53118e94ee41df3bb0a9233c1778269db6b29ee1a"
+  },
+  {
+    "id": "platinum",
+    "name": "白金",
+    "file": "platinum.png",
+    "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/1/18/Ranked_Tier4_Platinum.png/revision/latest?cb=20190902181349",
+    "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier4_Platinum.png",
+    "sha256": "024cfe50c74a92b2bd277ef29e1a45ed175119a5e9b4eecb364dbf9e9caf3e4d"
+  },
+  {
+    "id": "diamond",
+    "name": "钻石",
+    "file": "diamond.png",
+    "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/1/1e/Ranked_Tier5_Diamond.png/revision/latest?cb=20190902181402",
+    "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier5_Diamond.png",
+    "sha256": "0e92e54eb039e30c878b47a2dcb58ae1c760d05cb58f7b2249b82be773c380fd"
+  },
+  {
+    "id": "master",
+    "name": "大师",
+    "file": "master.png",
+    "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/7/70/Ranked_Tier6_Master.png/revision/latest?cb=20200204044914",
+    "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier6_Master.png",
+    "sha256": "2c47a23507a5e26722809cd83cd032f2868f725901b5d86715d3a56b2facfa71"
+  },
+  {
+    "id": "predator",
+    "name": "猎杀",
+    "file": "predator.png",
+    "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/43/Ranked_Tier7_Apex_Predator.png/revision/latest?cb=20190902181417",
+    "source_page": "https://apexlegends.fandom.com/wiki/File:Ranked_Tier7_Apex_Predator.png",
+    "sha256": "e71c685d2861842fd4262077d46d45d74ba9a2fa472a65ee940f16945f8f7c71"
+  }
+]

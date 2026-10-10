@@ -35,9 +35,11 @@ class SmartTests(unittest.TestCase):
         fine=[row(20,ammo=20,damage=100,kills=1),row(22,ammo=20,damage=120,kills=1)]
         self.assertFalse(audit_counters(coarse,fine,30)['passed'])
 
-    def test_smart_mode_never_enables_original_recycling(self):
-        self.assertFalse(parse_options({'scan_mode':'smart','delete_source':True})['delete_source'])
-        self.assertTrue(parse_options({'scan_mode':'complete','delete_source':True})['delete_source'])
+    def test_legacy_settings_migrate_to_indexed_without_changing_recycle_switch(self):
+        for old_mode in ['smart','complete']:
+            options=parse_options({'scan_mode':old_mode,'delete_source':True,'verify':False})
+            self.assertEqual(options['scan_mode'],'indexed')
+            self.assertTrue(options['delete_source']);self.assertFalse(options['verify'])
 
     def test_legacy_failed_audit_resumes_in_original_full_folder(self):
         with tempfile.TemporaryDirectory() as temp:

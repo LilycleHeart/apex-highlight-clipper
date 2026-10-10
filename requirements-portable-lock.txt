@@ -1,0 +1,17 @@
+# v0.2.0 CPU portable runtime, tested with Python 3.11.9 x64.
+rapidocr-onnxruntime==1.4.4
+opencv-python==5.0.0.93
+numpy==2.4.6
+Pillow==12.3.0
+Send2Trash==1.8.3
+pywin32==311
+pyclipper==1.4.0
+six==1.17.0
+Shapely==2.2.0
+PyYAML==6.0.3
+onnxruntime==1.31.0
+tqdm==4.70.1
+flatbuffers==25.12.19
+packaging==26.3
+protobuf==7.36.2
+colorama==0.4.6

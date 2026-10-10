@@ -1,9 +1,6 @@
-* text=auto
-*.py text eol=lf
-*.ts text eol=lf
-*.tsx text eol=lf
-*.cjs text eol=lf
-*.json text eol=lf
-*.md text eol=lf
-*.cmd text eol=crlf
+# 保留素材原始字节，Windows检出也不转换SVG/音频行尾。
+*.svg -text
 *.png binary
+*.wav binary
+*.ttf binary
+*.otf binary

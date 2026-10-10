@@ -1,0 +1,35 @@
+name: Validate
+on:
+  push:
+    branches: [codex/main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: electron-ui/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt
+      - run: ./scripts/setup-ffmpeg.ps1
+      - run: python -m unittest discover -p "test_*.py"
+      - run: npm ci
+        working-directory: electron-ui
+      - run: npm run validate
+        working-directory: electron-ui
+      - run: node scripts/package.cjs
+        working-directory: electron-ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: electron-windows-x64
+          path: electron-ui/release/Apex Highlight Clipper-win32-x64
+          retention-days: 7
