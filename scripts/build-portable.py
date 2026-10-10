@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import urllib.request
@@ -66,9 +67,17 @@ def build(args):
                 '-r',str(ROOT/'requirements.txt'),'-c',str(ROOT/'requirements-portable-lock.txt')],check=True)
         else:
             copy_tree(env/'Lib/site-packages',runtime/'Lib/site-packages')
-        (runtime/'python311._pth').write_text('python311.zip\n.\n../..\nLib/site-packages\nimport site\n','utf-8')
+    for mode in ['cpu','dml']:
+        runtime=target/'runtime'/mode
+        # Windows的_pth对无尾分隔符的../..会裁掉末尾点；原生路径并保留尾分隔符。
+        (runtime/'python311._pth').write_text('\n'.join([
+            'python311.zip','.',str(Path('..')/'..')+os.sep,
+            'Lib/site-packages','import site','']),'utf-8')
         subprocess.run([str(runtime/'python.exe'),'-c',
-            'import cv2,numpy,rapidocr_onnxruntime,onnxruntime,send2trash,pythoncom; print(onnxruntime.get_available_providers())'],cwd=target,check=True)
+            "import os,numpy as np,sys,send2trash,pythoncom; os.environ['APEX_GPU_LOAD']='low'; "
+            "from gpu_ocr_backend import create_ocr_engine; "
+            "e=create_ocr_engine(backend=sys.argv[1],model_path='models/numeric_rec_en_v4.onnx'); "
+            "print('Portable core inference OK',sys.argv[1],len(e.text_rec([np.full((32,96,3),255,np.uint8)])))",mode],cwd=target,check=True)
     (target/'Start.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\nif not exist "tools\\ffmpeg.exe" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\setup-ffmpeg.ps1"\r\nif not exist "tools\\ffmpeg.exe" (echo FFmpeg setup failed. See README.md. & pause & exit /b 1)\r\nstart "" "%~dp0app\\Apex Highlight Clipper.exe" %*\r\n','utf-8')
     inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in release_files(target)}
     (target/'FILES.sha256.json').write_text(json.dumps(inventory,indent=2),'utf-8')
