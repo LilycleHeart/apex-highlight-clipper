@@ -56,9 +56,9 @@ def open_task(request):
         if options['fps']<1: raise ValueError('新任务细查频率至少为 1 帧/秒，建议使用默认 2 帧/秒')
         effective={**request,**options}
         output=Path(request['output']).resolve(); output.mkdir(parents=True,exist_ok=True)
-    moment=datetime.now(timezone(timedelta(hours=8)))
-    # Windows英文区域的strftime会先用locale编码格式串；中文放在格式串外。
-    stamp=f'{moment:%Y}年{moment:%m}月{moment:%d}日 {moment:%H}点{moment:%M}分{moment:%S}秒'
+        moment=datetime.now(timezone(timedelta(hours=8)))
+        # Windows英文区域的strftime会先用locale编码格式串；中文放在格式串外。
+        stamp=f'{moment:%Y}年{moment:%m}月{moment:%d}日 {moment:%H}点{moment:%M}分{moment:%S}秒'
         directory=output/('任务 '+stamp+' '+uuid.uuid4().hex[:4]); directory.mkdir()
         path=directory/'task.json'; items=[]; names=set()
         for name in request['files']:
