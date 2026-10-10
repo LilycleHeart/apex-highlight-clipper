@@ -18,6 +18,14 @@ def copy_tree(source, destination):
             'setuptools', 'setuptools-*', 'pkg_resources', '_distutils_hack', 'distutils-precedence.pth',
             'av', 'av-*', 'av.libs'))
 
+def release_files(target):
+    # 依赖的测试目录、pip生成的pyc和运行时诊断也不进入发布包。
+    for p in target.rglob('*'):
+        rel=p.relative_to(target)
+        if not p.is_file() or any(part in {'__pycache__','tests','validation','output'} for part in rel.parts): continue
+        if p.suffix=='.pyc' or rel.parts[0]=='tools' or rel.as_posix()=='FILES.sha256.json': continue
+        yield p
+
 def build(args):
     version = json.loads((ROOT/'electron-ui/package.json').read_text('utf-8'))['version']
     target = OUT / f'Apex-Clipper-{version}-Windows-x64'
@@ -62,12 +70,12 @@ def build(args):
         subprocess.run([str(runtime/'python.exe'),'-c',
             'import cv2,numpy,rapidocr_onnxruntime,onnxruntime,send2trash,pythoncom; print(onnxruntime.get_available_providers())'],cwd=target,check=True)
     (target/'Start.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\nif not exist "tools\\ffmpeg.exe" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\setup-ffmpeg.ps1"\r\nif not exist "tools\\ffmpeg.exe" (echo FFmpeg setup failed. See README.md. & pause & exit /b 1)\r\nstart "" "%~dp0app\\Apex Highlight Clipper.exe" %*\r\n','utf-8')
-    inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in target.rglob('*') if p.is_file()}
+    inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in release_files(target)}
     (target/'FILES.sha256.json').write_text(json.dumps(inventory,indent=2),'utf-8')
     archive=OUT/(target.name+'.zip')
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-        for p in target.rglob('*'):
-            if p.is_file(): z.write(p,Path(target.name)/p.relative_to(target))
+        for p in [*release_files(target),target/'FILES.sha256.json']:
+            z.write(p,Path(target.name)/p.relative_to(target))
     (OUT/'SHA256SUMS.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  '+archive.name+'\n','utf-8')
     print(archive)
 
