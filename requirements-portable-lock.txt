@@ -1,5 +1,6 @@
 # v0.2.0 CPU portable runtime, tested with Python 3.11.9 x64.
 rapidocr-onnxruntime==1.4.4
+av==18.1.0
 opencv-python==5.0.0.93
 numpy==2.4.6
 Pillow==12.3.0

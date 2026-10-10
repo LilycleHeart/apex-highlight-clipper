@@ -1,2 +1,2 @@
-# Optional indexed-reader prototype; not needed by the production pipeline.
+# Required by the default indexed reader; also in CPU/GPU requirements.
 av==18.1.0
