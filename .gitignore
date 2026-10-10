@@ -66,3 +66,4 @@ electron-ui/.playwright*/
 !/electron-ui/tests/v3-ui-validation.cjs
 !/electron-ui/tests/titlebar-ui-validation.cjs
 !/docs/third-party.md
+!/electron-ui/tests/theme-ui-validation.cjs

@@ -18,6 +18,7 @@ export interface Bootstrap {output:string;options:Options;preferences:ThemePrefe
 export interface ImportResult {files:FileItem[];rejected:string[]}
 export interface DesktopAPI {
  ready():Promise<void>;
+ chrome(color:string,foreground:string):Promise<void>;
  bootstrap():Promise<Bootstrap>;chooseFiles():Promise<ImportResult>;chooseFolder():Promise<ImportResult>;importFiles(files:File[]):Promise<ImportResult>;
  chooseOutput():Promise<string|null>;savePreferences(prefs:ThemePreferences):Promise<void>;saveOptions(options:Options,output:string):Promise<void>;
  start(files:string[],output:string,options:Options):Promise<void>;stop():Promise<void>;resume(task:string,options:Options):Promise<void>;

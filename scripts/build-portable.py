@@ -6,11 +6,13 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import urllib.request
 import uuid
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
 OUT = ROOT / 'publish'
 PYTHON_URL = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip'
 
@@ -122,6 +124,6 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--cpu',default=str(ROOT/'.venv'))
     parser.add_argument('--gpu',default=str(ROOT/'.gpu-venv'))
-    parser.add_argument('--electron',default='release-v3')
+    parser.add_argument('--electron',default='release-v3-final')
     parser.add_argument('--refresh',action='store_true',help='更新本次未发布暂存包的产品文件，保留已验证runtime并重写校验和ZIP')
     build(parser.parse_args())

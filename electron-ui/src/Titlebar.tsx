@@ -5,7 +5,7 @@ export type Page='start'|'clips'|'statistics';
 const tabs=[{id:'start',label:'开始'},{id:'clips',label:'整理片段'},{id:'statistics',label:'统计数据'}] as const;
 function Tab({id,label,selected,onSelect,reduced}:{id:Page;label:string;selected:boolean;onSelect:()=>void;reduced:boolean}){
  const q=useSurfaceValue(selected?1:0,reduced),g=tabGeometry(q,16,116),u=clamp(q);
- return <button className="nav-tab" role="tab" id={`tab-${id}`} aria-controls={`page-${id}`} aria-selected={selected} onClick={onSelect} style={{color:`rgb(${Math.max(0,Math.min(255,232-202*q))} ${Math.max(0,Math.min(255,232-206*q))} ${Math.max(0,Math.min(255,232-210*q))})`}} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const buttons=[...e.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')];const i=buttons.indexOf(e.currentTarget),n=buttons[(i+(e.key==='ArrowRight'?1:buttons.length-1))%buttons.length];n.focus();n.click();}}}>
+ return <button className="nav-tab" role="tab" id={`tab-${id}`} aria-controls={`page-${id}`} aria-selected={selected} onClick={onSelect} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const buttons=[...e.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')];const i=buttons.indexOf(e.currentTarget),n=buttons[(i+(e.key==='ArrowRight'?1:buttons.length-1))%buttons.length];n.focus();n.click();}}}>
   <svg className="nav-surface" width="148" height="38" aria-hidden="true"><path d={g.path} fill="var(--page-blue)" opacity={g.opacity}/></svg><span style={{opacity:.8+.2*u}}>{label}</span>
  </button>;
 }
