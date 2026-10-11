@@ -39,7 +39,7 @@ class SmartTests(unittest.TestCase):
         for old_mode in ['smart','complete']:
             options=parse_options({'scan_mode':old_mode,'delete_source':True,'verify':False})
             self.assertEqual(options['scan_mode'],'indexed')
-            self.assertTrue(options['delete_source']);self.assertFalse(options['verify'])
+            self.assertTrue(options['delete_source']);self.assertNotIn('verify',options)
 
     def test_legacy_failed_audit_resumes_in_original_full_folder(self):
         with tempfile.TemporaryDirectory() as temp:
