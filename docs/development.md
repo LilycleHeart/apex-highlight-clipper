@@ -20,7 +20,7 @@ EXE 安装包由 `scripts/build-installer.py --bundle publish/<构建目录>/Ape
 
 安装包默认安装到当前用户的 LocalAppData/Programs，不要求管理员权限；开始菜单入口直接运行应用，桌面快捷方式可选。`/PORTABLE=1 /DIR=<隔离目录> /VERYSILENT /NORESTART` 可用于一次最小解包与启动检查，不写卸载登记或快捷方式。安装包已附视频工具，可离线运行。只检查安装文件完整性及启动，复用内核已有验证；测试目录在检查后清除。
 
-v1.0.1 保持安装器 AppId `{AF948615-855F-4699-8640-11A9E2F08854}` 与用户数据路径兼容。更新器仅接受本仓库同版本的 EXE、有效大小和 GitHub SHA256；流式校验后由隐藏的 PowerShell helper 等待旧进程退出，再在当前目录安装并重新启动。便携版使用 /PORTABLE=1，安装版沿用卸载登记；不强杀窗口或后台任务。下载在用户数据 updates 目录，有跨进程锁与清理机制。旧版 0.2.0/本地 1.0.0 不具备安装逻辑，第一次通过原更新入口打开 Release 下载 EXE，之后使用应用内“下载并安装”。
+v1.0.1 保持安装器 AppId `{AF948615-855F-4699-8640-11A9E2F08854}` 与用户数据路径兼容。更新器仅接受本仓库同版本的 EXE、有效大小和 GitHub SHA256；流式校验后通过 Electron relaunch 交接到隐藏的 PowerShell helper，等待旧进程退出，再在当前目录安装并重新启动。便携版使用 /PORTABLE=1，安装版沿用卸载登记；不强杀窗口或后台任务。下载在用户数据 updates 目录，有跨进程锁与清理机制。旧版 0.2.0/本地 1.0.0 不具备安装逻辑，第一次通过原更新入口打开 Release 下载 EXE，之后使用应用内“下载并安装”。
 
 两个runtime/*/python.exe入口保留。python311._pth只包含当前模式、包内源码与runtime/shared/Lib/site-packages，不读取PYTHONPATH或系统Python包。sitecustomize检查必需资源、保留AddDllDirectory句柄，并处理共享pywin32.pth；不会将另一模式的ONNX Runtime加入DLL搜索目录。Windows对多个新增DLL目录不保证顺序，因此构建时拒绝当前模式内不同内容的同名DLL。依据：[Python嵌入式路径](https://docs.python.org/3.11/using/windows.html#finding-modules)、[add_dll_directory](https://docs.python.org/3.11/library/os.html#os.add_dll_directory)、[Windows DLL搜索规则](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order)。
 

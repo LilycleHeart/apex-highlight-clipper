@@ -208,9 +208,9 @@ app.whenReady().then(async()=>{
    updateAbort=new AbortController();report('downloading',0);
    const installer=await downloadInstaller(latest.installer,updateRoot,(url,init)=>net.fetch(url,init),percent=>report('downloading',percent),updateAbort.signal);updateAbort=null;
    await flushSaves();const portable=!(await fs.readdir(target)).some(name=>/^unins\d+\.exe$/i.test(name));
-   const args=['-NoProfile','-ExecutionPolicy','Bypass','-File',helper,'-Installer',installer,'-Target',target,'-ParentPid',String(process.pid),...(portable?['-Portable']:[])];
-   const proc=spawn(path.join(process.env.SystemRoot||'C:/Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),args,{detached:true,stdio:'ignore',windowsHide:true});
-   await new Promise<void>((resolve,reject)=>{proc.once('spawn',resolve);proc.once('error',reject);});proc.unref();scheduled=true;report('installing',100);setTimeout(()=>win.close(),250);
+   const args=['-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',helper,'-Installer',installer,'-Target',target,'-ParentPid',String(process.pid),...(portable?['-Portable']:[])];
+   app.relaunch({execPath:path.join(process.env.SystemRoot||'C:/Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),args});
+   scheduled=true;report('installing',100);setTimeout(()=>win.close(),250);
   }catch(error){report('error',undefined,error instanceof Error&&/^[\u4e00-\u9fff]/.test(error.message)?error.message:'更新未完成，请重试');throw error;}
   finally{updateAbort=null;if(!scheduled)updating=false;}
  });
