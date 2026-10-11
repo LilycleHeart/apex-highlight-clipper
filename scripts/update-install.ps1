@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Installer,[Parameter(Mandatory)][string]$Target,[Parameter(Mandatory)][int]$ParentPid,[switch]$Portable)
+﻿param([Parameter(Mandatory)][string]$Installer,[Parameter(Mandatory)][string]$Target,[Parameter(Mandatory)][int]$ParentPid,[switch]$Portable)
 $ErrorActionPreference='Stop'
 $installerPath=[IO.Path]::GetFullPath($Installer)
 $targetPath=[IO.Path]::GetFullPath($Target)

@@ -21,6 +21,7 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -r requirements.txt
       - run: ./scripts/setup-ffmpeg.ps1
+      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-windows-scripts.ps1
       - run: python -m unittest discover -p "test_*.py"
       - run: npm ci
         working-directory: electron-ui

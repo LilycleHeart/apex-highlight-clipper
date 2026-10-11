@@ -1,4 +1,4 @@
-param([switch]$NoDownload)
+﻿param([switch]$NoDownload)
 $ErrorActionPreference = 'Stop'
 $ProjectDirectory = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $LocalData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }

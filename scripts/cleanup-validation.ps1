@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$Apply,
     [switch]$PurgeLegacyTests,
     [switch]$SkipImageCache,
