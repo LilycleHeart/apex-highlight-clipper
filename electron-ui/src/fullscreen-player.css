@@ -1,6 +1,6 @@
 .clip-expanded .clip-cover{position:relative}
-.clip-expanded .clip-cover .player-controls{position:absolute;inset:auto 0 0;z-index:10;box-sizing:border-box;width:100%;background:transparent;color:#fff;--card-ink:#fff;--card-muted:#fff;--card-accent:#fff;--card-line:rgba(218,229,244,.42);--card-tint:transparent;--primaryContainer:rgba(0,0,0,.2);--onPrimaryContainer:#fff}
-.clip-expanded .clip-cover .player-control-row button,.clip-expanded .clip-cover .event-marker{background:transparent;color:#fff;filter:drop-shadow(0 1px 2px #000b)}
+.clip-expanded .clip-cover .player-controls{position:absolute;inset:auto 0 0;z-index:10;box-sizing:border-box;width:100%;background:transparent;color:var(--card-accent);--card-line:color-mix(in srgb,var(--card-accent) 38%,transparent)}
+.clip-expanded .clip-cover .player-control-row button,.clip-expanded .clip-cover .event-marker{background:transparent;color:var(--card-accent);filter:drop-shadow(0 1px 2px #000b)}
 .clip-expanded .clip-cover .player-control-row button:hover,.clip-expanded .clip-cover .event-marker:hover,.clip-expanded .clip-cover .event-marker:focus-visible{background:rgba(0,0,0,.2)}
 .clip-expanded .clip-cover .player-control-row>time,.clip-expanded .clip-cover .event-marker{text-shadow:0 1px 3px #000}
 .clip-expanded .clip-cover .video-seek{filter:drop-shadow(0 1px 2px #000b)}
@@ -10,10 +10,10 @@
 .clip-cover:fullscreen .player-controls{padding:18px 24px 16px}
 .clip-cover:fullscreen .event-marker{min-width:72px}
 .clip-cover:fullscreen .event-marker .apex-icon{width:17px;height:17px}
-.clip-cover:fullscreen .player-controls,.player-round-totals{opacity:1;visibility:visible;transition:opacity .2s ease,visibility 0s}
-.clip-cover:fullscreen .player-controls[data-visible=false],.player-round-totals[data-visible=false]{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s .2s}
+.clip-cover .player-controls,.player-round-totals{opacity:1;visibility:visible;transition:opacity .2s ease,visibility 0s}
+.clip-cover .player-controls[data-visible=false],.player-round-totals[data-visible=false]{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s .2s}
 .clip-cover:fullscreen[data-controls-visible=false]{cursor:none}
-.player-round-totals{position:absolute;top:22px;right:28px;z-index:10;display:flex;gap:18px;align-items:center;padding:10px 14px;color:#fff;font-size:13px;text-shadow:0 1px 3px #000,0 0 8px #000;pointer-events:none}
+.player-round-totals{position:absolute;top:22px;right:28px;z-index:10;display:flex;gap:18px;align-items:center;padding:10px 14px;color:var(--card-accent);font-size:13px;text-shadow:0 1px 3px #000,0 0 8px #000;pointer-events:none}
 .player-round-totals>span{display:flex;align-items:center;gap:8px}
 .player-round-totals>span:first-child{font-size:12px}
 .player-round-totals b{font-size:22px;font-variant-numeric:tabular-nums}

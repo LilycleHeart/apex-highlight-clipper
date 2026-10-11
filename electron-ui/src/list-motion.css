@@ -4,6 +4,28 @@
   overflow: hidden;
 }
 
+/* Only card snapshots move. The real grid and playing video retain their layout. */
+:root[data-library-reveal]::view-transition {
+  pointer-events: none;
+  clip-path: var(--library-reveal-clip);
+}
+:root[data-library-reveal]::view-transition-group(*) {
+  animation-duration: 360ms;
+  animation-timing-function: cubic-bezier(.22,.75,.25,1);
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--card-paper);
+}
+:root[data-library-reveal]::view-transition-old(*),
+:root[data-library-reveal]::view-transition-new(*) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left top;
+  animation-duration: 220ms;
+  mix-blend-mode: normal;
+}
+
 /* Height caps previously changed the box ratio without changing its width.
    Metadata owns the inline aspect ratio; fullscreen alone overrides it. */
 .clip-expanded .clip-cover:not(:fullscreen) .media-frame {

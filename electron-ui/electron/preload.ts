@@ -7,6 +7,7 @@ const api:DesktopAPI={
  onWindowState:cb=>{const listener=(_event:Electron.IpcRendererEvent,state:{maximized:boolean})=>cb(state);ipcRenderer.on('window-state',listener);return()=>ipcRenderer.removeListener('window-state',listener);},
  savePlayerAudio:value=>ipcRenderer.invoke('player-audio',value),
  library:()=>ipcRenderer.invoke('library'),
+ ignoreLibraryErrors:()=>ipcRenderer.invoke('ignore-library-errors'),
  enrichHud:(files,fields)=>ipcRenderer.invoke('enrich-hud',files,fields),
  chooseLibraryRoot:()=>ipcRenderer.invoke('choose-library-root'),
  ready:()=>ipcRenderer.invoke('ui-ready'),chrome:(color,foreground)=>ipcRenderer.invoke('chrome',color,foreground),

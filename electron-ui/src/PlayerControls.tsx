@@ -38,11 +38,12 @@ export default function PlayerControls({clip,video,stage,roundTotals,onError,onC
  useEffect(()=>{
   const container=stage.current;if(!container)return;let timer:ReturnType<typeof setTimeout>|undefined;
   const focused=()=>{const el=document.activeElement;return el instanceof HTMLElement&&container.contains(el)&&el.matches(':focus-visible');};
-  const schedule=()=>{clearTimeout(timer);setControlsVisible(true);if(!fullscreen||!playing)return;timer=setTimeout(()=>{if(focused()||container.querySelector('.player-controls:hover,.event-hover-popover:hover'))schedule();else setControlsVisible(false);},2400);};
-  for(const name of ['pointermove','pointerdown','keydown','focusin','focusout'])container.addEventListener(name,schedule);schedule();
-  return()=>{clearTimeout(timer);for(const name of ['pointermove','pointerdown','keydown','focusin','focusout'])container.removeEventListener(name,schedule);};
+  const schedule=()=>{clearTimeout(timer);const inside=container.matches(':hover');setControlsVisible(!playing||inside||focused());if(!fullscreen||!playing||!inside)return;timer=setTimeout(()=>{if(focused()||container.querySelector('.player-controls:hover,.event-hover-popover:hover'))schedule();else setControlsVisible(false);},2400);};
+  const leave=()=>{clearTimeout(timer);if(playing&&!focused())setControlsVisible(false);};
+  for(const name of ['pointerenter','pointermove','pointerdown','keydown','focusin','focusout'])container.addEventListener(name,schedule);container.addEventListener('pointerleave',leave);schedule();
+  return()=>{clearTimeout(timer);for(const name of ['pointerenter','pointermove','pointerdown','keydown','focusin','focusout'])container.removeEventListener(name,schedule);container.removeEventListener('pointerleave',leave);};
  },[fullscreen,playing,stage]);
- const visible=!fullscreen||controlsVisible;
+ const visible=controlsVisible;
  useEffect(()=>{const container=stage.current;if(!container)return;container.dataset.controlsVisible=String(visible);return()=>{delete container.dataset.controlsVisible;};},[stage,visible]);
  useEffect(()=>()=>{if(volumeTimer.current!==null)clearTimeout(volumeTimer.current);},[]);
  useEffect(()=>{const v=video.current;if(!v)return;const update=()=>{setTime(v.currentTime);setPlaying(!v.paused&&!v.ended);setMuted(v.muted);setVolume(v.volume);if(Number.isFinite(v.duration)&&v.duration>0)setDuration(v.duration);};const ready=()=>{if(pending.current!==null){v.currentTime=pending.current;pending.current=null;}update();};for(const name of ['timeupdate','play','pause','volumechange','ended','seeked'])v.addEventListener(name,update);v.addEventListener('loadedmetadata',ready);update();return()=>{for(const name of ['timeupdate','play','pause','volumechange','ended','seeked'])v.removeEventListener(name,update);v.removeEventListener('loadedmetadata',ready);};},[clip.path,video]);

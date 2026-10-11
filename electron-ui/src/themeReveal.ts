@@ -1,4 +1,5 @@
 import {flushSync} from 'react-dom';
+import {cancelLibraryViewReveal} from './libraryViewReveal';
 
 let generation=0;
 let active:{transition:ViewTransition;animation?:Animation}|null=null;
@@ -15,6 +16,7 @@ export function cancelThemeReveal(){
 
 /** Reveal the new page from the selected button; interrupted clicks keep the latest choice. */
 export function revealTheme(button:HTMLElement,update:()=>void,animated:boolean,origin?:{x:number;y:number}){
+ cancelLibraryViewReveal();
  cancelThemeReveal();
  if(!animated||typeof document.startViewTransition!=='function'){flushSync(update);return;}
  const token=generation,box=button.getBoundingClientRect();

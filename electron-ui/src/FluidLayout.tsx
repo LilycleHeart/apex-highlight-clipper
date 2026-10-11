@@ -22,11 +22,11 @@ export default function FluidLayout({children,revision,reduced,className,style,p
    const key=el.dataset.identity!,r=el.getBoundingClientRect(),from=snapshots.current.get(key),fresh=!seen.current.has(key),visible=r.bottom>viewport.top&&r.top<viewport.bottom;
    seen.current.add(key);el.dataset.surfaceProgress='1';el.dataset.entryProgress='1';
    const resized=!!from&&(Math.abs(from.width-r.width)>1||Math.abs(from.height-r.height)>1);
-   if(reduced||!visible)continue;
+   if(reduced||!visible||document.documentElement.dataset.libraryReveal)continue;
    if(modeChanged||resized||fresh){animations.push(el.animate([{opacity:(modeChanged||resized)?0.75:0},{opacity:1}],{duration:240,delay:fresh&&!modeChanged?Math.min(entryIndex++*35,140):0,easing:'cubic-bezier(.2,.9,.25,1)'}));}
    else if(from){const x=from.x-r.x,y=from.y-r.y;if(Math.abs(x)+Math.abs(y)>.5)animations.push(el.animate([{translate:`${x}px ${y}px`},{translate:'0 0'}],{duration:320,easing:'cubic-bezier(.2,.9,.25,1)'}));}
   }
-  const settle=()=>{if(!live)return;for(const el of elements)if(el.dataset.selected==='true')el.dispatchEvent(new Event('surface-settled'));node.dispatchEvent(new Event('layout-settled'));};
+  const settle=()=>{if(!live||document.documentElement.dataset.libraryReveal)return;for(const el of elements)if(el.dataset.selected==='true')el.dispatchEvent(new Event('surface-settled'));node.dispatchEvent(new Event('layout-settled'));};
   if(animations.length)void Promise.all(animations.map(animation=>animation.finished.catch(()=>{}))).then(settle);else queueMicrotask(settle);
   return()=>{live=false;for(const animation of animations)animation.cancel();};
  },[revision,reduced,positioned,collection,className]);
