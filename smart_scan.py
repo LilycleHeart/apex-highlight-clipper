@@ -217,7 +217,7 @@ def audit_counters(coarse,fine,duration,outcomes=None):
             checks.append({'field':key,'start':start,'end':end,'coarse_final':endpoint,'detail_final':detail[-1][key],
                 'observed_increment_lower_bound':expected,'detected_increment':detected,
                 'passed':bool(near and min(near)<=endpoint<=max(near) and detected>=expected)})
-    return {'passed':all(c['passed'] for c in checks),'checks':checks}
+    return {'passed':all(c['passed'] for c in checks),'available':bool(checks),'checks':checks}
 
 def smart_read(source,job,samples,profile,fps,output,gap=35,pre=10,post=15,cuda=False,result_first=False,indexed=False,continuous=False):
     if continuous and not indexed: raise ValueError('连续局部流水线仅用于索引实验模式')

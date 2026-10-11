@@ -120,7 +120,8 @@ def _run_task(request_path):
             _ON_STAGE=update_stage
             try:
                 previous=item.get('record')
-                if outputs_intact(previous) and item['status'] in ['complete','cleanup']:
+                from hud_layout import needs_layout_retry
+                if outputs_intact(previous) and item['status'] in ['complete','cleanup'] and not (source.is_file() and needs_layout_retry(previous,item.get('hud_profile'))):
                     if item['status']=='cleanup':
                         if options['filter_enabled']:
                             previous['source_cleanup']={'status':'kept','reason':'处理保留阈值已启用，原录像保留'}
@@ -143,7 +144,7 @@ def _run_task(request_path):
                 meta,video=stage('probe','检查录像',0,5,lambda:probe(source))
                 from hud_layout import detect_video
                 frozen=item.get('hud_profile')
-                if frozen and frozen.get('reference_size')==[video['width'],video['height']]:profile=frozen
+                if frozen and frozen.get('reference_size')==[video['width'],video['height']] and frozen.get('layout_status')!='unconfirmed':profile=frozen
                 else:
                     profile=stage('probe','自动适配分辨率与HUD拉伸比例',2,5,
                         lambda:detect_video(source,video,float(meta['format']['duration']),task['profile']))
@@ -218,6 +219,8 @@ def _run_task(request_path):
                     saved=stage('outcomes','确认全灭及队友交战尾部（支持续接）',70 if result_first else 82,74 if result_first else 86,lambda:enrich_outcomes(saved,samples,checkpoint=hud_path)); write_json(hud_path,saved)
                     rows=saved['rows']; duration=float(meta['format']['duration'])
                     events=detect_events(rows)
+                    from hud_layout import ensure_activity_is_readable
+                    ensure_activity_is_readable(profile,events,saved.get('smart_plan',{}))
                     lifecycle=downed_intervals(rows,duration,gap,post)
                     candidates=segments_from_events(events,duration,gap,pre,post,lifecycle)
                     candidates=cap_segment_ends(candidates,saved['outcome_events'])

@@ -8,7 +8,7 @@ from image_io import read_image
 import numpy as np
 
 BASE = Path(__file__).resolve().parent
-VERSION = 'anchored-hud-v1'
+VERSION = 'anchored-hud-v2'
 
 
 def point(profile, x, y, horizontal='right', vertical='top'):
@@ -33,6 +33,10 @@ def make_profile(width, height, vertical_scale=1., horizontal_scale=1., base=Non
     profile['name'] = f'Auto {width}x{height} / {profile["layout"]}'
     for key in ('damage','kills','counter_marker_search'):
         profile[key] = box(profile, original[key])
+    # Counter panels can move vertically independently of the stretched HUD.
+    # Locate the icon first, then counter_offset translates the numeric boxes.
+    search=original['counter_marker_search']
+    profile['counter_marker_search']=box(profile,[search[0]-40,max(0,search[1]-64),search[2]+60,search[3]+80])
     profile['assists'] = box(profile,[2202,94,2228,124])
     profile['participation'] = box(profile,[2260,94,2300,124])
     profile['counter_marker_origin'] = point(profile,*original['counter_marker_origin'])
@@ -87,13 +91,16 @@ def detect_images(images, width, height, base=None):
 
 
 def detect_video(source, video, duration, base=None):
-    """最多四次直接 seek；只在看不到 HUD 时继续，不遍历视频帧。"""
+    """最多八次直接 seek；确认 HUD 后即停止，不遍历视频帧。"""
     import av
     images=[]
     times=list(dict.fromkeys([min(5,duration*.1),min(90,duration*.2),duration*.25,duration*.55]))
+    if duration>=600:times+=list(dict.fromkeys(duration*part for part in [.4,.7,.85,.95]))
     with av.open(str(source)) as container:
         stream=container.streams.video[0];stream.codec_context.thread_count=1
         for second in times:
+            from app_cancel import check_cancel
+            check_cancel()
             container.seek(int(second/stream.time_base),stream=stream,backward=True,any_frame=False)
             frame=next((f for f in container.decode(stream) if float(f.pts*f.time_base)>=second),None)
             if frame is None:continue
@@ -103,6 +110,17 @@ def detect_video(source, video, duration, base=None):
     if not images:raise ValueError('无法读取用于自动适配的录像画面')
     profile['layout_probe_frames']=len(images)
     return profile
+
+
+def ensure_activity_is_readable(profile, events, plan):
+    """Unavailable HUD counters must not certify an active recording as empty."""
+    if profile.get('layout_status')=='unconfirmed' and not events and plan.get('seed_count',0)>0:
+        raise ValueError('未能确认录像的 HUD 布局，无法可靠定位交战；本次未导出，请保留原录像并重新适配。')
+
+
+def needs_layout_retry(record, profile):
+    return bool(record and not record.get('outputs') and profile and
+                profile.get('layout_status')=='unconfirmed' and profile.get('layout_version')!=VERSION)
 
 
 def outcome_profile(hud, original):
