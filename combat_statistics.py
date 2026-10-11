@@ -10,7 +10,7 @@ import unicodedata
 import cv2
 
 from apex_clipper import BASE,crop,counter_offset,numeric,write_json,fingerprint
-from combat_outcome_reader import inspect_combat_outcomes,parse_result_line
+from combat_outcome_reader import inspect_combat_outcomes,parse_result_line,clean_target_name,PARSER_VERSION
 
 VERSION='combat-statistics-v7'
 ASSIST_BOX=[2202,94,2228,124]
@@ -28,7 +28,7 @@ def unique_toasts(events):
     tracks=[]
     for raw in sorted(events,key=lambda e:e['time']):
         parsed=parse_result_line(raw.get('text','')) or {}
-        event={**parsed,**raw};event['target_text']=parsed.get('target_text',raw.get('target_text',''))
+        event={**parsed,**raw};event['target_text']=parsed.get('target_text',clean_target_name(raw.get('target_text','')))
         matched=None
         for track in reversed(tracks):
             gap=event['time']-track['last_seen']
@@ -77,7 +77,7 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
         for group in pair:
             for row in group: chosen[row['frame']]=row
     marker=cv2.imread(str(BASE/profile['counter_marker']),0);images=[];positions=[];recognized={}
-    boxes={'kills':profile['kills'],'assists':ASSIST_BOX,'damage':profile['damage']}
+    boxes={'kills':profile['kills'],'assists':profile.get('assists',ASSIST_BOX),'damage':profile['damage']}
     for row in chosen.values():
         image=cv2.imread(str(resolver.path(row['frame'])));delta,score=counter_offset(image,profile,marker)
         result={'frame':row['frame'],'time':row['time'],'marker_score':float(score)};recognized[row['frame']]=result
@@ -252,8 +252,9 @@ def collect_statistics(cache,samples,segments,profile,checkpoint):
     checkpoint=Path(checkpoint);checkpoint.parent.mkdir(parents=True,exist_ok=True)
     from stat_counter_fallback import counter_recipe
     token=hashlib.sha256(json.dumps({'version':VERSION,'counter_recipe':counter_recipe(),'source':cache['source'],'fps':cache['fps'],
+        'toast_parser':PARSER_VERSION,
         'bounds':[(s['start'],s['end']) for s in segments],'outcomes':cache.get('outcome_events',[]),
-        'profile':profile,'assist_box':ASSIST_BOX},sort_keys=True).encode()).hexdigest()
+        'profile':profile,'assist_box':profile.get('assists',ASSIST_BOX)},sort_keys=True).encode()).hexdigest()
     if checkpoint.exists():
         previous=json.loads(checkpoint.read_text(encoding='utf-8'))
         if previous.get('signature')==token and previous.get('complete'):return previous
@@ -280,7 +281,7 @@ def collect_statistics(cache,samples,segments,profile,checkpoint):
         correction=settlement if i==len(segments)-1 else None
         counts=reconciled_counts(endpoint,events,decision['coverage'],correction)
         results.append({'start':segment['start'],'end':segment['end'],**counts,'events':events,'coverage':decision['coverage']})
-    result={'version':VERSION,'signature':token,'complete':True,'source':cache['source'],'segments':results,
+    result={'version':VERSION,'parser_version':PARSER_VERSION,'signature':token,'complete':True,'source':cache['source'],'segments':results,
             'last_team_settlement':settlement,'terminal_toast_burst':terminal,'scan_stats':report['stats']}
     if fingerprint(Path(cache['source']['path']))!=cache['source']:raise ValueError('核对战绩时原录像发生变化')
     write_json(checkpoint,result);return result

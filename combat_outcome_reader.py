@@ -4,6 +4,7 @@ import hashlib
 import math
 import re
 import unicodedata
+from difflib import SequenceMatcher
 from pathlib import Path
 import cv2
 import numpy as np
@@ -12,6 +13,35 @@ from weapon_reader import new_engine,MODEL_SHA
 
 KINDS={'knock','assist','elimination'}
 RULE_VERSION='own-center-result-v4'
+PARSER_VERSION='target-name-v3'
+
+
+def same_english_target(left,right):
+    left=''.join(c for c in left.upper() if c.isalnum());right=''.join(c for c in right.upper() if c.isalnum())
+    return bool(left and right and (left==right or min(len(left),len(right))>=4 and SequenceMatcher(None,left,right).ratio()>=.82))
+
+
+def restore_english_events(observations):
+    """语法修复只重解析已保存的OCR行，不再次采样或推理。"""
+    for item in observations.values():
+        if item.get('status')=='excluded_view':continue
+        candidates=[e for e in item.get('possible_events',[]) if e.get('confirmation_basis')!='english_toast_grammar']
+        item['events']=[e for e in item.get('events',[]) if e.get('confirmation_basis')!='english_toast_grammar']
+        for line in item.get('lines',[]):
+            event=parse_result_line(line['text'])
+            if not event or not re.match(r'^(?:ASSIST|KNOCKED DOWN|ELIMINATED)\b',event['text'],re.I):continue
+            if line['prefix_confidence']<.90 or len(event.get('target_text',''))<2:continue
+            if any(e['kind']==event['kind'] and same_english_target(e.get('target_text',''),event.get('target_text','')) for e in candidates):continue
+            candidates.append({**event,'confidence':line['prefix_confidence'],'text_confidence':line['confidence'],
+                'box':line['box'],'time':item['time'],'frame':item['frame'],'ownership':'self','confirmation_basis':'english_toast_grammar'})
+        item['possible_events']=candidates
+    for item in observations.values():
+        for event in item.get('possible_events',[]):
+            if event.get('confirmation_basis')!='english_toast_grammar':continue
+            if any(previous['time']!=item['time'] and abs(previous['time']-item['time'])<=1.1 and
+                any(e['kind']==event['kind'] and same_english_target(e.get('target_text',''),event.get('target_text','')) for e in previous.get('possible_events',[])) for previous in observations.values()):
+                if not any(e['kind']==event['kind'] and same_english_target(e.get('target_text',''),event.get('target_text','')) for e in item['events']):item['events'].append({**event,'confirmation':'two_frame_english_toast'})
+                item['status']='self_event'
 
 
 def load_profile():
@@ -28,10 +58,35 @@ def load_profile():
     return profile
 
 
+def clean_target_name(text):
+    """只保留姓名；OCR 的固定提示、积分、对白不能作为玩家名展示。"""
+    if not isinstance(text,str):return ''
+    target=re.sub(r'\s+',' ',unicodedata.normalize('NFKC',text)).strip()
+    # 也处理旧缓存曾把完整动作前缀写进 target_text 的情况。
+    prefix=r'^(?:(?:ASSIST|助攻)\s*[,.:，：]*\s*|KN[O0]CK(?:ED)?\s*D[O0]WN\s*|ELIMINAT(?:ED|ION)\s*|(?:已)?[擊击擎驛驿]倒\s*|(?:已)?消[滅灭減减]\s*)'
+    for _ in range(3):
+        stripped=re.sub(prefix,'',target,flags=re.I)
+        if stripped==target:break
+        target=stripped
+    target=re.sub(r'\s*\+\s*[0-9OoIiLlSsBbZz]{1,5}(?:\s|$|[^A-Za-z0-9]).*$','',target).strip(' ,.:;，。：；')
+    compact=re.sub(r'\s+','',target).upper()
+    if not target or len(target)>48 or not any(c.isalpha() for c in target):return ''
+    if re.search(r'[\x00-\x1f\ufffd□<>:=+!?！？。]',target):return ''
+    if re.search(r'DAMAGE|INFLICT|SHIELDBROKEN|YOUSPOTTED|SPOTTEDANENEMY|PRESS|HOLD|TOGGLE|RELOAD|ELIMINAT|KNOCK|KN0CK|ASSIST|SQUAD|擊倒|击倒|造成|傷害|伤害|護盾|护盾|按住|按下|切換|切换|你發現|你发现|我被|你被',compact,re.I):return ''
+    # 被截断的动作词（真实缓存有 ASSIST.KNO）没有可用姓名。
+    if re.fullmatch(r'KN[O0]?(?:C(?:K(?:ED)?)?)?|D[O0]WN|ELIM|ELIMIN|ELIMINA|ELIMINATE|XP|RP',compact):return ''
+    return target
+
+
 def parse_result_line(text):
     """只接受本人toast的行首语法；玩家名拼错不影响事件种类。"""
     clean=unicodedata.normalize('NFKC',text).strip()
     clean=re.sub(r'\s+',' ',clean)
+    # Apex英文HUD常被OCR连成一词，且DOWN的O会读成0；仅修正行首固定语法。
+    clean=re.sub(r'^KN[O0]CKED\s*D[O0]WN\s*','KNOCKED DOWN ',clean,flags=re.I)
+    clean=re.sub(r'^(ELIMINATED|ASSIST)\s*',lambda match:match.group(1).upper()+' ',clean,flags=re.I)
+    clean=re.sub(r'^(ASSIST)\s*[,.:]*\s*KN[O0]CK(?:ED)?\s*D[O0]WN\s*',r'ASSIST KNOCKED DOWN ',clean,flags=re.I)
+    clean=re.sub(r'^(ASSIST)\s*[,.:]*\s*ELIMINAT(?:ION|ED)\s*',r'ASSIST ELIMINATED ',clean,flags=re.I)
     patterns=[
         ('assist',r'^(?:助攻\s*[,，:]?\s*(?:擊倒|击倒|消滅|消灭)?|ASSIST\s*[: ,]*\s*(?:KNOCK(?:ED)? DOWN|ELIMINAT(?:ION|ED))?)\s*(.*)$'),
         ('knock',r'^(?:(?:已)?(?:擊倒|击倒)|KNOCKED DOWN)\s*(.*)$'),
@@ -40,7 +95,7 @@ def parse_result_line(text):
     for kind,pattern in patterns:
         match=re.match(pattern,clean,re.IGNORECASE)
         if not match: continue
-        target=re.sub(r'\s*[+＋]\s*[0-9OIl]{2,4}.*$','',match.group(1)).strip()
+        target=match.group(1).strip()
         action=('elimination' if re.search(r'消[滅灭]|ELIMINAT',clean,re.IGNORECASE) else
                 'knock' if re.search(r'[擊击]倒|KNOCK',clean,re.IGNORECASE) else 'unknown')
         if kind=='assist':target=re.sub(r'^(?:[擊击擎驛驿]倒|消[滅灭減减])\s*','',target)
@@ -48,7 +103,7 @@ def parse_result_line(text):
             suffix=re.sub(r'^(?:助攻|ASSIST)\s*[,，:]?\s*','',clean,flags=re.I)
             if re.match(r'^.倒',suffix):action='knock';target=re.sub(r'^.倒\s*','',target)
             elif re.match(r'^消.',suffix):action='elimination';target=re.sub(r'^消.\s*','',target)
-        return {'kind':kind,'action':action,'target_text':target,'text':clean}
+        return {'kind':kind,'action':action,'target_text':clean_target_name(target),'text':clean}
     return None
 
 
@@ -74,8 +129,12 @@ class PrefixGate:
         region,roi=roi_image(image,self.profile); gray=cv2.cvtColor(region,cv2.COLOR_BGR2GRAY)
         found=[]
         for entry,template in self.templates:
-            ratio=image.shape[1]/entry['sample_size'][0]
-            if ratio!=1: template=cv2.resize(template,None,fx=ratio,fy=ratio)
+            if self.profile.get('hud_scale'):
+                rw,rh=self.profile['reference_size'];sx,sy=self.profile['hud_scale']
+                fx=image.shape[1]/rw*2*sx;fy=image.shape[0]/rh*2*sy
+            else:fx=fy=image.shape[1]/entry['sample_size'][0]
+            if fx!=1 or fy!=1: template=cv2.resize(template,None,fx=fx,fy=fy)
+            if template.shape[0]>gray.shape[0] or template.shape[1]>gray.shape[1]:continue
             result=cv2.matchTemplate(gray,template,cv2.TM_CCOEFF_NORMED)
             action='knock' if 'knock' in entry.get('path','') else 'elimination' if 'elimination' in entry.get('path','') else entry['kind']
             # 同时出现多个同类提示时保留多个行位置，避免只支持最高匹配的一行。
@@ -86,6 +145,17 @@ class PrefixGate:
                 x,y=loc;th,tw=template.shape
                 result[max(0,y-th//2):min(result.shape[0],y+th//2+1),max(0,x-tw//2):min(result.shape[1],x+tw//2+1)]=-2
         return found
+
+
+def text_line_gate(image,profile):
+    """未知语言只用廉价文字行筛选触发OCR，不把几何命中当战果。"""
+    region,_=roi_image(image,profile)
+    if not region.size:return False
+    hsv=cv2.cvtColor(region,cv2.COLOR_BGR2HSV)
+    mask=((hsv[:,:,2]>180)&(hsv[:,:,1]<90)).astype(np.uint8)
+    _,_,stats,_=cv2.connectedComponentsWithStats(mask)
+    glyphs=[(x,y,w,h) for x,y,w,h,area in stats[1:] if 3<=h<=26 and 1<=w<=30 and 4<=area<=350]
+    return any(sum(abs(y+h/2-(yy+hh/2))<=3 for _,yy,_,hh in glyphs)>=8 for _,y,_,h in glyphs)
 
 
 def group_lines(detections):
@@ -142,6 +212,7 @@ def recognize_frame(image,profile,engine=None,expand_context=False):
         if is_known_dialogue(line['text']): dialogue.append(line); continue
         parsed=parse_result_line(line['text'])
         if parsed and line['prefix_confidence']>=.65:
+            if line['confidence']<.80:parsed['target_text']=''
             events.append({**parsed,'confidence':line['prefix_confidence'],'text_confidence':line['confidence'],'box':line['box']})
         elif re.search(r'擊倒|击倒|消滅|消灭|助攻|KNOCK|ELIMINAT',line['text'],re.IGNORECASE):
             ambiguous.append(line)
@@ -187,7 +258,11 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
     from app_cancel import check_cancel
     from resume_io import RowJournal
     from ui_observer import preview
-    profile=profile or load_profile(); samples=Path(samples); fps=cache['fps']
+    profile=profile or load_profile()
+    if cache.get('profile',{}).get('layout_version'):
+        from hud_layout import outcome_profile
+        profile=outcome_profile(cache['profile'],profile)
+    samples=Path(samples); fps=cache['fps']
     if fps<2 and _allow_upgrade and _stop_after_positive:
         return _inspect_low_frequency(cache,samples,candidates,profile,checkpoint)
     source=Path(cache['source']['path']); identity=fingerprint(source)
@@ -200,11 +275,12 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
         'bounds':[(c['start'],c['end']) for c in candidates]},sort_keys=True).encode()).hexdigest()
     if checkpoint.exists():
         saved=json.loads(checkpoint.read_text(encoding='utf-8'))
-        if saved.get('signature')==signature and saved.get('complete'): return saved
+        if saved.get('signature')==signature and saved.get('complete') and saved.get('parser_version')==PARSER_VERSION: return saved
     wanted={i for c in candidates for i in candidate_indices(c,fps)}
     journal=RowJournal(checkpoint.with_suffix('.toast-rows.jsonl'),signature,
         lambda r,index:r.get('index') in wanted and r.get('time')==(r['index']-.5)/fps and r.get('status') in ['negative','ambiguous','excluded_view','self_event'])
     observations={r['index']:r for r in journal.rows}
+    restore_english_events(observations)
     hud_rows={int(r['frame'][:-4]):r for r in cache['rows']}
     gate=PrefixGate(profile); engine=None; checked_new=0; ocr_new=0; sampled_new=0
     extra_root=checkpoint.parent/('combat-outcome-samples-'+signature[:12])
@@ -224,7 +300,8 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
             matches=gate.inspect(image); best=max((m['score'] for m in matches),default=0.)
             item['gate']=matches
             threshold=profile.get('calibration',{}).get('gate_threshold',.65)
-            if best>=threshold:
+            generic=bool(profile.get('layout_version') and text_line_gate(image,profile))
+            if best>=threshold or generic:
                 if engine is None: engine=new_engine()
                 result=recognize_frame(image,profile,engine); ocr_new+=1
                 if not _stop_after_positive:
@@ -251,6 +328,14 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
                     if matching:
                         strongest=max(matching,key=lambda m:m['score']);event['prefix_box']=strongest['box']
                         if event['kind']=='assist' and event.get('action')=='unknown':event['action']=strongest.get('action','unknown')
+                    english=bool(re.match(r'^(?:ASSIST|KNOCKED DOWN|ELIMINATED)\b',event['text'],re.I))
+                    if english and event['confidence']>=.90 and len(event.get('target_text',''))>=2 and support<threshold:
+                        potential={**event,'time':item['time'],'frame':item['frame'],'ownership':'self','confirmation_basis':'english_toast_grammar'}
+                        possible.append(potential)
+                        if any(previous['time']!=item['time'] and abs(previous['time']-item['time'])<=1.1 and
+                            any(e['kind']==event['kind'] and same_english_target(e.get('target_text',''),event.get('target_text','')) for e in previous.get('possible_events',[])) for previous in observations.values()):
+                            item['events'].append({**potential,'confirmation':'two_frame_english_toast'})
+                        continue
                     if event['confidence']>=.85 and support>=threshold:
                         item['events'].append({**event,'time':item['time'],'frame':item['frame'],'template_score':support,'ownership':'self'})
                     elif event['confidence']>=.65 and support>=.9:
@@ -308,7 +393,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
                         'calibrated_style_confirmed':supported_style,
                         'stopped_after_positive':bool(found) and _stop_after_positive}})
         print(f'本人战果提示: {position+1}/{len(candidates)} 段，{status}，新增文字识别 {ocr_new} 帧',flush=True)
-    report={'signature':signature,'version':RULE_VERSION,'complete':True,'source':identity,
+    report={'signature':signature,'version':RULE_VERSION,'parser_version':PARSER_VERSION,'complete':True,'source':identity,
         'policy':sorted(KINDS),'decisions':decisions,'stats':{'checked_new_frames':checked_new,'ocr_new_frames':ocr_new,'extra_sample_frames':sampled_new,'restored_frames':len(journal.rows)-checked_new}}
     if fingerprint(source)!=identity: raise ValueError('识别结果提示时源录像发生变化')
     write_json(checkpoint,report)

@@ -1,27 +1,34 @@
-import {useLayoutEffect,useRef,type ReactNode} from 'react';
-import {NAV,sampleSpring,clamp,edgeGeometry} from './surfaceGeometry';
-type Box={x:number;y:number;width:number;height:number;alpha?:number};
-// Grid 流仍保持源码顺序；定位补偿只在当前元素上，绝不缩放媒体/文本平面。
-export default function FluidLayout({children,revision,reduced,className}:{children:ReactNode;revision:string;reduced:boolean;className:string}){
- const root=useRef<HTMLDivElement>(null),visible=useRef(new Map<string,Box>()),finish=useRef(()=>{});
+import {Component,useCallback,useLayoutEffect,useRef,type CSSProperties,type ReactNode} from 'react';
+type Box={x:number;y:number;width:number;height:number};
+class BeforeLayout extends Component<{revision:string;capture:()=>Map<string,Box>;snapshot:(value:Map<string,Box>)=>void;children:ReactNode}>{
+ getSnapshotBeforeUpdate(previous:Readonly<typeof this.props>){return previous.revision!==this.props.revision?this.props.capture():null;}
+ componentDidUpdate(_previous:Readonly<typeof this.props>,_state:unknown,snapshot:Map<string,Box>|null){if(snapshot)this.props.snapshot(snapshot);}
+ render(){return this.props.children;}
+}
+export default function FluidLayout({children,revision,reduced,className,style,positioned=false,allKeys=[]}:{children:ReactNode;revision:string;reduced:boolean;className:string;style?:CSSProperties;positioned?:boolean;allKeys?:string[]}){
+ const root=useRef<HTMLDivElement>(null),snapshots=useRef(new Map<string,Box>()),previousMode=useRef(className),seen=useRef(new Set<string>());
+ const collection=allKeys.join('\0'),snapshotRevision=revision+':'+collection;
+ const capture=useCallback(()=>{const map=new Map<string,Box>();for(const el of root.current?.querySelectorAll<HTMLElement>(':scope > .clip-card')||[]){const r=el.getBoundingClientRect();map.set(el.dataset.identity!,{x:r.x,y:r.y,width:r.width,height:r.height});}return map;},[]);
  useLayoutEffect(()=>{
-  const node=root.current;if(!node)return;finish.current();
-  let raf=0,last=0,elapsed=0,disposed=false;const elements=[...node.querySelectorAll<HTMLElement>(':scope > .clip-card')];
-  const columns=getComputedStyle(node).gridTemplateColumns.split(' ').length;const chosen=elements.findIndex(el=>el.dataset.selected==='true'),group=chosen>=0?Math.floor(chosen/columns)*columns:-1;for(let i=0;i<elements.length;i++){elements[i].style.order=String(i===chosen?group*2:i>=group&&i<group+columns&&group>=0?i*2+1:i*2);}
-  const origin=node.getBoundingClientRect();
-  const jobs=elements.map(el=>{el.style.removeProperty('translate');el.style.removeProperty('width');el.style.removeProperty('height');const rect=el.getBoundingClientRect();const target={x:rect.x-origin.x,y:rect.y-origin.y,width:rect.width,height:rect.height};const key=el.dataset.identity!;const from=visible.current.get(key)??{...target,y:target.y+48,alpha:0};return{el,key,from,target};});
-  function paint(q:number){
-   // 先批量改尺寸，再读取网格自然位置：列表高度也连续变化，且每帧只需一次布局。
-   for(const {el,key,from,target} of jobs){const box={x:from.x+(target.x-from.x)*q,y:from.y+(target.y-from.y)*q,width:from.width+(target.width-from.width)*q,height:from.height+(target.height-from.height)*q,alpha:(from.alpha??1)+(1-(from.alpha??1))*clamp(q)};visible.current.set(key,box);el.style.opacity=String(box.alpha);el.style.width=`${box.width}px`;el.style.height=`${box.height}px`;el.dataset.surfaceProgress=String(q);const path=el.querySelector<SVGPathElement>(':scope > .card-surface path');const svg=path?.ownerSVGElement;if(svg){svg.setAttribute('viewBox',`0 0 ${box.width} ${box.height}`);path!.setAttribute('d',edgeGeometry(box.width,box.height,q));}el.style.clipPath=`path('${edgeGeometry(box.width,box.height,q)}')`;}
-   for(const {el,key} of jobs){const box=visible.current.get(key)!;el.style.translate=`${box.x-el.offsetLeft}px ${box.y-el.offsetTop}px`;}
+  const node=root.current;if(!node)return;
+  const elements=[...node.querySelectorAll<HTMLElement>(':scope > .clip-card')],modeChanged=previousMode.current!==className;previousMode.current=className;
+  const viewport=node.closest('.library-scroll')?.getBoundingClientRect()||{top:0,bottom:innerHeight},animations:Animation[]=[];
+  let live=true,entryIndex=0;
+  if(!positioned){const columns=getComputedStyle(node).gridTemplateColumns.split(' ').length,chosen=elements.findIndex(el=>el.dataset.selected==='true'),group=chosen>=0?Math.floor(chosen/columns)*columns:-1;elements.forEach((el,i)=>el.style.order=String(i===chosen?group*2:i>=group&&i<group+columns&&group>=0?i*2+1:i*2));}
+  for(const el of elements){
+   // Animating dimensions reflows grid rows during virtual-list measurement.
+   // Keep final geometry stable and animate position or opacity only.
+   for(const property of ['translate','scale','width','height','opacity','clip-path'])el.style.removeProperty(property);
+   const key=el.dataset.identity!,r=el.getBoundingClientRect(),from=snapshots.current.get(key),fresh=!seen.current.has(key),visible=r.bottom>viewport.top&&r.top<viewport.bottom;
+   seen.current.add(key);el.dataset.surfaceProgress='1';el.dataset.entryProgress='1';
+   const resized=!!from&&(Math.abs(from.width-r.width)>1||Math.abs(from.height-r.height)>1);
+   if(reduced||!visible)continue;
+   if(modeChanged||resized||fresh){animations.push(el.animate([{opacity:(modeChanged||resized)?0.75:0},{opacity:1}],{duration:240,delay:fresh&&!modeChanged?Math.min(entryIndex++*35,140):0,easing:'cubic-bezier(.2,.9,.25,1)'}));}
+   else if(from){const x=from.x-r.x,y=from.y-r.y;if(Math.abs(x)+Math.abs(y)>.5)animations.push(el.animate([{translate:`${x}px ${y}px`},{translate:'0 0'}],{duration:320,easing:'cubic-bezier(.2,.9,.25,1)'}));}
   }
-  function settle(){paint(1);for(const j of jobs){j.el.style.removeProperty('translate');j.el.style.removeProperty('width');j.el.style.removeProperty('height');j.el.style.removeProperty('clip-path');j.el.style.removeProperty('opacity');j.el.dispatchEvent(new Event('surface-settled'));}last=0;}
-  function schedule(){if(!raf&&!document.hidden&&document.documentElement.dataset.hidden!=='true'&&!disposed)raf=requestAnimationFrame(tick);}
-  function tick(t:number){raf=0;if(document.hidden||document.documentElement.dataset.hidden==='true'){last=0;return;}if(last)elapsed+=Math.min(.04,(t-last)/1000);last=t;paint(sampleSpring(0,1,elapsed));if(elapsed<NAV.duration)schedule();else settle();}
-  const visibility=()=>{last=0;schedule();};document.addEventListener('visibilitychange',visibility);const hiddenObserver=new MutationObserver(visibility);hiddenObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-hidden']});
-  if(reduced)settle();else{paint(0);schedule();}
-  const resize=new ResizeObserver(()=>{if(elapsed>=NAV.duration||reduced){for(const j of jobs){const r=j.el.getBoundingClientRect(),o=node.getBoundingClientRect();j.target={x:r.x-o.x,y:r.y-o.y,width:r.width,height:r.height};visible.current.set(j.key,j.target);}settle();}});resize.observe(node);
-  finish.current=()=>{disposed=true;cancelAnimationFrame(raf);for(const j of jobs){j.el.style.removeProperty('translate');j.el.style.removeProperty('width');j.el.style.removeProperty('height');j.el.style.removeProperty('clip-path');j.el.style.removeProperty('opacity');}resize.disconnect();hiddenObserver.disconnect();document.removeEventListener('visibilitychange',visibility);};return()=>finish.current();
- },[revision,reduced]);
- return <div ref={root} className={className}>{children}</div>;
+  const settle=()=>{if(!live)return;for(const el of elements)if(el.dataset.selected==='true')el.dispatchEvent(new Event('surface-settled'));node.dispatchEvent(new Event('layout-settled'));};
+  if(animations.length)void Promise.all(animations.map(animation=>animation.finished.catch(()=>{}))).then(settle);else queueMicrotask(settle);
+  return()=>{live=false;for(const animation of animations)animation.cancel();};
+ },[revision,reduced,positioned,collection,className]);
+ return <BeforeLayout revision={snapshotRevision} capture={capture} snapshot={value=>snapshots.current=value}><div ref={root} className={className} style={style} role="list">{children}</div></BeforeLayout>;
 }

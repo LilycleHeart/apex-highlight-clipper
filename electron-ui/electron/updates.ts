@@ -1,9 +1,16 @@
-import type {UpdateInfo} from '../src/shared';
+import type {InstallerAsset,UpdateInfo} from '../src/shared';
 
 export const REPOSITORY='LilycleHeart/apex-highlight-clipper';
 export const RELEASES_API=`https://api.github.com/repos/${REPOSITORY}/releases?per_page=20`;
 export const RELEASES_PAGE=`https://github.com/${REPOSITORY}/releases`;
 export const AUTO_CHECK_INTERVAL=24*60*60*1000;
+export function installerAsset(release:any):InstallerAsset|undefined{
+ const match=typeof release?.tag_name==='string'?release.tag_name.match(/^v(\d+\.\d+\.\d+)$/):null;if(!match||!Array.isArray(release.assets))return;
+ const version=match[1],name=`Apex-Clipper-${version}-Setup-x64.exe`,url=`https://github.com/${REPOSITORY}/releases/download/v${version}/${name}`;
+ const asset=release.assets.find((a:any)=>a.name===name&&a.browser_download_url===url&&a.state==='uploaded');
+ const sha=typeof asset?.digest==='string'?asset.digest.match(/^sha256:([a-f0-9]{64})$/):null;
+ if(sha&&Number.isSafeInteger(asset.size)&&asset.size>0&&asset.size<=1024**3)return{version,name,url,bytes:asset.size,sha256:sha[1]};
+}
 export function versionParts(value:unknown):bigint[]|null{
  if(typeof value!=='string'||value.length>80)return null;
  const match=value.trim().match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\+[\da-z.-]+)?$/i);
@@ -21,7 +28,7 @@ export function releaseResult(data:unknown,currentVersion:string):Omit<UpdateInf
   latestVersion:release.tag_name.replace(/^v/i,''),releaseTag:release.tag_name,
   releaseName:typeof release.name==='string'?release.name.slice(0,160):release.tag_name,
   releaseNotes:typeof release.body==='string'?release.body.slice(0,4000):'',
-  publishedAt:typeof release.published_at==='string'&&!Number.isNaN(Date.parse(release.published_at))?release.published_at:undefined};
+  publishedAt:typeof release.published_at==='string'&&!Number.isNaN(Date.parse(release.published_at))?release.published_at:undefined,installer:installerAsset(release)};
 }
 export function shouldAutoCheck(info:UpdateInfo,now=Date.now()){
  const checked=info.checkedAt?Date.parse(info.checkedAt):NaN;

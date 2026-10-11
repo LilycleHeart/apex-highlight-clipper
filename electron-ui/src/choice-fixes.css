@@ -1,0 +1,48 @@
+/* Keep decorative selection surfaces independent from icon-size rules. */
+.fluid-choices > svg.choice-surface {
+ position: absolute;
+ inset: 0;
+ width: 100%;
+ height: 100%;
+ max-width: none;
+ max-height: none;
+ display: block;
+ pointer-events: none;
+ fill: var(--card-paper);
+}
+.fluid-choices:not([data-choice-ready=true]) > button[aria-pressed=true] {
+ background: var(--card-paper) !important;
+}
+.fluid-choices > button:focus:not(:focus-visible) {outline: none;}
+.fluid-choices > button:focus-visible {
+ outline: 2px solid var(--card-accent);
+ outline-offset: -2px;
+}
+.page-content .fluid-choices.view-switch {
+ background: var(--primaryContainer);
+ color: var(--onPrimaryContainer);
+ border: 0;
+ border-radius: 12px;
+ gap: 4px;
+ padding: 4px;
+}
+:root[data-theme=dark] .page-content .fluid-choices.view-switch {
+ background: var(--surfaceContainerHighest);
+ color: var(--onSurface);
+}
+.page-content .fluid-choices.view-switch > button {
+ border: 0 !important;
+ box-shadow: none;
+ color: inherit;
+ border-radius: 10px;
+}
+.page-content .fluid-choices.view-switch > button[aria-pressed=true] {
+ color: var(--card-accent);
+}
+.page-content .fluid-choices.view-switch > button[aria-pressed=false]:hover {
+ background: color-mix(in srgb, currentColor 8%, transparent) !important;
+}
+.page-content .fluid-choices.view-switch > button:focus-visible {
+ outline: 2px solid var(--card-accent);
+ outline-offset: -2px;
+}

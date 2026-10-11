@@ -1,0 +1,25 @@
+/* Shared controls use semantic colors in both light and dark themes. */
+input[type=checkbox]:not(.toggle>input){appearance:none;position:relative;display:inline-block;flex:none;width:18px;height:18px;margin:0;border:1.5px solid var(--card-line);border-radius:5px;background:var(--card-tint);color:var(--accent-on,var(--onPrimary));vertical-align:middle;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s}
+input[type=checkbox]:not(.toggle>input):checked{background:var(--card-accent);border-color:var(--card-accent)}
+input[type=checkbox]:not(.toggle>input)::after{content:'';position:absolute;left:50%;top:46%;width:8px;height:5px;border-left:2px solid currentColor;border-bottom:2px solid currentColor;transform:translate(-50%,-50%) rotate(-45deg);opacity:0}
+input[type=checkbox]:not(.toggle>input):checked::after{opacity:1}
+input[type=checkbox]:not(.toggle>input):hover:not(:disabled){border-color:var(--card-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--card-accent) 12%,transparent)}
+.toggle>input[type=checkbox]{appearance:none;flex:none;width:38px;min-width:38px;height:24px;position:relative;margin:0;border:1px solid var(--outline);border-radius:20px;background:var(--surfaceContainerHighest);cursor:pointer;transition:background .18s,border-color .18s}
+.toggle>input[type=checkbox]::before{content:'';display:block;position:absolute;width:16px;height:16px;top:3px;left:3px;border-radius:50%;background:var(--outline);transform:translateX(0);transition:transform .18s,background .18s}
+.toggle>input[type=checkbox]:checked{background:var(--card-accent);border-color:var(--card-accent)}
+.toggle>input[type=checkbox]:checked::before{background:var(--accent-on,var(--onPrimary));transform:translateX(14px)}
+input[type=checkbox]:focus-visible{outline:2px solid var(--card-accent);outline-offset:3px}
+input[type=checkbox]:disabled{opacity:.4;cursor:default}
+.home-processing-options .toggle{flex-direction:row;gap:7px}
+.home-processing-options .toggle>.setting-label{order:1}
+.home-processing-options .toggle>input[type=checkbox]{order:0;width:34px;min-width:34px;height:20px;background:color-mix(in srgb,var(--page-on) 16%,transparent);border:1px solid color-mix(in srgb,var(--page-on) 50%,transparent)}
+.home-processing-options .toggle>input[type=checkbox]::before{display:block;width:14px;height:14px;top:2px;left:2px;background:var(--page-on)}
+.home-processing-options .toggle>input[type=checkbox]:checked{background:var(--page-on);border-color:var(--page-on)}
+.home-processing-options .toggle>input[type=checkbox]:checked::before{background:var(--primary);transform:translateX(14px)}
+.home-processing-options .toggle>input:focus-visible{outline-color:var(--page-on)}
+.toggle-disclosure{order:2;display:grid;place-items:center;flex:none;width:24px;height:24px;padding:4px;color:inherit;border-radius:7px;background:transparent}
+.toggle-disclosure svg{width:14px;height:14px;fill:currentColor;transition:transform .18s}
+.toggle-disclosure[aria-expanded=true] svg{transform:rotate(90deg)}
+.toggle-disclosure:hover{background:color-mix(in srgb,currentColor 12%,transparent)}
+.toggle-disclosure:focus-visible{outline:2px solid currentColor;outline-offset:1px}
+:root[data-reduced=true] input[type=checkbox],:root[data-reduced=true] input[type=checkbox]::before,:root[data-reduced=true] .toggle-disclosure svg{transition:none}

@@ -17,3 +17,14 @@ test('完整统计显示真实2助攻、3击杀，字段的不确定性互不传
  const value=clipStatistics({segment:{start:0,end:10},summary:{statistics_version:'v4',kills:3,assists:2,knockdowns:null,statistics_partial:{kills:false,assists:false,knockdowns:true,damage:true}},recognition:{outcome_evidence:[]}});
  assert.equal(value.assists,2);assert.equal(value.kills,3);assert.equal(value.knockdowns,null);assert.equal(value.statisticsPartial.assists,false);
 });
+test('战果回看从连续交战起点开始，长TTK及同目标延迟击杀不落在结果提示上',()=>{
+ const evidence=[{kind:'knock',time:150,target_text:'LOBA9578',ownership:'self'},{kind:'assist',time:189,target_text:'OTHER',ownership:'self'},{kind:'elimination',time:190,target_text:'LOBA9578',ownership:'self'}];
+ const clip={segment:{start:100,end:200},summary:{statistics_version:'fixture',kills:1,damage:1000},recognition:{outcome_evidence:evidence}};
+ const data=clipStatistics(clip,[],{parameters:{pre:6},events:[105,110,119,128,139,149,181,185,188].map(time=>({time,kind:'shoot'}))});
+ assert.deepEqual(data.evidence.map(e=>e.processStart),[100,175,100]);
+ assert.deepEqual(data.evidence.map(e=>e.time),[150,189,190]);assert.equal(data.kills,1);assert.equal(data.damage,1000);
+ const old={...clip,recognition:{outcome_evidence:[evidence[0]]}};
+ assert.equal(clipStatistics(old,[{start:136,end:155,first_signal:142}]).evidence[0].processStart,136);
+ assert.equal(clipStatistics(old).evidence[0].processStart,144);
+ assert.equal(clipStatistics({...old,segment:{start:148,end:200}}).evidence[0].processStart,148);
+});

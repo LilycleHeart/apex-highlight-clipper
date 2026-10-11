@@ -121,19 +121,22 @@ def sample_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_checkpoint=
         if on_checkpoint: on_checkpoint(state)
     write_json(complete,info)
 
-def export_with_resume(source,segments,output,events=None,on_checkpoint=None,statistics=None):
+def export_with_resume(source,segments,output,events=None,on_checkpoint=None,statistics=None,metadata_dir=None,name_suffix=''):
     from apex_clipper import probe,fingerprint,write_json,tool,run,align_segments,keyframes,segment_summary,informative_filename
     import csv
     from app_cancel import check_cancel
     source=Path(source).resolve(); output=Path(output).resolve(); output.mkdir(parents=True,exist_ok=True)
+    metadata_dir=Path(metadata_dir).resolve() if metadata_dir else output
+    metadata_dir.mkdir(parents=True,exist_ok=True)
     meta,_=probe(source); aligned=align_segments(segments,keyframes(source),float(meta['format']['duration']))
     summaries=[segment_summary(events,s) for s in aligned]
     if statistics is not None:
         from combat_statistics import overlay_summaries
         summaries=overlay_summaries(summaries,aligned,statistics)
     targets=[output/informative_filename(source,i+1,summary) for i,summary in enumerate(summaries)]
+    if name_suffix:targets=[p.with_stem(p.stem+' '+name_suffix) for p in targets]
     signature=digest({'source':fingerprint(source),'segments':aligned,'targets':[str(p) for p in targets],'summaries':summaries})
-    checkpoint=output/'export-checkpoint.json'
+    checkpoint=metadata_dir/'export-checkpoint.json'
     state=load(checkpoint) if checkpoint.exists() else {'signature':signature,'clips':[],'commands':[]}
     if state['signature']!=signature:
         # 旧断点冻结原统计；仅兼容显示占位符改名，不改动已导出文件。
@@ -141,6 +144,11 @@ def export_with_resume(source,segments,output,events=None,on_checkpoint=None,sta
         legacy_signature=digest({'source':fingerprint(source),'segments':aligned,'targets':[str(p) for p in legacy],'summaries':summaries})
         if state['signature']==legacy_signature:targets=legacy;signature=legacy_signature
         else:raise ValueError('导出断点与分析参数不匹配，请新建任务')
+    if 'targets' in state:
+        restored=[Path(p).resolve() for p in state['targets']]
+        if len(restored)!=len(targets) or len(set(restored))!=len(restored) or any(p.parent!=output or p.suffix.lower()!='.mp4' or p==source for p in restored):raise ValueError('导出断点的成片路径无效')
+        targets=restored
+    else:state['targets']=[str(p) for p in targets]
     write_json(checkpoint,state); clips=[]; commands=[]
     for i,(segment,target,summary) in enumerate(zip(aligned,targets,summaries)):
         check_cancel()
@@ -149,26 +157,35 @@ def export_with_resume(source,segments,output,events=None,on_checkpoint=None,sta
         if previous and target.is_file() and previous.get('output_identity')==fingerprint(target):
             clips.append(previous); print(f'导出续接：跳过已完成第 {i+1} 段',flush=True); continue
         if target.exists():
-            preserved=output/'未确认文件'/('未记录-'+uuid.uuid4().hex[:8]+' '+target.name); preserved.parent.mkdir(exist_ok=True)
-            target.resolve().relative_to(output); preserved.resolve().relative_to(output); target.replace(preserved)
+            if metadata_dir!=output:
+                # 未被本任务完整性记录确认的同名文件属于用户；另选名称，不移动或覆盖。
+                while target.exists():target=targets[i].with_stem(targets[i].stem+' '+uuid.uuid4().hex[:6])
+                targets[i]=target;state['targets'][i]=str(target);write_json(checkpoint,state)
+            else:
+                preserved=output/'未确认文件'/('未记录-'+uuid.uuid4().hex[:8]+' '+target.name); preserved.parent.mkdir(exist_ok=True)
+                target.resolve().relative_to(output); preserved.resolve().relative_to(output); target.replace(preserved)
         partial=output/('.working-'+uuid.uuid4().hex+'.mp4')
         args=[tool('ffmpeg'),'-hide_banner','-loglevel','warning','-nostdin','-n','-ss',f"{segment['start']:.9f}",
               '-i',str(source),'-t',f"{segment['end']-segment['start']:.9f}",'-map','0:v:0','-map','0:a?',
               '-map_metadata','0','-c','copy','-avoid_negative_ts','make_zero','-movflags','+faststart',str(partial)]
         print(f'无损切割 {i+1}/{len(aligned)}: {segment["start"]:.3f}—{segment["end"]:.3f}s',flush=True)
-        log=run(args); result_meta,_=probe(partial)
-        expected=[(s['codec_type'],s['codec_name']) for s in meta['streams']]
-        if expected!=[(s['codec_type'],s['codec_name']) for s in result_meta['streams']]: raise ValueError('导出音视频轨不匹配')
-        partial.resolve().relative_to(output); target.resolve().relative_to(output); partial.replace(target)
+        try:
+            log=run(args); result_meta,_=probe(partial)
+            expected=[(s['codec_type'],s['codec_name']) for s in meta['streams']]
+            if expected!=[(s['codec_type'],s['codec_name']) for s in result_meta['streams']]: raise ValueError('导出音视频轨不匹配')
+            partial.resolve().relative_to(output); target.resolve().relative_to(output)
+            if target.exists():raise FileExistsError(f'输出已存在，不覆盖: {target}')
+            partial.rename(target)
+        finally:partial.unlink(missing_ok=True)
         clip={'output':str(target),'segment':segment,'summary':summary,'metadata':result_meta,'output_identity':fingerprint(target)}
         result_meta['format']['filename']=str(target)
         clips.append(clip); state['clips']=[c for c in state['clips'] if c['output']!=str(target)]+[clip]
         state['commands'].append({'args':args,'log':log}); write_json(checkpoint,state)
         if on_checkpoint: on_checkpoint(state)
-    manifest={'mode':'segments','source':fingerprint(source),'segments':aligned,'outputs':[str(p) for p in targets],
+    manifest={'mode':'segments','video_directory':str(output),'metadata_directory':str(metadata_dir),'source':fingerprint(source),'segments':aligned,'outputs':[str(p) for p in targets],
               'commands':state['commands'],'clips':clips}
-    write_json(output/'export.json',manifest)
-    with (output/'segments.csv').open('w',newline='',encoding='utf-8') as stream:
+    write_json(metadata_dir/'export.json',manifest)
+    with (metadata_dir/'segments.csv').open('w',newline='',encoding='utf-8') as stream:
         writer=csv.writer(stream)
         for i,s in enumerate(aligned): writer.writerow([s['start'],s['end'],f'交战 {i+1}'])
     return targets

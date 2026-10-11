@@ -1,0 +1,18 @@
+/* These pages each own one scrollport. Ancestors must not add a second scroll
+   range or derive another viewport height that ignores page padding. */
+.page-surface:has(>.page-clips-content),
+.page-surface:has(>.page-statistics-content){overflow:hidden}
+.page-clips-content,.page-statistics-content{
+ height:100%;min-height:0;max-height:100%;overflow:hidden;padding-bottom:0;
+}
+.page-clips-content>.results-page,.results-page>.clip-library{
+ flex:1 1 0;min-width:0;min-height:0;overflow:hidden;
+}
+.clip-library>.library-scroll,.page-statistics-content>.statistics-page{
+ flex:1 1 0;height:auto;min-height:0;min-width:0;overflow-x:hidden;overflow-y:auto;
+ overscroll-behavior-y:contain;scroll-padding-block:12px 24px;padding-bottom:24px;
+}
+.clip-library>.library-scroll{padding-right:0}
+.library-heading-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}
+.library-heading-actions>.icon-button{width:28px;height:28px;color:var(--page-on);margin-left:0}
+.library-player-locator:focus-visible{outline-color:var(--page-on);outline-offset:1px}

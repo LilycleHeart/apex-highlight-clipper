@@ -1,7 +1,13 @@
 import {contextBridge,ipcRenderer,webUtils} from 'electron';
 import type {DesktopAPI,WorkerEvent,SystemTheme,UpdateInfo} from '../src/shared';
 const api:DesktopAPI={
+ installUpdate:()=>ipcRenderer.invoke('install-update'),
+ windowState:()=>ipcRenderer.invoke('window-state'),
+ windowCommand:value=>ipcRenderer.invoke('window-command',value),
+ onWindowState:cb=>{const listener=(_event:Electron.IpcRendererEvent,state:{maximized:boolean})=>cb(state);ipcRenderer.on('window-state',listener);return()=>ipcRenderer.removeListener('window-state',listener);},
+ savePlayerAudio:value=>ipcRenderer.invoke('player-audio',value),
  library:()=>ipcRenderer.invoke('library'),
+ enrichHud:(files,fields)=>ipcRenderer.invoke('enrich-hud',files,fields),
  chooseLibraryRoot:()=>ipcRenderer.invoke('choose-library-root'),
  ready:()=>ipcRenderer.invoke('ui-ready'),chrome:(color,foreground)=>ipcRenderer.invoke('chrome',color,foreground),
  bootstrap:()=>ipcRenderer.invoke('bootstrap'),chooseFiles:()=>ipcRenderer.invoke('choose-files'),chooseFolder:()=>ipcRenderer.invoke('choose-folder'),
@@ -10,6 +16,8 @@ const api:DesktopAPI={
  start:(files,output,options)=>ipcRenderer.invoke('start',{files,output,options}),stop:()=>ipcRenderer.invoke('stop'),resume:(task,options)=>ipcRenderer.invoke('resume',{task,options}),
  chooseTask:()=>ipcRenderer.invoke('choose-task'),lastTask:()=>ipcRenderer.invoke('last-task'),task:task=>ipcRenderer.invoke('task',task),results:task=>ipcRenderer.invoke('results',task),open:(path,folder)=>ipcRenderer.invoke('open',path,folder),
  videoURL:file=>ipcRenderer.invoke('video-url',file),
+ thumbnailURL:file=>ipcRenderer.invoke('thumbnail-url',file),
+ thumbnailStats:()=>ipcRenderer.invoke('thumbnail-stats'),
  onEvent:cb=>{const fn=(_:unknown,e:WorkerEvent)=>cb(e);ipcRenderer.on('worker-event',fn);return()=>ipcRenderer.removeListener('worker-event',fn);},
  onTheme:cb=>{const fn=(_:unknown,e:SystemTheme)=>cb(e);ipcRenderer.on('system-theme',fn);return()=>ipcRenderer.removeListener('system-theme',fn);},
  checkUpdate:()=>ipcRenderer.invoke('check-update'),setAutoCheck:enabled=>ipcRenderer.invoke('auto-check-update',enabled),openRelease:()=>ipcRenderer.invoke('open-release'),

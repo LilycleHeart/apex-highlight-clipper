@@ -16,6 +16,7 @@
     "src/surfaceGeometry.ts",
     "src/mediaGeometry.ts",
     "src/eventTimeline.ts",
+    "src/librarySort.ts",
     "src/blancaState.ts"
   ]
 }

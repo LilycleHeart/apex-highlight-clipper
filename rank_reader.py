@@ -26,12 +26,20 @@ class RankReader:
                 scaled.append(cv2.resize(center,(round(center.shape[1]/center.shape[0]*size),size)))
             self.templates.append((key,scaled))
 
-    def inspect(self,image):
+    def inspect(self,image,profile=None):
         h,w=image.shape[:2]
         # 已适配的超宽 HUD，按画面比例折算；禁止在整帧搜索以免命中敌人徽章。
-        if abs(w/h-2560/1080)>.03: return None
-        roi=image[:round(h*.091),round(w*.953):]
-        roi=cv2.resize(roi,(60,49))
+        if profile and profile.get('rank_roi'):
+            rw,rh=profile['reference_size'];x1,y1,x2,y2=profile['rank_roi']
+            roi=image[round(y1*h/rh):round(y2*h/rh),round(x1*w/rw):round(x2*w/rw)]
+        else:
+            if abs(w/h-2560/1080)>.03: return None
+            roi=image[:round(h*.091),round(w*.953):]
+        if not roi.size:return None
+        if profile and profile.get('hud_scale'):
+            sx,sy=profile['hud_scale'];rw,rh=profile['reference_size']
+            roi=cv2.resize(roi,None,fx=.5/sx*rw/w,fy=.5/sy*rh/h)
+        else:roi=cv2.resize(roi,(60,49))
         scores=[]
         for key,templates in self.templates:
             best=(-1,None,None)
@@ -47,7 +55,7 @@ class RankReader:
         division=None
         if key not in ['rookie','master','predator']:
             x,y=point;tw,th=size;cx=x+tw/2
-            patch=roi[min(49,y+th+2):min(49,y+th+12),max(0,round(cx-7)):min(60,round(cx+7))]
+            patch=roi[min(roi.shape[0],y+th+2):min(roi.shape[0],y+th+12),max(0,round(cx-7)):min(roi.shape[1],round(cx+7))]
             division=read_division(patch)
         return {'tier':key,'name':NAMES[key],'division':division,'confidence':round(score,3),'method':'hud_badge_template'}
 
@@ -74,6 +82,7 @@ def recognize_segments(cache,samples,segments,checkpoint):
     rows=[r for r in cache['rows'] if not r.get('inactive_view') and not r.get('friend_spectate')]
     signature=hashlib.sha256(json.dumps({'version':VERSION,'source':cache['source'],
         'bounds':[(s['start'],s['end']) for s in segments],
+        'profile':cache.get('profile'),
         'assets':json.loads((BASE/'assets/ranks/sources.json').read_text(encoding='utf-8'))},sort_keys=True).encode()).hexdigest()
     checkpoint=Path(checkpoint)
     if checkpoint.exists():
@@ -92,7 +101,7 @@ def recognize_segments(cache,samples,segments,checkpoint):
         for row in chosen:
             if row['frame'] not in observations:
                 image=cv2.imread(str(Path(samples)/row['frame']))
-                observations[row['frame']]=reader.inspect(image) if image is not None else None
+                observations[row['frame']]=reader.inspect(image,cache.get('profile')) if image is not None else None
             rank=observations[row['frame']]
             if rank: evidence.append({**rank,'time':row['time'],'frame':row['frame']})
         counts=Counter(r['tier'] for r in evidence);rank=None

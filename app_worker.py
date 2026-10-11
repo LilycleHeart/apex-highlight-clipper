@@ -73,25 +73,24 @@ def stage(name,label,start,end,action):
 
 def _run_task(request_path):
     global _ON_STAGE
-    from app_task import open_task,save_task,task_lock,outputs_intact,load,planner_for_item
+    from app_task import open_task,save_task,task_lock,outputs_intact,load,planner_for_item,data_root,task_cache_root,recorded_cache
     from app_options import recycle_source
     from apex_clipper import (BASE,VIDEO_EXTENSIONS,fingerprint,probe,sample_video,read_hud,
         same_hud_profile,enrich_lifecycle,enrich_weapon_labels,tool,detect_events,label_event_weapons,
         downed_intervals,segments_from_events,classify_combat_candidates,export_lossless,write_json,align_segments,keyframes)
     from outcome_reader import enrich_outcomes,cap_segment_ends,preserve_team_continuation
-    from verify_export import validate
     incoming=load(request_path)
     task_path,task,request,options=open_task(incoming)
     gap,pre,post,fps=(options[k] for k in ['gap','pre','post','fps'])
     os.environ['APEX_OCR_BACKEND']=request['backend']; os.environ['APEX_GPU_LOAD']=options['gpu_load']
     os.environ['APEX_OCR_POOL']='1'
-    run_root=Path(task['directory']); profile=task['profile']; skipped=0
+    run_root=Path(task['directory']); cache_root=task_cache_root(task); profile=task['profile']; skipped=0
     from gpu_load import get_gpu_policy
     with task_lock(run_root):
         from app_cancel import check_cancel
         if incoming.get('stop_file'):
             stop_marker=Path(incoming['stop_file']).resolve()
-            stop_marker.relative_to((BASE/'validation/app-requests').resolve())
+            if not any(stop_marker.is_relative_to(root.resolve()) for root in [data_root()/'validation/app-requests',BASE/'validation/app-requests']):raise ValueError('停止请求不属于软件请求目录')
             if stop_marker.suffix!='.stop': raise ValueError('停止请求路径不正确')
         else:
             stop_marker=run_root/'stop.request'; stop_marker.unlink(missing_ok=True)
@@ -110,6 +109,8 @@ def _run_task(request_path):
         for index,item in enumerate(task['items']):
             check_cancel()
             _STAGE_TIMINGS.clear(); source=Path(item['source']); destination=Path(item['destination']); destination.resolve().relative_to(run_root.resolve())
+            video_directory=Path(item.get('video_directory',destination))
+            cache_root=task_cache_root(task)
             from ui_observer import configure,phase,preview
             configure(emit,source)
             was_pending=item['status']=='pending'
@@ -126,7 +127,7 @@ def _run_task(request_path):
                         elif not source.exists():
                             previous['source_cleanup']={'status':'source_absent_after_cleanup','reason':'成片已完成；原录像在回收阶段后已不存在'}
                         else:
-                            verification=load(destination/'verification.json') if previous['verified'] else None
+                            verification=None
                             analysis=load(destination/'analysis.json')
                             previous['source_cleanup']=recycle_source(source,item['source_identity'],previous['outputs'],verification,
                                 analysis['review_candidates'],analysis['segments'])
@@ -140,10 +141,14 @@ def _run_task(request_path):
                 if item['source_identity'] is not None and identity!=item['source_identity']: raise ValueError('源录像已变化，不能使用旧任务断点，请新建任务')
                 item['source_identity']=identity; save_task(task_path,task)
                 meta,video=stage('probe','检查录像',0,5,lambda:probe(source))
-                width,height=profile['reference_size']
-                if abs(video['width']/video['height']-width/height)>.03: raise ValueError('当前版本适配 2560×1080 HUD，请先校准其他宽高比')
-                if options['scan_mode'] in ['smart','indexed'] and (video['width'],video['height'])!=(width,height):
-                    raise ValueError('当前索引识别需要 2560×1080 录像；其他画面布局需要先校准 HUD')
+                from hud_layout import detect_video
+                frozen=item.get('hud_profile')
+                if frozen and frozen.get('reference_size')==[video['width'],video['height']]:profile=frozen
+                else:
+                    profile=stage('probe','自动适配分辨率与HUD拉伸比例',2,5,
+                        lambda:detect_video(source,video,float(meta['format']['duration']),task['profile']))
+                    item['hud_profile']=profile;save_task(task_path,task)
+                emit('metadata',source=str(source),width=video['width'],height=video['height'],hud_layout=profile['layout'],hud_layout_status=profile.get('layout_status'))
                 config={'source':identity,'profile':profile,'fps':fps}
                 planner_version=item.get('smart_cache_version',task.get('smart_cache_version','smart-v2'))
                 if options['scan_mode']=='indexed' and planner_version not in ['indexed-v1','indexed-v2']:
@@ -152,19 +157,28 @@ def _run_task(request_path):
                 if planner_version=='indexed-v2': config['fine_pipeline']='continuous-v1'
                 old_digest=hashlib.sha256(json.dumps(config,sort_keys=True).encode()).hexdigest()[:16]
                 digest=hashlib.sha256(json.dumps({**config,'cache_version':'resume-v1'},sort_keys=True).encode()).hexdigest()[:16]
-                job=BASE/'validation/app-cache'/digest
+                registered=recorded_cache(task,item,config)
+                if registered:cache_root=registered.parent
+                job=registered or cache_root/digest
                 if options['scan_mode']=='smart':
-                    selected=planner_for_item(task,item,was_pending,job.exists() or (BASE/'validation/app-cache'/old_digest).exists())
+                    selected=planner_for_item(task,item,was_pending,job.exists() or (cache_root/old_digest).exists())
                     if selected!=planner_version:
                         planner_version=selected;item['smart_cache_version']=selected;save_task(task_path,task)
                         config['scan_mode']=selected
                         old_digest=hashlib.sha256(json.dumps(config,sort_keys=True).encode()).hexdigest()[:16]
                         digest=hashlib.sha256(json.dumps({**config,'cache_version':'resume-v1'},sort_keys=True).encode()).hexdigest()[:16]
-                        job=BASE/'validation/app-cache'/digest
+                        job=cache_root/digest
+                # 清理过图片的历史缓存保留JSON供成片展示；识别改用新代次，不能误用缺帧断点。
+                while (job/'.images-pruned.json').is_file():
+                    generation=load(job/'.images-pruned.json')['generation']
+                    job=cache_root/hashlib.sha256((job.name+generation).encode()).hexdigest()[:16]
                 job.mkdir(parents=True,exist_ok=True)
+                item['analysis_cache']=str(job); save_task(task_path,task)
                 with task_lock(job):
+                    if registered and job==registered and recorded_cache(task,item,config)!=registered:raise ValueError('旧任务缓存已变化，停止续接以保护断点')
+                    write_json(job/'.cache-use.json',{'source':str(source),'task':str(task_path)})
                     reference=job/'sample-reference.json'; samples=job/'samples'; hud_path=job/'hud.json'
-                    legacy=BASE/'validation/app-cache'/old_digest
+                    legacy=cache_root/old_digest
                     if not reference.exists() and (legacy/'hud.json').exists() and (legacy/'sample-reference.json').exists():
                         seed=load(legacy/'hud.json'); old_samples=Path(load(legacy/'sample-reference.json')['samples'])
                         if seed.get('complete') and seed.get('source')==identity and same_hud_profile(seed['profile'],profile) and (old_samples/'complete.json').exists():
@@ -197,13 +211,13 @@ def _run_task(request_path):
                         if saved['rows']:
                             row=saved['rows'][-1]; preview(samples/row['frame'],row['time'],force=True)
                     write_json(reference,{'samples':str(samples)})
+                    for row in saved['rows']:
+                        for field in ['weapon_labels','current_weapon','current_weapon_confidence','active_weapon_slot']:row.pop(field,None)
                     result_first=bool(task.get('result_filter_version') and (planner_version.startswith('focused-v6') or planner_version in ['indexed-v1','indexed-v2']))
                     saved=stage('lifecycle','识别倒地状态',65,70 if result_first else 78,lambda:enrich_lifecycle(saved,samples,profile)); write_json(hud_path,saved)
-                    if not result_first:
-                        saved=stage('weapons','读取实际使用的枪械（支持续接）',78,82,lambda:enrich_weapon_labels(saved,samples,profile,tool('ffmpeg'),checkpoint=hud_path)); write_json(hud_path,saved)
                     saved=stage('outcomes','确认全灭及队友交战尾部（支持续接）',70 if result_first else 82,74 if result_first else 86,lambda:enrich_outcomes(saved,samples,checkpoint=hud_path)); write_json(hud_path,saved)
                     rows=saved['rows']; duration=float(meta['format']['duration'])
-                    events=label_event_weapons(detect_events(rows),rows)
+                    events=detect_events(rows)
                     lifecycle=downed_intervals(rows,duration,gap,post)
                     candidates=segments_from_events(events,duration,gap,pre,post,lifecycle)
                     candidates=cap_segment_ends(candidates,saved['outcome_events'])
@@ -216,27 +230,7 @@ def _run_task(request_path):
                         result_filter=stage('combat_outcomes','确认本人击倒、助攻或消灭提示',74 if result_first else 86,80 if result_first else 90,
                             lambda:inspect_combat_outcomes(saved,samples,result_candidates,checkpoint=job/'combat-outcomes.json'))
                         segments,rejected,review=filter_combat_outcomes(result_candidates,result_filter)
-                    if result_first:
-                        saved=stage('weapons','只识别已确认保留片段的枪械',80,84,
-                            lambda:enrich_weapon_labels(saved,samples,profile,tool('ffmpeg'),checkpoint=hud_path,segments=segments)); write_json(hud_path,saved)
-                        # 枪械槽位会帮助排除切枪造成的假开火，重新形成精确片段后再核对战果资格。
-                        rows=saved['rows']; events=label_event_weapons(detect_events(rows),rows)
-                        lifecycle=downed_intervals(rows,duration,gap,post)
-                        candidates=segments_from_events(events,duration,gap,pre,post,lifecycle)
-                        candidates=cap_segment_ends(candidates,saved['outcome_events'])
-                        candidates=preserve_team_continuation(candidates,rows,saved['outcome_events'],duration)
-                        accepted,pending=classify_combat_candidates(events,candidates)
-                        final_candidates=sorted(accepted+pending,key=lambda c:c['start'])
-                        if [(c['start'],c['end']) for c in final_candidates]!=[(c['start'],c['end']) for c in result_candidates]:
-                            result_filter=stage('combat_outcomes','复核精确边界内的本人战果',84,90,
-                                lambda:inspect_combat_outcomes(saved,samples,final_candidates,checkpoint=job/'combat-outcomes-final.json'))
-                        segments,rejected,review=filter_combat_outcomes(final_candidates,result_filter)
                     destination.mkdir(exist_ok=True)
-                    from rank_reader import recognize_segments
-                    rank_report=stage('rank','复用已有画面识别本人当前段位',90,90,
-                        lambda:recognize_segments(saved,samples,segments,destination/'rank.json'))
-                    for segment,rank_record in zip(segments,rank_report['segments']):
-                        segment['rank']=rank_record['rank']
                     analysis={'source':identity,'duration':duration,'parameters':{'gap':gap,'pre':pre,'post':post,'fps':fps},'events':events,
                         'segments':segments,'review_candidates':review,'lifecycle_intervals':lifecycle,'outcome_events':saved['outcome_events'],'combat_filter_version':2}
                     if result_filter:
@@ -254,7 +248,8 @@ def _run_task(request_path):
                         frozen_statistics=None
                         if (destination/'export-checkpoint.json').exists() and (destination/'statistics.json').exists():
                             candidate=load(destination/'statistics.json')
-                            if candidate.get('source')==saved['source'] and [(s['start'],s['end']) for s in candidate.get('segments',[])]==[(s['start'],s['end']) for s in aligned]:frozen_statistics=candidate
+                            from combat_outcome_reader import PARSER_VERSION
+                            if candidate.get('parser_version')==PARSER_VERSION and candidate.get('source')==saved['source'] and [(s['start'],s['end']) for s in candidate.get('segments',[])]==[(s['start'],s['end']) for s in aligned]:frozen_statistics=candidate
                         statistics=stage('statistics','核对整段本人击杀、助攻、击倒与末队结算',90,90,
                             lambda:frozen_statistics or collect_statistics(saved,samples,aligned,profile,job/'statistics-report.json'))
                         write_json(destination/'statistics.json',statistics)
@@ -267,7 +262,7 @@ def _run_task(request_path):
                         if options['filter_enabled']:emit('log',message=f"战绩过滤：保留 {len(export_segments)} 段，未达标 {len(quality_rejected)} 段，待复核 {len(quality_review)} 段",progress=90)
                         if export_segments:
                             export_input=export_segments if options['filter_enabled'] and any(options[k]>0 for k in ['min_damage','min_kills','min_assists','min_duration']) else segments
-                            outputs=stage('export','无损导出独立交战视频（支持续接）',90 if result_filter else 86,95,lambda:export_lossless(source,export_input,destination,events,resume=True,statistics=export_statistics))
+                            outputs=stage('export','无损导出独立交战视频（支持续接）',90 if result_filter else 86,95,lambda:export_lossless(source,export_input,video_directory,events,resume=True,statistics=export_statistics,metadata_dir=destination,name_suffix=item.get('export_suffix','')))
                             manifest=load(destination/'export.json')
                             for clip_index,clip in enumerate(manifest['clips']):
                                 bound=clip['segment'];left=bound.get('requested_start',bound['start']);right=bound.get('requested_end',bound['end'])
@@ -278,16 +273,23 @@ def _run_task(request_path):
                                         unique[(event['kind'],event['time'],event.get('text',''))]=event
                                 evidence=[e for e in export_statistics['segments'][clip_index]['events'] if e['confirmed']];ranks=[s.get('rank') for s in related]
                                 rank=ranks[0] if ranks and all(ranks) and all((r['tier'],r['division'])==(ranks[0]['tier'],ranks[0]['division']) for r in ranks) else None
-                                clip['recognition']={'scope':'self','rank':rank,'outcome_evidence':evidence,
+                                round_index=sum(event['time']<=bound['start'] for event in saved.get('outcome_events',[]))
+                                match_key=hashlib.sha256((json.dumps(identity,sort_keys=True)+':'+str(round_index)).encode()).hexdigest()[:16]
+                                clip['recognition']={'scope':'self','rank':rank,'match_key':match_key,'outcome_evidence':evidence,
                                     'assists_minimum':sum(e['kind']=='assist' for e in evidence) or None,
                                     'knockdowns_minimum':sum(e['kind']=='knock' for e in evidence) or None,
                                     'outcome_counts_complete':not any(export_statistics['segments'][clip_index]['partial'].values()),
                                     'statistics':export_statistics['segments'][clip_index]}
                             write_json(destination/'export.json',manifest)
-                            if options['verify']:
-                                verification=stage('verify','校验视频与全部音轨（支持续接）',95,99,lambda:validate(source,destination))
-                                verified=verification.get('passed') is True
-                                if not verified: raise ValueError('成片校验未通过')
+                            if options['hud_info_enabled'] and options['hud_info_fields']:
+                                from hud_enrichment import enrich_manifest
+                                from app_cancel import TaskStopped
+                                try:
+                                    stage('hud_info','导出完成，补充所选HUD信息',99,99,
+                                        lambda:enrich_manifest(destination,fields=options['hud_info_fields']))
+                                except TaskStopped:raise
+                                except Exception as error:
+                                    emit('log',message='片段已导出，HUD信息尚未补齐，可稍后继续：'+str(error),progress=99)
                     record={'source':str(source),'status':'complete','outputs':[str(p) for p in outputs],
                         'output_identities':[fingerprint(p) for p in outputs],'review_count':len(review),'directory':str(destination),
                         'verified':verified,'parameters':options,'stage_seconds':dict(_STAGE_TIMINGS),'sample_directory':str(samples),

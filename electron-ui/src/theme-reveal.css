@@ -1,0 +1,7 @@
+:root[data-theme-reveal]::view-transition{pointer-events:none}
+:root[data-theme-reveal]::view-transition-group(root){animation:none}
+:root[data-theme-reveal]::view-transition-image-pair(root){isolation:isolate}
+:root[data-theme-reveal]::view-transition-old(root),
+:root[data-theme-reveal]::view-transition-new(root){animation:none;mix-blend-mode:normal}
+:root[data-theme-reveal]::view-transition-old(root){z-index:1}
+:root[data-theme-reveal]::view-transition-new(root){z-index:2;clip-path:circle(0px at var(--theme-reveal-x) var(--theme-reveal-y))}

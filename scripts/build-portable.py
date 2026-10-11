@@ -10,11 +10,19 @@ import sys
 import urllib.request
 import uuid
 import zipfile
+from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
+from scripts.portable_runtime import assemble_runtime, dependency_files
 OUT = ROOT / 'publish'
 PYTHON_URL = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip'
+PRODUCT_MODULES = '''adaptive_evidence apex_clipper app_cancel app_options app_task app_ui_info app_worker
+    build_weapon_catalog clip_quality_filter combat_outcome_reader combat_statistics continuous_sampler
+    damage_bisection early_round_end engine_pool evidence_completion gpu_load gpu_ocr_backend hero_reader hud_layout hud_enrichment indexed_coarse
+    inspect_video ocr_cache outcome_reader planning_evidence rank_reader rename_exports repair_cached_statistics
+    resume_io resume_media sample_locations sample_pipeline setup_weapon_model smart_scan sparse_pipeline
+    stat_counter_fallback ui_observer verify_export weapon_reader'''.split()
 
 def copy_tree(source, destination):
     shutil.copytree(source, destination, dirs_exist_ok=True,
@@ -28,6 +36,40 @@ def release_files(target):
         if not p.is_file() or any(part in {'__pycache__','tests','validation','output'} for part in rel.parts): continue
         if p.suffix=='.pyc' or rel.parts[0]=='tools' or rel.as_posix()=='FILES.sha256.json': continue
         yield p
+
+def reuse_shared_runtime(source,target):
+    """只复用先前独立验证过、逐文件内容未改变的共享运行库与内核。"""
+    source=Path(source).resolve()
+    report=json.loads((source.parent/'validation-report.json').read_text('utf-8'))
+    archive=source.parent/(source.name+'.zip')
+    if hashlib.sha256(archive.read_bytes()).hexdigest()!=report.get('sha256'):
+        raise RuntimeError('共享候选ZIP与既有验证报告不一致')
+    if {item['mode'] for item in report.get('inference',[])}!={'cpu','dml'}:
+        raise RuntimeError('共享候选缺少CPU/DirectML独立推理记录')
+    with zipfile.ZipFile(archive) as z:
+        inventory=json.loads(z.read(source.name+'/FILES.sha256.json'))
+    if inventory!=json.loads((source/'FILES.sha256.json').read_text('utf-8')):
+        raise RuntimeError('共享候选文件清单已变化')
+    kernel_changed=[]
+    for name,digest in inventory.items():
+        if name.startswith('runtime/'):
+            file=(source/name).resolve()
+            if not file.is_relative_to(source) or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:
+                raise RuntimeError('已验证运行库内容已变化：'+name)
+            dest=target/name
+            if file!=dest.resolve():
+                dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(file,dest)
+        elif name.endswith('.py') or name.startswith(('models/','templates/','assets/ranks/')) or name in {'profile-ultrawide.json','combat-outcome-profile.json','weapon-catalog.json','weapon-catalog.v1.json'}:
+            file=target/name
+            if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:
+                if name.endswith('.py') and file.is_file():kernel_changed.append(name)
+                else:raise RuntimeError('识别资源已改变，需要重新验证运行库：'+name)
+    for mode in ['cpu','dml']:
+        if (target/'runtime'/mode/'sitecustomize.py').read_bytes()!=(ROOT/'scripts/portable_sitecustomize.py').read_bytes():
+            raise RuntimeError('共享加载器已修改，需要重新构建并验证运行库')
+    print('Reused previously validated, byte-identical CPU/DirectML runtime')
+    if kernel_changed:print('Changed product modules require worker smoke:',','.join(kernel_changed))
+    return not kernel_changed
 
 def validate_worker(target):
     # 无交战合成录像仍会经过默认索引、局部OCR、战果/枪械/段位配置加载。
@@ -43,10 +85,10 @@ def validate_worker(target):
         '-g','30','-bf','0','-pix_fmt','yuv420p',str(source)],check=True)
     request=folder/'request.json'
     request.write_text(json.dumps({'files':[str(source)],'output':str(folder/'results'),
-        'backend':'cpu','scan_mode':'indexed','fps':2,'gpu_load':'low','verify':True,
+        'backend':'cpu','scan_mode':'indexed','fps':2,'gpu_load':'low',
         'delete_source':False}),'utf-8')
     result=subprocess.run([str(target/'runtime/cpu/python.exe'),str(target/'app_worker.py'),str(request)],
-        cwd=target,env={**os.environ,'APEX_FFMPEG_DIR':str(ffmpeg.parent),'PYTHONUTF8':'1'},
+        cwd=target,env={**os.environ,'APEX_FFMPEG_DIR':str(ffmpeg.parent),'APEX_DATA_ROOT':str(folder/'app-data'),'PYTHONUTF8':'1'},
         capture_output=True,text=True,encoding='utf-8',timeout=120)
     events=[json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
     if result.returncode or not events or events[-1].get('type')!='done' or events[-1].get('failures')!=0:
@@ -57,23 +99,30 @@ def validate_worker(target):
 def build(args):
     version = json.loads((ROOT/'electron-ui/package.json').read_text('utf-8'))['version']
     out=OUT/args.stage if args.stage else OUT
+    if not args.stage or Path(args.stage).name!=args.stage or args.stage in {'.','..','downloads'}:
+        raise ValueError('暂存目录必须是publish内的单个构建目录')
     if not out.resolve().is_relative_to(OUT.resolve()): raise ValueError('暂存目录超出publish范围')
     target = out / f'Apex-Clipper-{version}-Windows-x64'
     if target.exists() and not args.refresh:
         raise RuntimeError('目标包目录已存在，保留已有包；请先改名备份再重新构建。')
+    if args.refresh and not (target/'runtime/runtime-layout.json').is_file():
+        raise RuntimeError('只允许刷新本次共享依赖候选，不可覆盖旧版双环境发布包')
     target.mkdir(parents=True, exist_ok=args.refresh)
+    args.managed_stage=out
+    build_state(out,'building','portable')
     # 明确白名单：不带私有录像、断点、测试输出、配置和开发环境。
-    extra = [p.name for p in ROOT.glob('*.py') if not p.name.startswith(('test_', 'validate_', 'probe_', 'audit_', 'evaluate_', 'gpu_validation', 'gpu_stress', 'benchmark_', 'run_day', 'revise_day', 'write_day', 'gpu_outcome', 'gpu_quality'))]
+    extra = [name+'.py' for name in PRODUCT_MODULES]
     selected = set(extra + ['profile-ultrawide.json', 'combat-outcome-profile.json', 'weapon-catalog.json', 'weapon-catalog.v1.json', 'README.md', 'requirements.txt', 'requirements-gpu.txt'])
     for name in sorted(selected):
         p=ROOT/name
-        if p.is_file(): shutil.copy2(p,target/name)
-    for name in ['templates', 'models', 'assets/ranks']:
+        if not p.is_file(): raise RuntimeError('缺少白名单产品文件：'+name)
+        shutil.copy2(p,target/name)
+    for name in ['templates', 'models', 'assets/ranks', 'assets/legends']:
         copy_tree(ROOT/name, target/name)
     (target/'experimental').mkdir(exist_ok=True)
     for name in ['__init__.py','indexed_reader.py','in_memory_hud.py']:
         shutil.copy2(ROOT/'experimental'/name,target/'experimental'/name)
-    for name in ['docs/third-party.md', 'docs/assets', 'scripts/setup-ffmpeg.ps1']:
+    for name in ['docs/third-party.md', 'docs/assets', 'scripts/setup-ffmpeg.ps1', 'scripts/update-install.ps1', 'scripts/cleanup-validation.ps1', 'scripts/validation-task-caches.py']:
         p=ROOT/name; dest=target/name
         dest.parent.mkdir(parents=True, exist_ok=True)
         if p.is_dir(): copy_tree(p,dest)
@@ -85,48 +134,87 @@ def build(args):
     # 官方发布页 MD5 用于供应包完整性；资产总清单另外使用 SHA256。
     if hashlib.md5(archive.read_bytes()).hexdigest() != '6d9aa08531d48fcc261ba667e2df17c4':
         raise RuntimeError('Python 官方嵌入包校验失败')
-    for mode, environment in ([] if args.refresh else [('cpu',args.cpu), ('dml',args.gpu)]):
-        env=Path(environment).resolve()
-        if not (env/'Lib/site-packages/rapidocr_onnxruntime').exists():
-            raise RuntimeError(f'{mode} 环境缺少 RapidOCR')
-        runtime=target/'runtime'/mode;runtime.mkdir(parents=True)
-        with zipfile.ZipFile(archive) as z: z.extractall(runtime)
-        if mode=='cpu':
-            # 开发环境可能继承系统site-packages；从requirements完整独立安装，
-            # 不能只复制venv目录后漏掉NumPy/ORT等继承依赖。
-            subprocess.run([str(env/'Scripts/python.exe'),'-m','pip','install',
-                '--ignore-installed','--target',str(runtime/'Lib/site-packages'),
-                '-r',str(ROOT/'requirements.txt'),'-c',str(ROOT/'requirements-portable-lock.txt')],check=True)
+    runtime_reused=False;kernel_reused=False
+    if args.refresh:
+        # A UI-only refresh can reuse the already verified byte-identical kernel.
+        kernel_reused=reuse_shared_runtime(target,target)
+        runtime_reused=True
+    elif args.shared_runtime_source:
+        kernel_reused=reuse_shared_runtime(args.shared_runtime_source,target)
+        runtime_reused=True
+    elif not args.refresh:
+        if args.runtime_source:
+            baseline=Path(args.runtime_source).resolve()
+            inventory=json.loads((baseline/'FILES.sha256.json').read_text('utf-8'))
+            for name,digest in inventory.items():
+                if name.startswith(('runtime/cpu/','runtime/dml/')):
+                    file=(baseline/name).resolve()
+                    if not file.is_relative_to(baseline) or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:
+                        raise RuntimeError('输入运行库校验失败：'+name)
+            sources={mode:baseline/'runtime'/mode/'Lib/site-packages' for mode in ['cpu','dml']}
+            for mode,source in sources.items():
+                prefix=f'runtime/{mode}/Lib/site-packages/'
+                expected={name[len(prefix):]:digest for name,digest in inventory.items() if name.startswith(prefix)}
+                if dependency_files(source)!=expected:
+                    raise RuntimeError(f'{mode}输入依赖与发布清单不一致')
         else:
-            copy_tree(env/'Lib/site-packages',runtime/'Lib/site-packages')
-    for mode in ['cpu','dml']:
+            # CPU开发环境可继承系统包；使用固定依赖安装完整输入，GPU只复制白名单。
+            cpu_source=target/'validation/dependency-input/cpu'
+            subprocess.run([str(Path(args.cpu)/'Scripts/python.exe'),'-m','pip','install',
+                '--ignore-installed','--target',str(cpu_source),
+                '-r',str(ROOT/'requirements.txt'),'-c',str(ROOT/'requirements-portable-lock.txt')],check=True)
+            sources={'cpu':cpu_source,'dml':Path(args.gpu)/'Lib/site-packages'}
+        layout=assemble_runtime(target,sources,archive,ROOT/'scripts/portable_sitecustomize.py')
+        print('Shared dependency bytes saved:',layout['shared_bytes_saved'])
+    for mode in ([] if runtime_reused else ['cpu','dml']):
         runtime=target/'runtime'/mode
-        # Windows的_pth对无尾分隔符的../..会裁掉末尾点；原生路径并保留尾分隔符。
-        (runtime/'python311._pth').write_text('\n'.join([
-            'python311.zip','.',str(Path('..')/'..')+os.sep,
-            'Lib/site-packages','import site','']),'utf-8')
         subprocess.run([str(runtime/'python.exe'),'-c',
             "import os,numpy as np,sys,send2trash,pythoncom,av; os.environ['APEX_GPU_LOAD']='low'; "
             "from indexed_coarse import indexed_coarse_scan; "
             "from gpu_ocr_backend import create_ocr_engine; "
             "e=create_ocr_engine(backend=sys.argv[1],model_path='models/numeric_rec_en_v4.onnx'); "
             "print('Portable core inference OK',sys.argv[1],len(e.text_rec([np.full((32,96,3),255,np.uint8)])))",mode],cwd=target,check=True)
-    validate_worker(target)
-    (target/'Start.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\nif not exist "tools\\ffmpeg.exe" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\setup-ffmpeg.ps1"\r\nif not exist "tools\\ffmpeg.exe" (echo FFmpeg setup failed. See README.md. & pause & exit /b 1)\r\nstart "" "%~dp0app\\Apex Highlight Clipper.exe" %*\r\n','utf-8')
-    inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in release_files(target)}
+    if not kernel_reused:validate_worker(target)
+    (target/'Start.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\setup-ffmpeg.ps1"\r\nif errorlevel 1 (echo FFmpeg setup failed. See README.md. & pause & exit /b 1)\r\nstart "" "%~dp0app\\Apex Highlight Clipper.exe" %*\r\n','utf-8')
+    inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(release_files(target))}
     (target/'FILES.sha256.json').write_text(json.dumps(inventory,indent=2),'utf-8')
     archive=out/(target.name+'.zip')
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-        for p in [*release_files(target),target/'FILES.sha256.json']:
-            z.write(p,Path(target.name)/p.relative_to(target))
+        for p in sorted([*release_files(target),target/'FILES.sha256.json']):
+            info=zipfile.ZipInfo((Path(target.name)/p.relative_to(target)).as_posix(),(1980,1,1,0,0,0))
+            info.compress_type=zipfile.ZIP_DEFLATED
+            info.external_attr=0o100644<<16
+            z.writestr(info,p.read_bytes(),compresslevel=6)
     (out/'SHA256SUMS.txt').write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  '+archive.name+'\n','utf-8')
     print(archive)
+
+def build_state(folder,status,kind):
+    (folder/'.apex-build.json').write_text(json.dumps({'schema':1,'owner':'apex-auto-clipper',
+        'kind':kind,'status':status,'pid':os.getpid(),'updated':datetime.now(timezone.utc).isoformat()}),'utf-8')
+
+def cleanup_builds(args):
+    protected=[value for value in [args.runtime_source,args.shared_runtime_source] if value]
+    command=['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',
+        str(ROOT/'scripts/cleanup-generated.ps1'),'-Apply']
+    if protected: command+=['-Protect','|'.join(str(Path(p).resolve()) for p in protected)]
+    result=subprocess.run(command,cwd=ROOT)
+    if result.returncode: print('构建产物清理失败，请检查 cleanup-generated.ps1 的输出',file=sys.stderr)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--cpu',default=str(ROOT/'.venv'))
     parser.add_argument('--gpu',default=str(ROOT/'.gpu-venv'))
     parser.add_argument('--electron',default='release-v5')
-    parser.add_argument('--stage',default='v5',help='publish内独立暂存目录，避免覆盖旧运行包')
+    parser.add_argument('--stage',default='v5-shared',help='publish内独立暂存目录，避免覆盖旧运行包')
+    parser.add_argument('--runtime-source',help='复用已校验发布包中的依赖输入，逐文件验证FILES.sha256.json')
+    parser.add_argument('--shared-runtime-source',help='仅复用已有独立推理报告且内容未变化的共享运行库/内核，避免重复测试')
     parser.add_argument('--refresh',action='store_true',help='更新本次未发布暂存包的产品文件，保留已验证runtime并重写校验和ZIP')
-    build(parser.parse_args())
+    args=parser.parse_args()
+    try:
+        build(args)
+    except BaseException:
+        if getattr(args,'managed_stage',None):
+            build_state(args.managed_stage,'failed','portable');cleanup_builds(args)
+        raise
+    else:
+        build_state(args.managed_stage,'succeeded','portable');cleanup_builds(args)

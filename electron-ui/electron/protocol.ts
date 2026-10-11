@@ -1,4 +1,5 @@
 import {StringDecoder} from 'node:string_decoder';
+import type {HudField} from '../src/shared';
 export class JsonLines {
   private decoder=new StringDecoder('utf8');private pending='';
   constructor(private receive:(event:Record<string,unknown>)=>void,private malformed:(line:string)=>void){}
@@ -9,13 +10,16 @@ export class JsonLines {
 }
 export const videoExtensions=new Set(['.mp4','.mkv','.mov','.ts','.m4v']);
 export function safeOptions(value:any,legacy=false){
+ const export_layout=value.export_layout??'task';if(!['task','flat'].includes(export_layout))throw new Error('导出布局无效');
  const limits:Record<string,[number,number]>={fps:[legacy?.5:1,5],gap:[0,600],pre:[0,120],post:[0,180]};
  if(!legacy&&typeof value.fps==='number'&&value.fps<1)throw new Error('新任务细查频率至少需要1帧/秒');
  for(const [key,[a,b]] of Object.entries(limits))if(typeof value[key]!=='number'||!Number.isFinite(value[key])||value[key]<a||value[key]>b)throw new Error(`${key} 参数超出范围`);
  if(!['smart','complete','indexed'].includes(value.scan_mode)||!['cpu','dml'].includes(value.backend)||!['low','balanced','fast'].includes(value.gpu_load))throw new Error('识别选项无效');
- for(const key of ['verify','delete_source','pipeline'])if(typeof value[key]!=='boolean')throw new Error('开关参数无效');
+ for(const key of ['delete_source','pipeline'])if(typeof value[key]!=='boolean')throw new Error('开关参数无效');
  const filters={filter_enabled:value.filter_enabled??false,filter_mode:value.filter_mode??'any',min_damage:value.min_damage??0,min_kills:value.min_kills??0,min_assists:value.min_assists??0,min_duration:value.min_duration??0};
  if(typeof filters.filter_enabled!=='boolean'||!['any','all'].includes(filters.filter_mode))throw new Error('过滤选项无效');
  for(const [key,max] of [['min_damage',20000],['min_kills',60],['min_assists',99],['min_duration',86400]] as const)if(!Number.isInteger(filters[key])||filters[key]<0||filters[key]>max)throw new Error('过滤阈值超出范围');
- return {fps:value.fps,gap:value.gap,pre:value.pre,post:value.post,scan_mode:legacy?value.scan_mode:'indexed',backend:value.backend,gpu_load:value.gpu_load,delete_source:value.delete_source,verify:value.verify,pipeline:legacy&&value.scan_mode==='complete'&&value.pipeline,...filters};
+ const hud_info_enabled=value.hud_info_enabled??false,hud_info_fields:HudField[]=value.hud_info_fields??['account','weapons','teammates','hero','rank'];
+ if(typeof hud_info_enabled!=='boolean'||!Array.isArray(hud_info_fields)||hud_info_fields.some(field=>!['account','weapons','teammates','hero','rank'].includes(field)))throw new Error('HUD信息选项无效');
+ return {export_layout:export_layout as 'task'|'flat',fps:value.fps,gap:value.gap,pre:value.pre,post:value.post,scan_mode:legacy?value.scan_mode:'indexed',backend:value.backend,gpu_load:value.gpu_load,delete_source:value.delete_source,pipeline:legacy&&value.scan_mode==='complete'&&value.pipeline,hud_info_enabled,hud_info_fields:[...new Set(hud_info_fields)],...filters};
 }

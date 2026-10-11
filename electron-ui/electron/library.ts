@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {randomUUID} from 'node:crypto';
 import type {Result} from '../src/shared';
 const key=(value:string)=>path.resolve(value).toLowerCase();
 /** 仅扫描已知输出根和登记任务，不遍历用户磁盘，不改写任务或成片。 */
@@ -24,5 +25,13 @@ export class LibraryStore{
  async remember(task:string){this.tasks.set(key(task),path.resolve(task));this.roots.set(key(path.dirname(path.dirname(task))),path.dirname(path.dirname(task)));await this.save();}
  async addRoot(root:string){this.roots.set(key(root),path.resolve(root));await this.save();}
  async discover(extraRoots:string[]){return discoverTasks([...this.roots.values(),...extraRoots],[...this.tasks.values()]);}
+ async recoverLastTask<T extends {path:string;finished:boolean}>(extraRoots:string[],pointer:string,readTask:(file:string)=>Promise<T>){
+  const candidates:{info:T;time:number}[]=[];
+  for(const file of await this.discover(extraRoots))try{const info=await readTask(file);const stat=await fs.stat(file);candidates.push({info,time:stat.mtimeMs});}catch{}
+  candidates.sort((a,b)=>Number(a.info.finished)-Number(b.info.finished)||b.time-a.time);
+  const selected=candidates[0]?.info;if(!selected)return null;
+  await fs.mkdir(path.dirname(pointer),{recursive:true});const temporary=pointer+'.'+randomUUID()+'.tmp';try{await fs.writeFile(temporary,JSON.stringify({task:selected.path,finished:selected.finished}),'utf8');await fs.rename(temporary,pointer);}finally{await fs.unlink(temporary).catch(()=>{});}
+  return selected;
+ }
  private save(){const body=JSON.stringify({version:1,tasks:[...this.tasks.values()],roots:[...this.roots.values()]});this.writes=this.writes.catch(()=>{}).then(async()=>{await fs.mkdir(path.dirname(this.file),{recursive:true});await fs.writeFile(this.file+'.tmp',body,'utf8');await fs.rename(this.file+'.tmp',this.file);});return this.writes;}
 }

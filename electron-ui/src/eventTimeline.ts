@@ -1,7 +1,7 @@
 import type {Clip,OutcomeEvidence} from './shared';
-export interface ClipEvent extends OutcomeEvidence {id:string;clipTime:number}
+export interface ClipEvent extends OutcomeEvidence {id:string;clipTime:number;seekTime:number}
 export function clipEvents(clip:Clip,duration=clip.duration):ClipEvent[]{
- const unique=new Map<string,ClipEvent>();for(const e of clip.evidence||[]){const time=e.time-clip.start;if(!['knock','assist','elimination'].includes(e.kind)||!Number.isFinite(time)||time<0||time>duration)continue;const id=`${e.kind}:${e.time}:${e.text||''}`;unique.set(id,{...e,id,clipTime:time});}return[...unique.values()].sort((a,b)=>a.clipTime-b.clipTime);
+ const unique=new Map<string,ClipEvent>();for(const e of clip.evidence||[]){const time=e.time-clip.start;if(!['knock','assist','elimination'].includes(e.kind)||!Number.isFinite(time)||time<0||time>duration)continue;const id=`${e.kind}:${e.time}:${e.text||''}`,seekTime=Math.max(0,Math.min(time,Number.isFinite(e.processStart)?e.processStart!-clip.start:time-6));unique.set(id,{...e,id,clipTime:time,seekTime});}return[...unique.values()].sort((a,b)=>a.clipTime-b.clipTime);
 }
 export function eventGroups(events:ClipEvent[],duration:number,width:number,minGap=36){
  const groups:{id:string;events:ClipEvent[];fraction:number}[]=[];

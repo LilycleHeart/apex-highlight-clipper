@@ -116,6 +116,7 @@ class HUDFeatures:
             raise ValueError('Expected an 8-bit BGR image')
         profile=self.profile; delta,score=counter_offset(image,profile,self.marker)
         inactive=inactive_view(image); shield=downed_score(image,profile,self.downed)
+        if shield>=profile['downed_marker_threshold']:inactive=False
         row={'frame':frame.frame_id,'frame_kind':'memory','time':float(frame.timestamp),
              'pts':frame.pts,'time_base':[frame.time_base.numerator,frame.time_base.denominator],
              'keyframe_index':frame.keyframe_index,'burst_slot':frame.burst_slot,

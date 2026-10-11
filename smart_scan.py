@@ -69,6 +69,7 @@ def coarse_scan(source,job,profile,fps):
     for name,t in sorted(times.items(),key=lambda item:item[1]):
         check_cancel(); frame=cv2.imread(str(samples/name)); delta,score=counter_offset(frame,profile,marker)
         state=inactive_view(frame); shield=downed_score(frame,profile,downed)
+        if shield>=profile['downed_marker_threshold']:state=False
         r={'frame':name,'time':t,'ammo':None,'damage':None,'kills':None,'weapon_icon':icon_signature(frame,profile),
             'inactive_view':state,'downed_score':shield,'downed':shield>=profile['downed_marker_threshold'],
             'friend_spectate':friend_view(frame,state),'counter_offset':delta,'counter_marker_score':score}

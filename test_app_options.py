@@ -6,14 +6,16 @@ from app_options import parse_options,recycle_source
 from apex_clipper import fingerprint
 
 class AppOptionsTests(unittest.TestCase):
-    def test_defaults_and_delete_verification_are_independent(self):
-        self.assertEqual(parse_options({})['gap'],35)
+    def test_defaults_and_retired_verification(self):
+        self.assertEqual([parse_options({})[k] for k in ['gap','pre','post']],[10,6,6])
+        self.assertEqual(parse_options({},legacy=True)['gap'],35)
         self.assertFalse(parse_options({})['delete_source'])
-        self.assertFalse(parse_options({'delete_source':True,'verify':False})['verify'])
+        self.assertNotIn('verify',parse_options({'delete_source':True,'verify':False}))
         for verify in [True,False]:
             for delete in [True,False]:
                 options=parse_options({'verify':verify,'delete_source':delete})
-                self.assertEqual((options['verify'],options['delete_source']),(verify,delete))
+                self.assertNotIn('verify',options)
+                self.assertEqual(options['delete_source'],delete)
         self.assertEqual(parse_options({})['scan_mode'],'indexed')
         self.assertEqual(parse_options({'scan_mode':'smart'})['scan_mode'],'indexed')
         self.assertEqual(parse_options({'scan_mode':'smart'},legacy=True)['scan_mode'],'smart')

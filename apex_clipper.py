@@ -40,10 +40,13 @@ def write_json(path, value):
 
 def tool(name):
     suffix = '.exe' if os.name == 'nt' else ''
-    candidates = [BASE/'tools'/f'{name}{suffix}']
+    candidates = []
     override = os.environ.get('APEX_FFMPEG_DIR')
     if override:
         candidates.append(Path(override)/f'{name}{suffix}')
+    if os.name == 'nt' and os.environ.get('LOCALAPPDATA'):
+        candidates.append(Path(os.environ['LOCALAPPDATA'])/'Apex Highlight Clipper'/'dependencies'/'ffmpeg'/'9.0.2'/f'{name}{suffix}')
+    candidates.append(BASE/'tools'/f'{name}{suffix}')
     local_config=BASE/'ffmpeg.local.json'
     if local_config.is_file():
         local=json.loads(local_config.read_text(encoding='utf-8-sig'))
@@ -177,6 +180,8 @@ def icon_similarity(a,b):
 
 
 def counter_offset(frame, profile, template):
+    from hud_layout import template_for
+    template=template_for(profile,template)
     # Apex 的计分 HUD 会因动画和数字宽度整体平移，用图标作锚点。
     ref=cv2.resize(frame,(profile['reference_size'][0]//2,profile['reference_size'][1]//2))
     x1,y1,x2,y2=[round(v/2) for v in profile['counter_marker_search']]
@@ -212,6 +217,8 @@ def lifecycle_signature(profile):
 
 
 def downed_score(frame,profile,template):
+    from hud_layout import template_for
+    template=template_for(profile,template)
     rw,rh=profile['reference_size']
     x1,y1,x2,y2=[round(v/2) for v in profile['downed_marker_search']]
     ref=cv2.resize(frame,(rw//2,rh//2))
@@ -231,7 +238,7 @@ def enrich_lifecycle(cache, samples, profile):
         score=downed_score(frame,profile,template)
         row['downed_score']=float(score)
         row['downed']=score>=profile['downed_marker_threshold']
-        row['inactive_view']=inactive_view(frame)
+        row['inactive_view']=inactive_view(frame) and not row['downed']
     cache['lifecycle_signature']=signature; cache['profile']=profile
     return cache
 
@@ -638,11 +645,13 @@ def informative_filename(source, index, summary):
     return f'{recording_prefix(source)} 第{index}段 {kills} {weapons} {damage}.mp4'
 
 
-def export_lossless(source, segments, output, events=None,resume=False,statistics=None):
+def export_lossless(source, segments, output, events=None,resume=False,statistics=None,metadata_dir=None,name_suffix=''):
     if resume:
         from resume_media import export_with_resume
-        return export_with_resume(source,segments,output,events,statistics=statistics)
+        return export_with_resume(source,segments,output,events,statistics=statistics,metadata_dir=metadata_dir,name_suffix=name_suffix)
     output=Path(output).resolve(); output.mkdir(parents=True,exist_ok=True)
+    metadata_dir=Path(metadata_dir).resolve() if metadata_dir else output
+    metadata_dir.mkdir(parents=True,exist_ok=True)
     if not segments: raise ValueError('没有片段；不会生成空视频')
     source=Path(source).resolve()
     meta,_=probe(source); duration=float(meta['format']['duration'])
@@ -652,7 +661,8 @@ def export_lossless(source, segments, output, events=None,resume=False,statistic
         from combat_statistics import overlay_summaries
         summaries=overlay_summaries(summaries,aligned,statistics)
     targets=[output/informative_filename(source,i+1,summaries[i]) for i in range(len(aligned))]
-    if (output/'export.json').exists(): raise FileExistsError('此目录已有导出清单，请使用新目录')
+    if name_suffix:targets=[p.with_stem(p.stem+' '+name_suffix) for p in targets]
+    if (metadata_dir/'export.json').exists(): raise FileExistsError('此任务已有导出清单，请使用续接')
     for target in targets:
         if target.exists(): raise FileExistsError(f'输出已存在，不覆盖: {target}')
     files=[]; commands=[]; clips=[]
@@ -668,9 +678,9 @@ def export_lossless(source, segments, output, events=None,resume=False,statistic
         if [(s['codec_type'],s['codec_name']) for s in result_meta['streams']]!=[(s['codec_type'],s['codec_name']) for s in meta['streams']]:
             raise ValueError('导出后音视频流不符，请检查导出物')
         clips.append({'output':str(clip),'segment':s,'summary':summaries[i],'metadata':result_meta})
-    write_json(output/'export.json',{'mode':'segments','source':fingerprint(source),'segments':aligned,
+    write_json(metadata_dir/'export.json',{'mode':'segments','video_directory':str(output),'metadata_directory':str(metadata_dir),'source':fingerprint(source),'segments':aligned,
                'outputs':[str(f) for f in files],'commands':commands,'clips':clips})
-    with (output/'segments.csv').open('w',newline='',encoding='utf-8') as f:
+    with (metadata_dir/'segments.csv').open('w',newline='',encoding='utf-8') as f:
         writer=csv.writer(f)
         for i,s in enumerate(aligned): writer.writerow([s['start'],s['end'],f'交战 {i+1}'])
     print(f'导出完成: {len(files)} 个独立交战视频 -> {output}',flush=True)

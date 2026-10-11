@@ -1,0 +1,6 @@
+.window-controls{position:fixed;top:0;right:0;z-index:240;display:flex;width:138px;height:36px;background:var(--chrome);color:var(--chrome-on);-webkit-app-region:no-drag}
+.window-controls button{flex:1;min-width:0;height:36px;display:grid;place-items:center;padding:0;border-radius:0;background:transparent;color:inherit;outline-offset:-3px}
+.window-controls button:hover{background:var(--surfaceContainerHighest);filter:none}
+.window-controls .window-close:hover{background:#c42b1c;color:#fff}
+.window-controls button svg{stroke-width:1.5}
+:root[data-theme-reveal] .window-controls button{transition:none}

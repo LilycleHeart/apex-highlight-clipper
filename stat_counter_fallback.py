@@ -56,13 +56,16 @@ class CounterFallback:
         self.last_match_score=min(matched_scores) if matched_scores else 0.
         return ''.join(output)
     def patches(self,image,profile,delta):
-        if image.shape[1]!=1280:return {}
+        from hud_layout import template_for
+        rw,rh=profile['reference_size'];fx=image.shape[1]/rw;fy=image.shape[0]/rh
         gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY);dx,dy=delta;anchors={}
-        for key,reference in [('kills',profile['kills']),('assists',[2202,94,2228,124]),('participation',[2260,94,2300,124])]:
+        for key,reference in [('kills',profile['kills']),('assists',profile.get('assists',[2202,94,2228,124])),('participation',profile.get('participation',[2260,94,2300,124]))]:
             template=self.templates[key]
             if template is None:continue
-            x1=max(0,round((reference[0]+dx)/2)-40);x2=min(image.shape[1],round((reference[2]+dx)/2)+25)
-            y1=max(0,round((reference[1]+dy)/2)-8);y2=min(image.shape[0],round((reference[3]+dy)/2)+8)
+            template=template_for(profile,template)
+            if abs(fx-.5)>.001 or abs(fy-.5)>.001:template=cv2.resize(template,None,fx=fx*2,fy=fy*2)
+            x1=max(0,round((reference[0]+dx)*fx)-40);x2=min(image.shape[1],round((reference[2]+dx)*fx)+25)
+            y1=max(0,round((reference[1]+dy)*fy)-8);y2=min(image.shape[0],round((reference[3]+dy)*fy)+8)
             region=gray[y1:y2,x1:x2]
             if region.shape[0]<template.shape[0] or region.shape[1]<template.shape[1]:continue
             _,score,_,point=cv2.minMaxLoc(cv2.matchTemplate(region,template,cv2.TM_CCOEFF_NORMED))
@@ -73,6 +76,6 @@ class CounterFallback:
                 a,b=anchors[key],anchors[next_key];left,right=a[2],b[0]-2
                 if 3<=right-left<=32:
                     result[key]=digit_view(image[a[1]:a[3],left:right])
-        box=profile['damage'];x1,y1,x2,y2=[round((v+(dx if i%2==0 else dy))/2) for i,v in enumerate(box)]
+        box=profile['damage'];x1,y1,x2,y2=[round((v+(dx if i%2==0 else dy))*(fx if i%2==0 else fy)) for i,v in enumerate(box)]
         result['damage']=digit_view(image[y1:y2,x1:x2])
         return result

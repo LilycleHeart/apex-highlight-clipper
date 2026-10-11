@@ -1,0 +1,481 @@
+{
+  "source": "Official EA character ability artwork",
+  "legends": [
+    {
+      "id": "alter",
+      "name": "Alter",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/alter",
+      "abilities": {
+        "tactical": {
+          "file": "alter-tactical.png",
+          "url": "https://drop-assets.ea.com/images/7u0cUMuk4m5UEC5K8vDLbl/59b87d96968bddb8a1d191596523dd5a/apex-grid-tile-legends-abilities-tactical-Alter-1x1.png",
+          "sha256": "4ff76d172321a2660eaba326bc73c452b88401faf16410fed9090bf211b81506"
+        },
+        "ultimate": {
+          "file": "alter-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/3JiamhxVvcm4ax70NUu3w0/dc07afec61a67856653259f6090a2697/apex-grid-tile-legends-abilities-ultimate-Alter-1x1.png",
+          "sha256": "529900e2332d0c111b20d94caaa0f602a5a4485dcf6f9f85ff9681784ef6a2ac"
+        }
+      }
+    },
+    {
+      "id": "ash",
+      "name": "Ash",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ash",
+      "abilities": {
+        "tactical": {
+          "file": "ash-tactical.png",
+          "url": "https://drop-assets.ea.com/images/7CSTsiJauEYkf6x33cpmfB/b34a5f40033145df3b52fece46a59eac/apex-grid-tile-legends-abilities-tactical-ash-1x1.png",
+          "sha256": "25c81a979936485373248314cf4347a0cf46f83f76598e8dc9df395d8a8b706c"
+        },
+        "ultimate": {
+          "file": "ash-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/7stu0fkID7EvtznLCGIq3/ee9548539c4f891c6ae4416c31ad5a85/apex-grid-tile-legends-abilities-ultimate-ash-1x1.png",
+          "sha256": "6e6be177dcba5b98d36b5d7aca84bf69c1a9828228b606c57a3122406d9495e9"
+        }
+      }
+    },
+    {
+      "id": "axle",
+      "name": "Axle",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/axle",
+      "abilities": {
+        "tactical": {
+          "file": "axle-tactical.png",
+          "url": "https://drop-assets.ea.com/images/35hgHtO3qzm7UtS4K1IzNQ/ba7f1d976df674cad2d5f2bb2b919910/Apex-Axle-Tactical_1x1.png",
+          "sha256": "d940f45243be06bb01ead3c189f571a7121cc04b0b9cb185e63f24f64409dec9"
+        },
+        "ultimate": {
+          "file": "axle-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/JPczixQ9fCVJKBYjGUfB0/c0ef0aa18df188e7dee3e635a8f33ec5/Apex-Axle-Ultimate_1x1.png",
+          "sha256": "527e25852a8d79faa1ad9a1de669576c65ee5e66b136394c30a4a370134b0398"
+        }
+      }
+    },
+    {
+      "id": "ballistic",
+      "name": "Ballistic",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ballistic",
+      "abilities": {
+        "tactical": {
+          "file": "ballistic-tactical.png",
+          "url": "https://drop-assets.ea.com/images/2PLG2OJiyqlz5ap3F6hUJT/9d408dbb47fa5af18a48d1159896eb2e/apex-grid-tile-legends-abilities-tactical-ballistic.png",
+          "sha256": "397ddacfd0847e2921077cc39592b67cc53195a3d2bfc3b179a2c678dfecc5c3"
+        },
+        "ultimate": {
+          "file": "ballistic-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/3wQESyP8J19pr0XyJf7bHh/5e8d983f3e4223f95deb9570137c64ca/apex-grid-tile-legends-abilities-ultimate-ballistic.png",
+          "sha256": "b07cb9187233cc0930fdbca1334daf3286ac46d9be5f3fb3f2f7650db23fc597"
+        }
+      }
+    },
+    {
+      "id": "bangalore",
+      "name": "Bangalore",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/bangalore",
+      "abilities": {
+        "tactical": {
+          "file": "bangalore-tactical.png",
+          "url": "https://drop-assets.ea.com/images/22fAD5kQZTVbVJEUFerjfR/0ac4fe852854efaff42d4e28275fc09c/apex-grid-tile-legends-abilities-tactical-bangalore.png",
+          "sha256": "9cccc142b62b6c641f98f618240945b85a0f1f8dfd74f8f07466b1a42d1ae832"
+        },
+        "ultimate": {
+          "file": "bangalore-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/bwxFUgKKdZhF0MQf4mtdI/7a447f72fb6fc7f9183c8bcd787cc3eb/apex-grid-tile-legends-abilities-ultimate-bangalore.png",
+          "sha256": "0506481fe443abe765f889a0ce727eed842059376c86cef1f1023eee18af8823"
+        }
+      }
+    },
+    {
+      "id": "bloodhound",
+      "name": "Bloodhound",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/bloodhound",
+      "abilities": {
+        "tactical": {
+          "file": "bloodhound-tactical.png",
+          "url": "https://drop-assets.ea.com/images/3rP24eW8ooBJ62zWRKWQyp/89a5b915ed945a42fc7f20ce02448b5f/apex-grid-tile-legends-abilities-tactical-bloodhound.png",
+          "sha256": "6196cd4185a022a4a6df4252829663375cc0754e2a4488466f21ceab89631569"
+        },
+        "ultimate": {
+          "file": "bloodhound-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/01cV3CXT2P9XAis1s92Z8O/c86803daf1219d98a577aa18b623ca6b/Apex-Bloodhound-Ultimate_1x1.png",
+          "sha256": "4dde3b14754a762a59691b8c0456820e6bc83e9b8a39193fd5ba63add30ce2b1"
+        }
+      }
+    },
+    {
+      "id": "catalyst",
+      "name": "Catalyst",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/catalyst",
+      "abilities": {
+        "tactical": {
+          "file": "catalyst-tactical.png",
+          "url": "https://drop-assets.ea.com/images/6fPR1t6DcBRAakLL4KqXfW/20354e67b1f52c1cbd44221b864ceb6a/apex-grid-tile-legends-abilities-tactical-catalyst.png",
+          "sha256": "0c6b3810b6475b5afe6f0dda95bf61c7c2911006d7c6d8c8412281aa9a0184b8"
+        },
+        "ultimate": {
+          "file": "catalyst-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/1QitrIvv364bepsgkFrBbb/55b9856147c0598669c3f0debcfd21e8/apex-grid-tile-legends-abilities-ultimate-catalyst.png",
+          "sha256": "f89708f3c3a736236e3bab27e7927ca84e7f9c9d70393e864b9e8be8ba3f3f1d"
+        }
+      }
+    },
+    {
+      "id": "caustic",
+      "name": "Caustic",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/caustic",
+      "abilities": {
+        "tactical": {
+          "file": "caustic-tactical.png",
+          "url": "https://drop-assets.ea.com/images/4musY1CZ7HA31NbE5qgJde/c44b7824f7b7569043d834a7610d56d8/apex-grid-tile-legends-abilities-tactical-caustic.png",
+          "sha256": "9fbe5eb599bcab4f457e2a2f8807c56386facceb7eb106f5f0fa5183873f7cc6"
+        },
+        "ultimate": {
+          "file": "caustic-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/4PQcb9UIm6DRdBZRZlNWym/178c10f9278ba296c20759c3c851d81c/apex-grid-tile-legends-abilities-ultimate-caustic.png",
+          "sha256": "8df8b477648daa00e8084a8fab15e6e9bfe4c2ae625305ef8328c641171e13b2"
+        }
+      }
+    },
+    {
+      "id": "conduit",
+      "name": "Conduit",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/conduit",
+      "abilities": {
+        "tactical": {
+          "file": "conduit-tactical.png",
+          "url": "https://drop-assets.ea.com/images/5o9jy4AcYgaa8mQTeSUEPh/752ccc4e3bd0b5c97a0000b4a1e575cb/apex-grid-tile-legends-abilities-tactical-conduit.png",
+          "sha256": "180e666cce1fb72ce2f17db064434cd58127cfacc9af7530fba3b84d5fb03948"
+        },
+        "ultimate": {
+          "file": "conduit-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/6RsyvTSJ5smYlXWj3hrY8T/9d3b6ce278b872b3f0c533f603b15b78/apex-grid-tile-legends-abilities-ultimate-conduit.png",
+          "sha256": "8c46f2692c3c3c582d9c35bf7f0b49472f73666eb4e352b1152cf6ba3869440d"
+        }
+      }
+    },
+    {
+      "id": "crypto",
+      "name": "Crypto",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/crypto",
+      "abilities": {
+        "tactical": {
+          "file": "crypto-tactical.png",
+          "url": "https://drop-assets.ea.com/images/a8vYpY2Bq606GqYQBYl4j/7276f2181dcd351161a674d741642b3f/apex-grid-tile-legends-abilities-tactical-crypto.png",
+          "sha256": "ba6b5055645769c1ff723cfddf39b7c0a78be070832cb606f7450cd95e8942c5"
+        },
+        "ultimate": {
+          "file": "crypto-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/2OEytyhM2LTFsnwGw627pO/438982c3c0057c83ea250fe4d76ee773/apex-grid-tile-legends-abilities-ultimate-crypto.png",
+          "sha256": "87414f40506cf12dc0f000088048eebef8603d9374b776536a77606e78b8e05f"
+        }
+      }
+    },
+    {
+      "id": "fuse",
+      "name": "Fuse",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/fuse",
+      "abilities": {
+        "tactical": {
+          "file": "fuse-tactical.png",
+          "url": "https://drop-assets.ea.com/images/2mwVeFsvKDekKLzuhr6BsC/0dd5f4bf024a23f2fd5d335aaf384525/apex-grid-tile-legends-abilities-tactical-fuse.png",
+          "sha256": "4f9d36144decffb28f5ecc53d748e5178264fe09ce9bf8b0655dde9b6156b0e3"
+        },
+        "ultimate": {
+          "file": "fuse-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/31yybTciQQJRx39SacVNhO/27f8fa74b5b0d3ba83ded3e47dd7b2e1/apex-grid-tile-legends-abilities-ultimate-fuse.png",
+          "sha256": "49b72a3a479ae4b840c71a084f9155d2733115679c896cbbf2662bc2d8eaeb7e"
+        }
+      }
+    },
+    {
+      "id": "gibraltar",
+      "name": "Gibraltar",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/gibraltar",
+      "abilities": {
+        "tactical": {
+          "file": "gibraltar-tactical.png",
+          "url": "https://drop-assets.ea.com/images/6ZoW2Dn1BsBNYK8gSEADHw/171d7c54f94193e516db99720f5f8e65/apex-grid-tile-legends-abilities-tactical-gibraltar.png",
+          "sha256": "239d3f1df45dda23ffefb1f5619cf603db6477c336df9c26c8c4b9ab241e8ad9"
+        },
+        "ultimate": {
+          "file": "gibraltar-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/6vJgV8sdFfccg4hOocuOwU/386a1c84b91573fd8a0aae94a553f91c/apex-grid-tile-legends-abilities-ultimate-gibraltar.png",
+          "sha256": "114e5502e48e2143fec1357de42f6e0bfd6b74e755b41e6990ab0974315e7beb"
+        }
+      }
+    },
+    {
+      "id": "horizon",
+      "name": "Horizon",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/horizon",
+      "abilities": {
+        "tactical": {
+          "file": "horizon-tactical.png",
+          "url": "https://drop-assets.ea.com/images/5mYni5G1koYL2aHvkdGwJp/ccfbd81938530e6434d15867b95c1f3f/apex-grid-tile-legends-abilities-tactical-horizon.png",
+          "sha256": "2ad8a59b0521c5f45e9a690d23291ba79daae1919d7b4d67110e9c0741df369c"
+        },
+        "ultimate": {
+          "file": "horizon-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/4YYAaIxDxixb39EavbH3Sr/792295b58d7e046ae2d5b3cb35a25052/apex-grid-tile-legends-abilities-ultimate-horizon.png",
+          "sha256": "7c4f6ea10d18164a626da58bd315469d78663a7e5c966548d3f69f351bf35c9d"
+        }
+      }
+    },
+    {
+      "id": "lifeline",
+      "name": "Lifeline",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/lifeline",
+      "abilities": {
+        "tactical": {
+          "file": "lifeline-tactical.png",
+          "url": "https://drop-assets.ea.com/images/5JOookrf5csKKzevG1oZFA/d33ff6694873f61f230dde06d9675eb8/apex-grid-tile-legends-abilities-tactical-lifeline.png",
+          "sha256": "ee71c7ad3f090c6be86772e2b2f0284d4e00ab1553e6c240f858badd1d4130c2"
+        },
+        "ultimate": {
+          "file": "lifeline-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/3tHvisyVS1uW1xSoJL538M/4c73dc0682bd099896cf06d80a011974/apex-grid-tile-legends-abilities-ultimate-lifeline.png",
+          "sha256": "29db050db2dea772973de0e840ebc288c7a580708f02b69d4711b5a1ac3c21d6"
+        }
+      }
+    },
+    {
+      "id": "loba",
+      "name": "Loba",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/loba",
+      "abilities": {
+        "tactical": {
+          "file": "loba-tactical.png",
+          "url": "https://drop-assets.ea.com/images/2LYkPXp0pizBewtxrBN2YH/37b49ac74e134c3801c73218bcf5ab1f/apex-grid-tile-legends-abilities-tactical-loba.png",
+          "sha256": "252bd59865eb19761bc31c0254e1e5c28f94d5674a017a0d6ffab5e3d26b7c08"
+        },
+        "ultimate": {
+          "file": "loba-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/1PneuVhYEpvv4JkzdbV3Zj/945ceea2c0f3e935844b2341bb9edcc0/apex-grid-tile-legends-abilities-ultimate-loba.png",
+          "sha256": "1ed4f0589ef75f67e61fc4dd5d18b8c28ade3001e6d1e1be714999d1be24467c"
+        }
+      }
+    },
+    {
+      "id": "mad-maggie",
+      "name": "Mad Maggie",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/mad-maggie",
+      "abilities": {
+        "tactical": {
+          "file": "mad-maggie-tactical.png",
+          "url": "https://drop-assets.ea.com/images/rTqB1ierTtsp8fh0CZBlS/ca418f92f7408665da4ad7e5f158cc9a/apex-grid-tile-legends-abilities-tactical-maggie.png",
+          "sha256": "b012ccad3baa4ace510790e64824fd409bed70c44e293de7614d27d03147b648"
+        },
+        "ultimate": {
+          "file": "mad-maggie-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/IHwwhWbCwYq5yOY1yzm1X/849d3ee7a85b676233d0b711af7f40b1/apex-grid-tile-legends-abilities-ultimate-maggie.png",
+          "sha256": "0c68c218639c33e045bc8660d3370fecec70b66f8877c72c0165fe59d7753d09"
+        }
+      }
+    },
+    {
+      "id": "newcastle",
+      "name": "Newcastle",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/newcastle",
+      "abilities": {
+        "tactical": {
+          "file": "newcastle-tactical.png",
+          "url": "https://drop-assets.ea.com/images/5Y7jX3EUfM6owKgcqtA0op/e36d1e4c40a2d88e16e7ffda04d1b147/apex-grid-tile-legends-abilities-tactical-newcastle.png",
+          "sha256": "0cbfbdf4f1b8f0cbcf774064fc11c1084c7c4edfb7a665755f11ba044c0e3ebc"
+        },
+        "ultimate": {
+          "file": "newcastle-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/77b4ldrEfuSaKxKV8AoBek/e57ba1fe05b72722753464fc9bbabdea/apex-grid-tile-legends-abilities-ultimate-newcastle.png",
+          "sha256": "ddfa6a14b57db04e49aececd6e78da46e19ff6dbcf1b41bd348cf064482a4f88"
+        }
+      }
+    },
+    {
+      "id": "octane",
+      "name": "Octane",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/octane",
+      "abilities": {
+        "tactical": {
+          "file": "octane-tactical.png",
+          "url": "https://drop-assets.ea.com/images/6dW9QvXHuwcTgL6EXHCXmh/76845266a58927ea763c67a0ba035678/apex-grid-tile-legends-abilities-tactical-octane.png",
+          "sha256": "827d1f3f4183f2e627bc72e05d2330f82b43b4cf67c16867aad0c5c446651c3e"
+        },
+        "ultimate": {
+          "file": "octane-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/4PJNmo5Z6hGj1Nqn2BATi1/da22cca29f732a41ed9df04edcdec82e/apex-grid-tile-legends-abilities-ultimate-octane.png",
+          "sha256": "8873ee10534f4e3024b91786779abc6958f88eced8b5b8849aad5d7ad16d03af"
+        }
+      }
+    },
+    {
+      "id": "pathfinder",
+      "name": "Pathfinder",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/pathfinder",
+      "abilities": {
+        "tactical": {
+          "file": "pathfinder-tactical.png",
+          "url": "https://drop-assets.ea.com/images/3rZjojlbx3GeS2jyrRP984/963990087fa22a52edf993d4395cb68a/apex-grid-tile-legends-abilities-tactical-pathfinder.png",
+          "sha256": "0fc981b2c1041f07dd7ae06df9ef131549bbd84a663bf9a3c538cc6fafe9ceb6"
+        },
+        "ultimate": {
+          "file": "pathfinder-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/6gf43Nj1KwflrS3tvEiiEf/7b8ed2365111aa7bb84e341514fb0065/apex-grid-tile-legends-abilities-ultimate-pathfinder.png",
+          "sha256": "1ab3e68643a841cf083453e54c4dc50ac9069b8b9124226e2f4a660282d115c7"
+        }
+      }
+    },
+    {
+      "id": "rampart",
+      "name": "Rampart",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/rampart",
+      "abilities": {
+        "tactical": {
+          "file": "rampart-tactical.png",
+          "url": "https://drop-assets.ea.com/images/1stOc5Io5q7Omla1RApBt0/0c3d7c023903a8490604cd12f3df035d/apex-grid-tile-legends-abilities-tactical-rampart.png",
+          "sha256": "13a8175f46a004ecfcf920bd462ab7a7dacb5809d02b3211e1691a85ef397697"
+        },
+        "ultimate": {
+          "file": "rampart-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/7cJmc6F1jt0cLdcawCJ6CG/9509cf1a6e930037392d6074cf273637/apex-grid-tile-legends-abilities-ultimate-rampart.png",
+          "sha256": "10f2b26c18acd5f29977258252f3a61de3a25deb5dd165c4d83ea9990575c42b"
+        }
+      }
+    },
+    {
+      "id": "revenant",
+      "name": "Revenant",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/revenant",
+      "abilities": {
+        "tactical": {
+          "file": "revenant-tactical.png",
+          "url": "https://drop-assets.ea.com/images/3ZN82EP5REeWhea4hSFGi3/6bdb2ce8d23e5c099d4ea6e493ed7ef5/apex-grid-tile-legends-abilities-tactical-revenant.png",
+          "sha256": "71bf95e58610454c64d491bfe9bf93497d34e7170bbdf2bf09a1b5fbedba05fb"
+        },
+        "ultimate": {
+          "file": "revenant-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/mSKUFQEPhpTSGi8TRNHOd/c1dbee5ae803cc4928a91577ac1cc915/apex-grid-tile-legends-abilities-ultimate-revenant.png",
+          "sha256": "0fcb8ad8565a6e6f9ef0f395274216350e58d30c86f1a38c7d4d8d6956e47c03"
+        }
+      }
+    },
+    {
+      "id": "seer",
+      "name": "Seer",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/seer",
+      "abilities": {
+        "tactical": {
+          "file": "seer-tactical.png",
+          "url": "https://drop-assets.ea.com/images/3X1Rv11FR8WB4cFxBpNqE2/0a6ffa67e6146ab71869d35e7c8041e8/apex-grid-tile-legends-abilities-tactical-seer.png",
+          "sha256": "83eb3b02f5d0ea2d7033ca248237ab25e978650a90ee787131bea6564b618393"
+        },
+        "ultimate": {
+          "file": "seer-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/6x1FCBzA051YD5By7uqEWG/b9a70fc97a1220fa1943e3ff0714931a/apex-grid-tile-legends-abilities-ultimate-seer.png",
+          "sha256": "2d55a9ec17d6a0439bc3ef1ebadfc49561ea215cc2284f3b1cce1bda2e21e9e2"
+        }
+      }
+    },
+    {
+      "id": "sparrow",
+      "name": "Sparrow",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/sparrow",
+      "abilities": {
+        "tactical": {
+          "file": "sparrow-tactical.png",
+          "url": "https://drop-assets.ea.com/images/2trgAcmpuLZxL4hhNPFj3U/a0d289fc18de76b169e2d8762db191ed/Apex-Sparrow-Tactical_1x1.png",
+          "sha256": "2223a6c96e9b2b545b4907229ea55377e6d0400ef5a1721265419c2860d0ec8d"
+        },
+        "ultimate": {
+          "file": "sparrow-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/yIfvV6dKyIoHOYPexlhy3/df9c93f97dbb757647d4083ecb9207e9/Apex-Sparrow-Ultimate_1x1.png",
+          "sha256": "c15eb84e35ffc7cd2d40db77ef84aacc73c3be3dae674376b02a9fdd15105a63"
+        }
+      }
+    },
+    {
+      "id": "valkyrie",
+      "name": "Valkyrie",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/valkyrie",
+      "abilities": {
+        "tactical": {
+          "file": "valkyrie-tactical.png",
+          "url": "https://drop-assets.ea.com/images/1wR7k2VhJI3HJ84fl63Tbp/e1d1e0f2bda9bdd57f83ad650aae1836/apex-grid-tile-legends-abilities-tactical-valkyrie.png",
+          "sha256": "21ebc19e14fbdfc5825ea5798b48b312cc340212aa497f65ceffd0c122357b81"
+        },
+        "ultimate": {
+          "file": "valkyrie-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/YROSTDuukiyOOJaeokq37/fce8124b214d243b8fef44b4670234ce/apex-grid-tile-legends-abilities-ultimate-valkyrie.png",
+          "sha256": "2d16a2e0861b40d3dd6fc62240112f4f50c33d87be929bcbc9729ea99c0283dd"
+        }
+      }
+    },
+    {
+      "id": "vantage",
+      "name": "Vantage",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/vantage",
+      "abilities": {
+        "tactical": {
+          "file": "vantage-tactical.png",
+          "url": "https://drop-assets.ea.com/images/3Nl109vKaFueu24DPNMAjU/9241fdaedabfa8f1e28019f4d8de23e0/apex-grid-tile-legends-abilities-tactical-vantage.png",
+          "sha256": "f21ff51d0f375f7510488b55fb671feba5fec998fdb01aadd728fd17dad97cb2"
+        },
+        "ultimate": {
+          "file": "vantage-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/29Lvu342dpux0sjiu2brDU/624aa388e7fe763bd7af31036178ba26/apex-grid-tile-legends-abilities-ultimate-vantage.png",
+          "sha256": "5e937e76f162914bf26f586e0bd04c3d0751dc2e74f64511c4c0813d6b82a90b"
+        }
+      }
+    },
+    {
+      "id": "wattson",
+      "name": "Wattson",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/wattson",
+      "abilities": {
+        "tactical": {
+          "file": "wattson-tactical.png",
+          "url": "https://drop-assets.ea.com/images/2nYopJqjadE2XZ2DiKKiw7/a2612a65da741c26e8cd11b8101c107f/apex-grid-tile-legends-abilities-tactical-wattson.png",
+          "sha256": "76d74e63fc21d522e9d1c88bfac998905254a448a6affc4a91df438097933065"
+        },
+        "ultimate": {
+          "file": "wattson-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/3yLWKf7oUCN8x8uFSffjbV/5f191e67e73c3ce8fa224291c3fe84f5/apex-grid-tile-legends-abilities-ultimate-wattson.png",
+          "sha256": "d984ec35b70635f6d8fe4492c9b1f1901de32e09cb3d7a7c35d4af817a2b5a3d"
+        }
+      }
+    },
+    {
+      "id": "wraith",
+      "name": "Wraith",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/wraith",
+      "abilities": {
+        "tactical": {
+          "file": "wraith-tactical.png",
+          "url": "https://drop-assets.ea.com/images/6D8cm75AtTUZVeYpJOIXQ0/e922a1b66c362609f691bd292dd78e05/apex-grid-tile-legends-abilities-tactical-wraith.png",
+          "sha256": "ee69699a1c659f10ebebfef09474751438b2253834270f02055fbf373e767e7f"
+        },
+        "ultimate": {
+          "file": "wraith-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/1kpZB0urVFt2MXUsUsa4DB/6f7002b4400eabd371e2233dfb1d72ea/apex-grid-tile-legends-abilities-ultimate-wraith.png",
+          "sha256": "e2d8a06f9dddee75a48b2c85025305a2d5ed9cba3bebfb7f6e8f75fb7ef0eea5"
+        }
+      }
+    },
+    {
+      "id": "mirage",
+      "name": "Mirage",
+      "page": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/mirage",
+      "abilities": {
+        "tactical": {
+          "file": "mirage-tactical.png",
+          "url": "https://drop-assets.ea.com/images/5su0uVvBTaxjmTeJ2qsuZY/f574b8c2b810e4f5422ac8aa46c9a6db/apex-grid-tile-legends-abilities-tactical-mirage.png",
+          "sha256": "fba128ba7c1a9236224196e9f95cdfdc322e754b7e15c2d85e67d05e041d9c1c"
+        },
+        "ultimate": {
+          "file": "mirage-ultimate.png",
+          "url": "https://drop-assets.ea.com/images/3gwsOFB7wgYubntRdS8Oe6/68ed04c89465b028385d0270a6a0d900/apex-grid-tile-legends-abilities-ultimate-mirage.png",
+          "sha256": "0af5428dde96b00582612c5e78fec16c188033e7bcecfb8ec5b41b249c7d7cee"
+        }
+      }
+    }
+  ]
+}

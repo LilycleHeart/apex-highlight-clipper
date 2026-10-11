@@ -1,13 +1,15 @@
-"""桌面参数与原录像回收策略；导出和可选无损校验分别控制。"""
+"""桌面参数与原录像回收策略；导出成功后按独立开关回收。"""
 import math
 from pathlib import Path
 
-DEFAULTS={'gap':35.,'pre':10.,'post':15.,'fps':2.}
+DEFAULTS={'gap':10.,'pre':6.,'post':6.,'fps':2.}
 LIMITS={'gap':(0,600),'pre':(0,120),'post':(0,180),'fps':(.5,5)}
 
 def parse_options(request,legacy=False):
     values={}
-    for key,default in DEFAULTS.items():
+    values['export_layout']=request.get('export_layout','task')
+    if values['export_layout'] not in ('task','flat'):raise ValueError('导出布局必须为 task 或 flat')
+    for key,default in ({'gap':35.,'pre':10.,'post':15.,'fps':2.} if legacy else DEFAULTS).items():
         raw=request.get(key,default)
         if isinstance(raw,bool): raise ValueError(f'{key} 必须是数值')
         try: value=float(raw)
@@ -16,10 +18,15 @@ def parse_options(request,legacy=False):
         if not math.isfinite(value) or not low<=value<=high:
             raise ValueError(f'{key} 必须在 {low}–{high} 范围内')
         values[key]=value
-    for key,default in [('delete_source',False),('verify',True),('pipeline',True)]:
+    for key,default in [('delete_source',False),('pipeline',True)]:
         value=request.get(key,default)
         if not isinstance(value,bool): raise ValueError(f'{key} 必须是布尔值')
         values[key]=value
+    enabled=request.get('hud_info_enabled',False)
+    if not isinstance(enabled,bool):raise ValueError('HUD信息开关必须是布尔值')
+    fields=request.get('hud_info_fields',['account','weapons','teammates','hero','rank'])
+    if not isinstance(fields,list) or any(key not in ['account','weapons','teammates','hero','rank'] for key in fields):raise ValueError('HUD信息字段无效')
+    values['hud_info_enabled']=enabled;values['hud_info_fields']=list(dict.fromkeys(fields))
     from gpu_load import get_gpu_policy
     values['gpu_load']=get_gpu_policy(request.get('gpu_load','low'))['name']
     values['scan_mode']=request.get('scan_mode','indexed')
