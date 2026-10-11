@@ -22,7 +22,7 @@ class SparseHUDTests(unittest.TestCase):
         stack=ExitStack()
         stack.enter_context(patch.dict(os.environ,{'APEX_OCR_BACKEND':'cpu','APEX_OCR_POOL':'0'}))
         stack.enter_context(patch('rapidocr_onnxruntime.RapidOCR',return_value=engine))
-        stack.enter_context(patch('apex_clipper.cv2.imread',return_value=np.zeros((540,1280,3),np.uint8)))
+        stack.enter_context(patch('apex_clipper.read_image',return_value=np.zeros((540,1280,3),np.uint8)))
         stack.enter_context(patch('apex_clipper.counter_offset',return_value=((0,0),.99)))
         stack.enter_context(patch('apex_clipper.crop',return_value=np.zeros((48,64,3),np.uint8)))
         stack.enter_context(patch('apex_clipper.icon_signature',return_value='AA=='))

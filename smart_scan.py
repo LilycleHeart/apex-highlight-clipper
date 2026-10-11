@@ -9,6 +9,7 @@ import subprocess
 import time
 import uuid
 import cv2
+from image_io import read_image
 from apex_clipper import (BASE,probe,tool,fingerprint,write_json,read_hud,detect_events,icon_similarity,
                          counter_offset,inactive_view,downed_score,icon_signature)
 from resume_media import sample_with_resume
@@ -63,11 +64,11 @@ def coarse_scan(source,job,profile,fps):
         if cached['rows']:
             row=cached['rows'][-1]; preview(samples/row['frame'],row['time'])
         return cached
-    marker=cv2.imread(str(BASE/profile['counter_marker']),cv2.IMREAD_GRAYSCALE)
-    downed=cv2.imread(str(BASE/profile['downed_marker']),cv2.IMREAD_GRAYSCALE)
+    marker=read_image(str(BASE/profile['counter_marker']),cv2.IMREAD_GRAYSCALE)
+    downed=read_image(str(BASE/profile['downed_marker']),cv2.IMREAD_GRAYSCALE)
     cheap=[]; chosen=set(); previous=None; last_anchor=-100.
     for name,t in sorted(times.items(),key=lambda item:item[1]):
-        check_cancel(); frame=cv2.imread(str(samples/name)); delta,score=counter_offset(frame,profile,marker)
+        check_cancel(); frame=read_image(str(samples/name)); delta,score=counter_offset(frame,profile,marker)
         state=inactive_view(frame); shield=downed_score(frame,profile,downed)
         if shield>=profile['downed_marker_threshold']:state=False
         r={'frame':name,'time':t,'ammo':None,'damage':None,'kills':None,'weapon_icon':icon_signature(frame,profile),

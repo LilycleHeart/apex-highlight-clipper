@@ -2,6 +2,7 @@
 from pathlib import Path
 import hashlib
 import cv2
+from image_io import read_image
 import numpy as np
 
 BASE=Path(__file__).resolve().parent
@@ -27,8 +28,8 @@ def digit_view(patch):
 
 class CounterFallback:
     def __init__(self):
-        self.templates={key:cv2.imread(str(BASE/'templates/statistics'/f'{key}-gray.png'),0) for key in ['kills','assists','participation']}
-        self.digits={key:cv2.imread(str(BASE/'templates/statistics'/f'digit-{key}.png'),0) for key in ['0','6','8']}
+        self.templates={key:read_image(str(BASE/'templates/statistics'/f'{key}-gray.png'),0) for key in ['kills','assists','participation']}
+        self.digits={key:read_image(str(BASE/'templates/statistics'/f'digit-{key}.png'),0) for key in ['0','6','8']}
     def decode_numeric_alias(self,text,view):
         self.last_match_score=0.
         zero_aliases=['D','O','〇','日','口']

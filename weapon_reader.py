@@ -11,6 +11,7 @@ import unicodedata
 import urllib.request
 
 import cv2
+from image_io import read_image
 import numpy as np
 
 BASE=Path(__file__).resolve().parent
@@ -148,7 +149,7 @@ def recognize_text_views(views,catalog=None):
 def native_hud(path, row, cache, profile, ffmpeg):
     path.parent.mkdir(parents=True,exist_ok=True)
     if path.exists():
-        image=cv2.imread(str(path))
+        image=read_image(str(path))
         if image is not None: return image
         raise ValueError(f'原生 HUD 图片损坏: {path}')
     source=Path(cache['source']['path'])
@@ -171,7 +172,7 @@ def native_hud(path, row, cache, profile, ffmpeg):
                           capture_output=True,encoding='utf-8',errors='replace',
                           creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess,'CREATE_NO_WINDOW') else 0)
     if result.returncode: raise RuntimeError(result.stderr)
-    image=cv2.imread(str(path))
+    image=read_image(str(path))
     if image is None: raise ValueError(f'无法读取原生 HUD: {path}')
     return image
 

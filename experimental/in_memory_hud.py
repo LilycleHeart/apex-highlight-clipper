@@ -14,6 +14,7 @@ import threading
 import time
 
 import cv2
+from image_io import read_image
 import numpy as np
 
 from apex_clipper import (BASE, crop, counter_offset, icon_signature, inactive_view,
@@ -104,8 +105,8 @@ class HUDFeatures:
     """Use production ROI, marker, icon and view-state functions unchanged."""
     def __init__(self, profile, *, marker=None, downed_template=None, feature_hook=None):
         self.profile=profile
-        self.marker=marker if marker is not None else cv2.imread(str(BASE/profile['counter_marker']),cv2.IMREAD_GRAYSCALE)
-        self.downed=downed_template if downed_template is not None else cv2.imread(str(BASE/profile['downed_marker']),cv2.IMREAD_GRAYSCALE)
+        self.marker=marker if marker is not None else read_image(str(BASE/profile['counter_marker']),cv2.IMREAD_GRAYSCALE)
+        self.downed=downed_template if downed_template is not None else read_image(str(BASE/profile['downed_marker']),cv2.IMREAD_GRAYSCALE)
         if self.marker is None or self.downed is None:
             raise ValueError('Missing production HUD templates')
         self.feature_hook=feature_hook

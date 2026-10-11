@@ -17,6 +17,7 @@ import subprocess
 import time
 
 import cv2
+from image_io import read_image
 import numpy as np
 from weapon_reader import enrich_weapon_labels
 from outcome_reader import enrich_outcomes,cap_segment_ends,preserve_team_continuation
@@ -230,10 +231,10 @@ def enrich_lifecycle(cache, samples, profile):
     template_path=BASE/profile['downed_marker']
     signature=lifecycle_signature(profile)
     if cache.get('lifecycle_signature')==signature: return cache
-    template=cv2.imread(str(template_path),cv2.IMREAD_GRAYSCALE)
+    template=read_image(str(template_path),cv2.IMREAD_GRAYSCALE)
     if template is None: raise ValueError('缺少倒地 HUD 图标模板')
     for row in cache['rows']:
-        frame=cv2.imread(str(Path(samples)/row['frame']))
+        frame=read_image(str(Path(samples)/row['frame']))
         if frame is None: raise ValueError(f"采样帧不存在: {row['frame']}")
         score=downed_score(frame,profile,template)
         row['downed_score']=float(score)
@@ -298,9 +299,9 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
     rows=[]; tic=time.perf_counter()
     # 名称已由原生 HUD 独立读取；基础 OCR 只保留三个数字区域。
     keys=['ammo','damage','kills']
-    marker=cv2.imread(str(BASE/profile['counter_marker']),cv2.IMREAD_GRAYSCALE)
+    marker=read_image(str(BASE/profile['counter_marker']),cv2.IMREAD_GRAYSCALE)
     if marker is None: raise ValueError('缺少 HUD 图标模板')
-    lifecycle_marker=cv2.imread(str(BASE/profile['downed_marker']),cv2.IMREAD_GRAYSCALE) if optimize and profile.get('downed_marker') else None
+    lifecycle_marker=read_image(str(BASE/profile['downed_marker']),cv2.IMREAD_GRAYSCALE) if optimize and profile.get('downed_marker') else None
     lifecycle_id=lifecycle_signature(profile) if lifecycle_marker is not None else None
     frames=sorted(Path(samples).glob('*.jpg'))
     def frame_time(path): return timestamps[path.name] if timestamps is not None else (int(path.stem)-.5)/fps
@@ -347,7 +348,7 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
         batch=selected[offset:offset+HUD_BATCH_SIZE]
         crops=[]; slots=[]; signatures=[]; offsets=[]; inactive=[]; downed_scores=[]
         for path in batch:
-            frame=cv2.imread(str(path))
+            frame=read_image(str(path))
             delta,score=counter_offset(frame,profile,marker)
             offsets.append((delta,score)); inactive.append(inactive_view(frame))
             if lifecycle_marker is not None: downed_scores.append(downed_score(frame,profile,lifecycle_marker))

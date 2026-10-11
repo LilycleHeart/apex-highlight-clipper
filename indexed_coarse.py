@@ -11,6 +11,7 @@ import time
 import uuid
 
 import cv2
+from image_io import write_image
 
 from apex_clipper import BASE,fingerprint,write_json
 from app_cancel import check_cancel
@@ -64,7 +65,7 @@ def indexed_coarse_scan(source,job,profile,fps):
                 # Unique URLs prevent stale browser image caching; retain only 8.
                 previews=folder/'previews'; previews.mkdir(exist_ok=True)
                 path=previews/f'frame-pts-{row["pts"]}-{uuid.uuid4().hex[:8]}.jpg'; temp=previews/'writing.jpg'
-                if not cv2.imwrite(str(temp),image,[cv2.IMWRITE_JPEG_QUALITY,82]): raise ValueError('无法保存索引预览画面')
+                if not write_image(str(temp),image,[cv2.IMWRITE_JPEG_QUALITY,82]): raise ValueError('无法保存索引预览画面')
                 temp.replace(path); preview_time=now
                 from ui_observer import preview
                 preview(path,row['time'])

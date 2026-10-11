@@ -8,6 +8,7 @@ import re
 import unicodedata
 
 import cv2
+from image_io import read_image
 
 from apex_clipper import BASE,crop,counter_offset,numeric,write_json,fingerprint
 from combat_outcome_reader import inspect_combat_outcomes,parse_result_line,clean_target_name,PARSER_VERSION
@@ -76,10 +77,10 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
         pair=(before[-5:],after[-5:],initial);probes.append(pair)
         for group in pair:
             for row in group: chosen[row['frame']]=row
-    marker=cv2.imread(str(BASE/profile['counter_marker']),0);images=[];positions=[];recognized={}
+    marker=read_image(str(BASE/profile['counter_marker']),0);images=[];positions=[];recognized={}
     boxes={'kills':profile['kills'],'assists':profile.get('assists',ASSIST_BOX),'damage':profile['damage']}
     for row in chosen.values():
-        image=cv2.imread(str(resolver.path(row['frame'])));delta,score=counter_offset(image,profile,marker)
+        image=read_image(str(resolver.path(row['frame'])));delta,score=counter_offset(image,profile,marker)
         result={'frame':row['frame'],'time':row['time'],'marker_score':float(score)};recognized[row['frame']]=result
         if delta is None: continue
         dx,dy=delta
@@ -97,7 +98,7 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
     for frame,result in recognized.items():
         missing=[key for key in FIELDS if result.get(key) is None]
         if not missing:continue
-        image=cv2.imread(str(resolver.path(frame)));delta,_=counter_offset(image,profile,marker)
+        image=read_image(str(resolver.path(frame)));delta,_=counter_offset(image,profile,marker)
         if delta is None:continue
         patches=fallback.patches(image,profile,delta)
         for key in missing:
@@ -130,7 +131,7 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
                 path=Path(initial_samples or samples)/f'{index:06d}.jpg'
                 if not path.is_file():path=Path(extra_samples)/f'candidate-{segment_index+1:03d}'/path.name
                 if not path.is_file():continue
-                image=cv2.imread(str(path));delta,_=counter_offset(image,profile,marker)
+                image=read_image(str(path));delta,_=counter_offset(image,profile,marker)
                 if delta is None and not inactive_view(image):hidden_count+=1
                 if hidden_count>=2:break
         from apex_clipper import stable_counter
@@ -192,7 +193,7 @@ def last_team_settlement(cache,samples,segments):
     engine=new_engine();observations=[]
     for row in selected:
         from app_cancel import check_cancel
-        check_cancel();image=cv2.imread(str(Path(samples)/row['frame']));h,w=image.shape[:2]
+        check_cancel();image=read_image(str(Path(samples)/row['frame']));h,w=image.shape[:2]
         region=image[round(h*.463):round(h*.724),round(w*.1367):round(w*.3711)]
         detected,_=engine(cv2.resize(region,None,fx=2,fy=2),use_cls=False)
         values=parse_settlement(detected)

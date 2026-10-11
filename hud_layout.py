@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 
 import cv2
+from image_io import read_image
 import numpy as np
 
 BASE = Path(__file__).resolve().parent
@@ -63,7 +64,7 @@ def template_for(profile, template):
 def detect_images(images, width, height, base=None):
     from apex_clipper import counter_offset
     original = base or json.loads((BASE/'profile-ultrawide.json').read_text('utf-8'))
-    marker=cv2.imread(str(BASE/original['counter_marker']),cv2.IMREAD_GRAYSCALE)
+    marker=read_image(str(BASE/original['counter_marker']),cv2.IMREAD_GRAYSCALE)
     candidates=[make_profile(width,height,base=original),make_profile(width,height,.75,base=original)]
     if width/height<1.55:candidates.append(make_profile(width,height,.75,.75,base=original))
     evidence=[]

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import cv2
+from image_io import read_image
 import numpy as np
 
 from apex_clipper import write_json
@@ -78,7 +79,7 @@ def inspect_early_round_ends(coarse,samples,checkpoint):
             watching=True
         if not watching or ended or checked>=32: continue
         # 加载画面不一定满足观战底栏条件；先用严格的两侧黑边作廉价候选。
-        image=cv2.imread(str(samples/row['frame']))
+        image=read_image(str(samples/row['frame']))
         if image is None: raise ValueError('缺少粗查结束画面')
         loading=loading_geometry(image)
         if not inactive and not loading: continue
@@ -130,7 +131,7 @@ def inspect_early_round_ends(coarse,samples,checkpoint):
                 check_cancel(); at=(index-.5)/2
                 if index in saved: entry=saved[index]
                 else:
-                    image=cv2.imread(str(folder/f'{index:06d}.jpg'))
+                    image=read_image(str(folder/f'{index:06d}.jpg'))
                     if image is None: raise ValueError('缺少观战入口补查画面')
                     if not inactive_view(image): entry={'index':index,'kind':None,'text':''}
                     else:

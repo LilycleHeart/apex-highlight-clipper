@@ -7,6 +7,7 @@ import re
 import unicodedata
 
 import cv2
+from image_io import read_image
 import numpy as np
 
 from apex_clipper import BASE,fingerprint,probe,write_json,inactive_view,downed_score
@@ -85,7 +86,7 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None):
             # 同交战可能包含本人倒地后的队友观战；不能把观战对象当成本人。
             from outcome_reader import friend_view
             if friend_view(image,True):continue
-            if shield is None:shield=cv2.imread(str(BASE/profile['downed_marker']),0)
+            if shield is None:shield=read_image(str(BASE/profile['downed_marker']),0)
             if downed_score(image,profile,shield)<profile['downed_marker_threshold']:continue
         row={'time':second};crops=[];slots=[]
         regions=[]

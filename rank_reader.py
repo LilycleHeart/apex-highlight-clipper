@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import cv2
+from image_io import read_image
 import numpy as np
 
 BASE = Path(__file__).resolve().parent
@@ -16,7 +17,7 @@ class RankReader:
     def __init__(self):
         self.templates = []
         for key in NAMES:
-            image = cv2.imread(str(BASE/'assets/ranks'/f'{key}.png'), cv2.IMREAD_UNCHANGED) if (BASE/'assets/ranks'/f'{key}.png').exists() else None
+            image = read_image(str(BASE/'assets/ranks'/f'{key}.png'), cv2.IMREAD_UNCHANGED) if (BASE/'assets/ranks'/f'{key}.png').exists() else None
             if image is None: continue
             h,w=image.shape[:2]
             # 只比对徽章中心的段位图形，避开外环、分级文字和动态背景。
@@ -100,7 +101,7 @@ def recognize_segments(cache,samples,segments,checkpoint):
         evidence=[]
         for row in chosen:
             if row['frame'] not in observations:
-                image=cv2.imread(str(Path(samples)/row['frame']))
+                image=read_image(str(Path(samples)/row['frame']))
                 observations[row['frame']]=reader.inspect(image,cache.get('profile')) if image is not None else None
             rank=observations[row['frame']]
             if rank: evidence.append({**rank,'time':row['time'],'frame':row['frame']})

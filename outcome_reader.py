@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import unicodedata
 import cv2
+from image_io import read_image
 import numpy as np
 from weapon_reader import new_engine,MODEL_SHA
 
@@ -34,7 +35,7 @@ def enrich_outcomes(cache,samples,checkpoint=None):
         r['round_ended']=False
         r['friend_spectate']=False
         if r.get('inactive_view'):
-            image=cv2.imread(str(Path(samples)/r['frame']))
+            image=read_image(str(Path(samples)/r['frame']))
             if image is None: raise ValueError('缺少观战检查采样')
             r['friend_spectate']=friend_view(image,True)
         if r.get('inactive_view') and (i==0 or not rows[i-1].get('inactive_view')):
@@ -59,7 +60,7 @@ def enrich_outcomes(cache,samples,checkpoint=None):
         if checkpoint:
             from app_cancel import check_cancel
             check_cancel()
-        r=rows[index]; image=cv2.imread(str(Path(samples)/r['frame']))
+        r=rows[index]; image=read_image(str(Path(samples)/r['frame']))
         if image is None: raise ValueError('缺少结尾检查采样')
         h,w=image.shape[:2]; region=image[round(h*.18):round(h*.67),round(w*.20):round(w*.80)]
         result,_=engine(region,use_cls=False)

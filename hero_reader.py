@@ -2,6 +2,7 @@
 from pathlib import Path
 import json
 import cv2
+from image_io import read_image
 import numpy as np
 
 BASE=Path(__file__).resolve().parent
@@ -18,7 +19,7 @@ class HeroReader:
   data=json.loads((BASE/'assets/legends/sources.json').read_text('utf-8'))
   for hero in data['legends']:
    for kind,asset in hero.get('abilities',{}).items():
-    image=cv2.imread(str(BASE/'assets/legends'/asset['file']),cv2.IMREAD_UNCHANGED)
+    image=read_image(str(BASE/'assets/legends'/asset['file']),cv2.IMREAD_UNCHANGED)
     if image is None:continue
     mask=image[:,:,3] if image.shape[2]==4 else cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
     ys,xs=np.where(mask>127)

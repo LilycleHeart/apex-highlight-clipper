@@ -1,6 +1,7 @@
 from pathlib import Path
 import argparse
 import cv2
+from image_io import write_image
 from PIL import Image, ImageDraw
 
 def main():
@@ -21,7 +22,7 @@ def main():
         cap.set(cv2.CAP_PROP_POS_MSEC, t*1000)
         ok, frame = cap.read()
         if not ok: break
-        cv2.imwrite(str(out/f'{t:08.2f}.jpg'), frame)
+        write_image(str(out/f'{t:08.2f}.jpg'), frame)
         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         img.thumbnail((640, 270))
         tile = Image.new('RGB', (640, 296), '#141820'); tile.paste(img)

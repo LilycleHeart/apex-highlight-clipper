@@ -19,7 +19,7 @@ OUT = ROOT / 'publish'
 PYTHON_URL = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip'
 PRODUCT_MODULES = '''adaptive_evidence apex_clipper app_cancel app_options app_task app_ui_info app_worker
     build_weapon_catalog clip_quality_filter combat_outcome_reader combat_statistics continuous_sampler
-    damage_bisection early_round_end engine_pool evidence_completion gpu_load gpu_ocr_backend hero_reader hud_layout hud_enrichment indexed_coarse
+    damage_bisection early_round_end engine_pool evidence_completion gpu_load gpu_ocr_backend hero_reader hud_layout hud_enrichment image_io indexed_coarse
     inspect_video ocr_cache outcome_reader planning_evidence rank_reader rename_exports repair_cached_statistics
     resume_io resume_media sample_locations sample_pipeline setup_weapon_model smart_scan sparse_pipeline
     stat_counter_fallback ui_observer verify_export weapon_reader'''.split()
@@ -77,7 +77,7 @@ def validate_worker(target):
     from apex_clipper import tool
     ffmpeg=Path(tool('ffmpeg'));probe=Path(tool('ffprobe'))
     if ffmpeg.parent!=probe.parent: raise RuntimeError('验证需要同目录FFmpeg与FFprobe')
-    folder=target/'validation'/('build-smoke-'+uuid.uuid4().hex)
+    folder=target/'validation'/('build-smoke-中文路径-'+uuid.uuid4().hex)
     folder.mkdir(parents=True)
     source=folder/'Replay 2026-10-10 09-00-00.mp4'
     subprocess.run([str(ffmpeg),'-hide_banner','-loglevel','error','-f','lavfi','-i',

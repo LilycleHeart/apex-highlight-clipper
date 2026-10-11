@@ -7,6 +7,7 @@ import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
 import cv2
+from image_io import read_image
 import numpy as np
 from apex_clipper import BASE,write_json,fingerprint,probe,inactive_view
 from weapon_reader import new_engine,MODEL_SHA
@@ -121,7 +122,7 @@ class PrefixGate:
     def __init__(self,profile):
         self.profile=profile; self.templates=[]
         for entry in profile.get('prefix_templates',[]):
-            image=cv2.imread(str(BASE/entry['gray']),cv2.IMREAD_GRAYSCALE)
+            image=read_image(str(BASE/entry['gray']),cv2.IMREAD_GRAYSCALE)
             if image is None: raise ValueError('缺少本人结果提示模板')
             self.templates.append((entry,image))
 
@@ -288,7 +289,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
     def observe(index,path):
         nonlocal engine,checked_new,ocr_new
         if index in observations: return observations[index]
-        check_cancel(); image=cv2.imread(str(path))
+        check_cancel(); image=read_image(str(path))
         if image is None: raise ValueError('结果提示画面缺失或损坏')
         own=not hud_rows[index].get('inactive_view') if index in hud_rows else not inactive_view(image)
         if index in hud_rows and hud_rows[index].get('friend_spectate'): own=False
