@@ -20,7 +20,7 @@
 
 ## 下载即用
 
-当前正式版本为 **v1.0.2**，可在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载安装包或便携包。
+当前正式版本为 **v1.0.3**，可在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载安装包或便携包。
 
 1. 运行 EXE 安装包，或将便携 ZIP 完整解压到可写目录。
 2. 安装版从开始菜单启动；便携版双击 **Start.cmd**。包内已附 CPU / DirectML Python 运行环境和 OCR 模型，无需另装 Python 或 Node.js。
@@ -109,3 +109,10 @@ AHC 36px 标题栏、慢速斜向手柄图案、三页导航和圆体排版。�
 ## 资源与许可
 
 第三方字体、模型、游戏图形和角色素材各自遵守原许可，详见 [第三方资源](docs/third-party.md)。本项目是非官方社区工具，与 EA / Respawn 无隶属关系。
+
+## 日志与反馈
+
+打开“剪辑设置 → 诊断与反馈”，点击“打开日志目录”即可找到本机实际日志，无需手动搜缓存。“导出诊断包”会保存一个 ZIP；点击“提交问题”后，将 ZIP 拖入 GitHub 反馈描述框，并补充问题现象、发生时间和复现步骤。
+
+v1.0.3 起持续保存程序、界面、任务和更新错误；日志位于软件用户数据目录的 `logs/`，单文件约 1 MB，保留最近 7 天、总量约 20 MB。重启不会丢失近期日志。ZIP 包含最近日志、运行环境、剪辑参数、任务状态和近期错误摘要，隐藏常见本机路径，不包含录像、封面、完整任务文件或 HUD 账号识别结果。旧版只有部分异常产生零散 `error.log`，不能恢复过去未保存的界面日志；升级后重新复现问题再导出。
+

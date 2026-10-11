@@ -104,3 +104,5 @@ electron-ui/.playwright*/
 !/electron-ui/tests/v5-ui-validation.cjs
 !/electron-ui/tests/v5-theme-validation.cjs
 !/electron-ui/tests/update-installer.test.cjs
+
+!/electron-ui/tests/diagnostics.test.cjs

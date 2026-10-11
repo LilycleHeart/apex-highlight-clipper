@@ -1,6 +1,11 @@
 import {contextBridge,ipcRenderer,webUtils} from 'electron';
 import type {DesktopAPI,WorkerEvent,SystemTheme,UpdateInfo} from '../src/shared';
 const api:DesktopAPI={
+ diagnosticsInfo:()=>ipcRenderer.invoke('diagnostics-info'),
+ openDiagnostics:()=>ipcRenderer.invoke('open-diagnostics'),
+ exportDiagnostics:()=>ipcRenderer.invoke('export-diagnostics'),
+ openFeedback:()=>ipcRenderer.invoke('open-feedback'),
+ reportDiagnostic:value=>ipcRenderer.invoke('renderer-diagnostic',value),
  installUpdate:()=>ipcRenderer.invoke('install-update'),
  windowState:()=>ipcRenderer.invoke('window-state'),
  windowCommand:value=>ipcRenderer.invoke('window-command',value),

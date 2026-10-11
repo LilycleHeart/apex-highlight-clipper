@@ -1,6 +1,7 @@
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App';
+import {initializeRendererDiagnostics} from './rendererDiagnostics';
 import './style.css';
 import './blanca.css';
 import './clipDetails.css';
@@ -19,4 +20,5 @@ import './interaction-motion.css';
 import './viewport-fixes.css';
 import './theme-reveal.css';
 import './window-controls.css';
+initializeRendererDiagnostics();
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);

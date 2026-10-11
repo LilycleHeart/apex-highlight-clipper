@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
+import os from 'node:os';
+import {Diagnostics} from './diagnostics';
 import {JsonLines,safeOptions,videoExtensions} from './protocol';
 import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,SystemTheme,UpdateInfo} from '../src/shared';
 import {normalizePlayerAudio,defaultPlayerAudio,type PlayerAudioPreferences} from '../src/audioPreferences';
@@ -20,8 +22,12 @@ protocol.registerSchemesAsPrivileged([{scheme:'apex-media',privileges:{standard:
 app.commandLine.appendSwitch('disk-cache-size',String(64*1024*1024));
 if(process.env.APEX_UI_TEST_HOME)app.setPath('userData',process.env.APEX_UI_TEST_HOME);
 else {const legacy=path.join(app.getPath('appData'),'Apex交战剪辑');if(existsSync(path.join(legacy,'preferences.json')))app.setPath('userData',legacy);}
+const diagnostics=new Diagnostics(path.join(app.getPath('userData'),'logs'),{home:os.homedir(),data:app.getPath('userData')});
+process.on('uncaughtExceptionMonitor',error=>diagnostics.fatal(error));
+diagnostics.log('info','startup','程序启动',{version:app.getVersion(),packaged:app.isPackaged,platform:process.platform,arch:process.arch,versions:process.versions});
 function locateProject(){if(process.env.APEX_PROJECT_ROOT)return path.resolve(process.env.APEX_PROJECT_ROOT);for(const base of [__dirname,app.getAppPath(),path.dirname(app.getPath('exe'))]){let dir=base;for(let i=0;i<8;i++){if(existsSync(path.join(dir,'app_worker.py')))return dir;const next=path.dirname(dir);if(next===dir)break;dir=next;}}throw new Error('未找到剪辑内核。请将程序保留在项目目录内，或设置 APEX_PROJECT_ROOT。');}
 const project=locateProject();
+diagnostics.alias(project,'<app>');
 const dataRoot=path.resolve(process.env.APEX_DATA_ROOT||app.getPath('userData'));
 const validationRoot=path.join(dataRoot,'validation');
 const legacyValidationRoot=path.join(project,'validation');
@@ -43,7 +49,7 @@ let workerExit:Promise<void>=Promise.resolve();let resolveWorkerExit:(()=>void)|
 let playerAudio:PlayerAudioPreferences={...defaultPlayerAudio};
 let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:false};let options:Options={...defaults};let output=path.join(project,'output');
 let updateInfo:UpdateInfo={status:'idle',currentVersion:app.getVersion(),autoCheck:true};let updateTimer:ReturnType<typeof setTimeout>|null=null;
-function publishUpdate(info:UpdateInfo){updateInfo=info;if(info.status!=='checking')void save().catch(()=>{});if(win&&!win.isDestroyed())win.webContents.send('update-status',info);}
+function publishUpdate(info:UpdateInfo){diagnostics.log(info.status==='error'?'error':'info','update',info.status,{currentVersion:info.currentVersion,latestVersion:info.latestVersion,message:info.message});updateInfo=info;if(info.status!=='checking')void save().catch(error=>diagnostics.log('error','preferences',String(error)));if(win&&!win.isDestroyed())win.webContents.send('update-status',info);}
 const updater=new UpdateChecker(app.getVersion(),(url,init)=>net.fetch(url,init),()=>updateInfo,publishUpdate);
 function scheduleUpdate(){if(updateTimer)clearTimeout(updateTimer);updateTimer=setTimeout(()=>{updateTimer=null;if(shouldAutoCheck(updateInfo))void updater.check().catch(()=>{});},3000);updateTimer.unref();}
 const taskSampleRoots=new Set<string>();
@@ -60,10 +66,11 @@ async function pruneRequests(){
   if(stat?.isFile()&&Date.now()-stat.mtimeMs>7*86400000)await fs.unlink(file).catch(()=>{});
  }
 }
-function send(e:WorkerEvent){if(win&&!win.isDestroyed())win.webContents.send('worker-event',e);}
+let loggedStage='',loggedProgress=-1;
+function send(e:WorkerEvent){if(e.source)diagnostics.alias(e.source,'<video>');const progress=Math.floor((e.progress||0)/10);if(['run','file','stage','done','stopped','fatal','error','exit','log','stderr','close-request','hud-info-start','hud-info-file','hud-info-error','hud-info-done'].includes(e.type)||(e.type==='progress'&&(e.stage!==loggedStage||progress!==loggedProgress))){loggedStage=e.stage||loggedStage;loggedProgress=progress;diagnostics.log(['fatal','error','stderr','hud-info-error'].includes(e.type)?'error':'info','worker',e.message||e.type,{type:e.type,stage:e.stage,progress:e.progress,index:e.index,total:e.total,failures:e.failures,clips:e.clips});}if(win&&!win.isDestroyed())win.webContents.send('worker-event',e);}
 function theme():SystemTheme{let accent='#526b4a';let reduceMotion=false;try{const color=systemPreferences.getAccentColor();if(/^[\da-f]{8}$/i.test(color))accent='#'+color.slice(0,6);}catch{}try{reduceMotion=systemPreferences.getAnimationSettings().prefersReducedMotion;}catch{}return{accent,dark:nativeTheme.shouldUseDarkColors,reduceMotion};}
 let saveChain=Promise.resolve();
-async function flushSaves(){let pending:Promise<void>;do{pending=saveChain;await pending.catch(()=>{});}while(pending!==saveChain);}
+async function flushSaves(){let pending:Promise<void>;do{pending=saveChain;await pending.catch(()=>{});}while(pending!==saveChain);await diagnostics.flush();}
 let maintenance:ChildProcess|null=null;let maintenanceExit:Promise<void>=Promise.resolve();let maintenanceTimer:ReturnType<typeof setTimeout>|null=null;
 function scheduleMaintenance(force=false){
  if(process.env.APEX_UI_TEST_HOME||process.env.APEX_UI_VALIDATE||maintenanceTimer||maintenance)return;
@@ -88,7 +95,7 @@ async function imageUrl(p:string){
  let key=imageKeys.get(real);if(!key){key=randomUUID();images.set(key,real);imageKeys.set(real,key);if(images.size>6000){const oldest=images.keys().next().value!;imageKeys.delete(images.get(oldest)!);images.delete(oldest);}}
  return `apex-media://image/${key}`;
 }
-async function taskInfo(p:string):Promise<TaskInfo>{const task=await readJson(p);validateTaskStorage(task,p);const historic={...task,items:task.items.filter((item:any)=>[item.analysis_cache,item.record?.analysis_cache].some(raw=>typeof raw==='string'&&path.isAbsolute(raw)&&![validationRoot,legacyValidationRoot].some(root=>within(path.resolve(raw),root))&&![...taskSampleRoots].some(root=>within(root,path.resolve(raw)))))};for(const root of await recordedSampleDirectories(historic))taskSampleRoots.add(root);allowedTasks.add(normalized(p));allowedPaths.add(normalized(task.directory));for(const item of task.items)allowedPaths.add(normalized(item.source));return{path:p,directory:task.directory,output:task.request.output||path.dirname(task.directory),finished:task.finished,legacyRule:!task.result_filter_version,samplingWarning:task.request.fps<1?'旧任务低采样率可能漏掉交战；新建任务建议至少1帧/秒':'',options:safeOptions({...defaults,...task.request},true),items:task.items.map((i:any)=>({id:normalized(i.source),path:i.source,name:path.basename(i.source),status:i.status==='error'?'error':i.status==='complete'?'complete':i.status==='running'?'stopped':'pending',missing:!existsSync(i.source),error:i.record?.error}))};}
+async function taskInfo(p:string):Promise<TaskInfo>{const task=await readJson(p);validateTaskStorage(task,p);const historic={...task,items:task.items.filter((item:any)=>[item.analysis_cache,item.record?.analysis_cache].some(raw=>typeof raw==='string'&&path.isAbsolute(raw)&&![validationRoot,legacyValidationRoot].some(root=>within(path.resolve(raw),root))&&![...taskSampleRoots].some(root=>within(root,path.resolve(raw)))))};for(const root of await recordedSampleDirectories(historic))taskSampleRoots.add(root);allowedTasks.add(normalized(p));allowedPaths.add(normalized(task.directory));for(const item of task.items){allowedPaths.add(normalized(item.source));diagnostics.alias(item.source,'<video>');diagnostics.alias(path.basename(item.source),'<video>');}return{path:p,directory:task.directory,output:task.request.output||path.dirname(task.directory),finished:task.finished,legacyRule:!task.result_filter_version,samplingWarning:task.request.fps<1?'旧任务低采样率可能漏掉交战；新建任务建议至少1帧/秒':'',options:safeOptions({...defaults,...task.request},true),items:task.items.map((i:any)=>({id:normalized(i.source),path:i.source,name:path.basename(i.source),status:i.status==='error'?'error':i.status==='complete'?'complete':i.status==='running'?'stopped':'pending',missing:!existsSync(i.source),error:i.record?.error}))};}
 async function lastTask(){for(const root of [validationRoot,legacyValidationRoot])try{const record=await readJson(path.join(root,'app-last-task.json'));if(!libraryStore.isIgnored(record.task))return await taskInfo(record.task);}catch{}return libraryStore.recoverLastTask([output,path.join(dataRoot,'tasks')],path.join(validationRoot,'app-last-task.json'),taskInfo);}
 const repairedCounters=new Set<string>();let counterRepair:Promise<void>|null=null;let repairWorker:ChildProcess|null=null;
 async function repairLegacyCounters(task:any){
@@ -129,10 +136,10 @@ let libraryRead:Promise<{results:Result[];tasks:number;errors:number}>|null=null
 let unreadableTasks:string[]=[];
 async function collectLibrary(){
  if(libraryRead)return libraryRead;
- libraryRead=(async()=>{const last=await lastTask();if(last)await libraryStore.remember(last.path);const paths=await libraryStore.discover([output,path.join(dataRoot,'tasks')]);let tasks=0;const results:Result[]=[],failed:string[]=[];for(const p of paths){try{await taskInfo(p);results.push(...await collectResults(p,false));tasks++;}catch{failed.push(p);}}unreadableTasks=failed;return{results:mergeLibrary(results),tasks,errors:failed.length};})().finally(()=>{libraryRead=null;});return libraryRead;
+ libraryRead=(async()=>{const last=await lastTask();if(last)await libraryStore.remember(last.path);const paths=await libraryStore.discover([output,path.join(dataRoot,'tasks')]);let tasks=0;const results:Result[]=[],failed:string[]=[];for(const p of paths){try{await taskInfo(p);results.push(...await collectResults(p,false));tasks++;}catch(error){failed.push(p);diagnostics.log('warning','library','任务记录无法读取',{error:String(error)});}}unreadableTasks=failed;diagnostics.log('info','library','片段库载入',{tasks,unreadable:failed.length,clips:results.reduce((n,r)=>n+r.clips.length,0)});return{results:mergeLibrary(results),tasks,errors:failed.length};})().finally(()=>{libraryRead=null;});return libraryRead;
 }
 async function metadata(file:FileItem){await new Promise<void>(resolve=>{const executable=pythonFor();const proc=spawn(executable,['app_ui_info.py',file.path],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});let result='';proc.stdout.setEncoding('utf8');proc.stdout.on('data',t=>result+=t);const timeout=setTimeout(()=>proc.kill(),20000);proc.on('error',()=>{clearTimeout(timeout);resolve();});proc.on('close',()=>{clearTimeout(timeout);try{const info=JSON.parse(result.trim());send({type:'metadata',source:file.path,...info} as WorkerEvent);}catch{send({type:'metadata',source:file.path,message:'无法读取录像信息'});}resolve();});});}
-async function imports(paths:unknown):Promise<{files:FileItem[];rejected:string[]}>{if(!Array.isArray(paths)||paths.length>500)throw new Error('录像清单无效');const files:FileItem[]=[];const rejected:string[]=[];const seen=new Set<string>();for(const raw of paths){if(typeof raw!=='string'||!raw)continue;const p=path.resolve(raw);if(seen.has(normalized(p)))continue;seen.add(normalized(p));try{const stat=await fs.stat(p);if(!stat.isFile()||!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error();allowedPaths.add(normalized(p));files.push({id:normalized(p),path:p,name:path.basename(p),bytes:stat.size,status:'pending'});}catch{rejected.push(path.basename(p));}}let next=0;const pump=async()=>{while(next<files.length)await metadata(files[next++]);};void pump();void pump();return{files,rejected};}
+async function imports(paths:unknown):Promise<{files:FileItem[];rejected:string[]}>{if(!Array.isArray(paths)||paths.length>500)throw new Error('录像清单无效');const files:FileItem[]=[];const rejected:string[]=[];const seen=new Set<string>();for(const raw of paths){if(typeof raw!=='string'||!raw)continue;const p=path.resolve(raw);diagnostics.alias(p,'<video>');diagnostics.alias(path.basename(p),'<video>');if(seen.has(normalized(p)))continue;seen.add(normalized(p));try{const stat=await fs.stat(p);if(!stat.isFile()||!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error();allowedPaths.add(normalized(p));files.push({id:normalized(p),path:p,name:path.basename(p),bytes:stat.size,status:'pending'});}catch{rejected.push(path.basename(p));}}let next=0;const pump=async()=>{while(next<files.length)await metadata(files[next++]);};void pump();void pump();return{files,rejected};}
 async function start(payload:any,resume=false){if(updating)throw new Error('正在更新软件，请稍后再开始任务');if(worker&&terminal)await workerExit;if(worker||launching||hudWorker||hudLaunching)throw new Error('已有识别任务正在处理');launching=true;stopRequested=false;terminal=false;
  try{if(maintenanceTimer){clearTimeout(maintenanceTimer);maintenanceTimer=null;}if(maintenance){maintenance.kill();await maintenanceExit;}let effective=safeOptions(payload.options,resume);let request:any;
   if(resume){if(!allowedTasks.has(normalized(payload.task)))throw new Error('请先选择续接任务');const info=await taskInfo(payload.task);request={resume_task:info.path,backend:effective.backend,gpu_load:effective.gpu_load,pipeline:effective.pipeline};currentTask=info.path;}
@@ -159,7 +166,7 @@ async function enrichHud(files:unknown,fields:unknown){
  if(worker||launching||hudWorker||hudLaunching)throw new Error('请先等待当前识别结束');
  if(!Array.isArray(files)||!files.length||files.length>500||files.some(file=>typeof file!=='string'||!allowedClips.has(normalized(file))))throw new Error('请选择片段库中已导出的片段');
  if(!Array.isArray(fields)||!fields.length||fields.some(field=>!['account','weapons','teammates','hero','rank'].includes(field)))throw new Error('请选择要补充的HUD信息');
- hudLaunching=true;let requestPath='';
+ for(const file of files){diagnostics.alias(file,'<clip>');diagnostics.alias(path.basename(file),'<clip>');}hudLaunching=true;let requestPath='';
  try{
  if(maintenance){maintenance.kill();await maintenanceExit;}
  const grouped=new Map<string,string[]>();for(const file of files){const dir=clipDirectories.get(normalized(file));if(!dir)throw new Error('片段没有对应任务记录');grouped.set(dir,[...(grouped.get(dir)||[]),file]);}
@@ -173,21 +180,42 @@ async function enrichHud(files:unknown,fields:unknown){
   proc.once('error',reject);proc.once('close',code=>{lines.end();hudWorker=null;if(code===0&&done)resolve(done);else reject(new Error(stderr||'HUD补充识别中断，可重新继续'));});
  });}finally{hudWorker=null;hudLaunching=false;if(requestPath)await fs.unlink(requestPath).catch(()=>{});scheduleMaintenance(true);}
 }
-function handle(name:string,fn:(...args:any[])=>any){ipcMain.handle(name,(event,...args)=>{trusted(event);return fn(...args);});}
+function handle(name:string,fn:(...args:any[])=>any){ipcMain.handle(name,async(event,...args)=>{trusted(event);try{return await fn(...args);}catch(error){diagnostics.log('error','ipc:'+name,error instanceof Error?error.message:String(error),{stack:error instanceof Error?error.stack:undefined});throw error;}});}
+
+async function diagnosticTask(){
+ const attachments:{name:string;text:string}[]=[];let file=currentTask;
+ if(!file)for(const root of [validationRoot,legacyValidationRoot]){try{file=(await readJson(path.join(root,'app-last-task.json'))).task;if(file)break;}catch{}}
+ let summary:unknown=null;const traceFiles=[path.join(updateRoot,'install.log')],traceRoots=[validationRoot,legacyValidationRoot,updateRoot];
+ try{if(file){const task=await readJson(file);validateTaskStorage(task,file);traceRoots.push(task.directory);traceFiles.push(path.join(task.directory,'error.log'));summary={version:task.version,finished:task.finished,options:safeOptions({...defaults,...task.request},true),items:task.items.slice(0,500).map((item:any,index:number)=>{diagnostics.alias(item.source,`<video-${index+1}>`);diagnostics.alias(path.basename(item.source),`<video-${index+1}>`);const cache=item.analysis_cache||item.record?.analysis_cache;if(['error','running'].includes(item.status)&&typeof cache==='string'&&path.isAbsolute(cache))traceFiles.push(path.join(cache,'error.log'));return{index:index+1,status:item.status,stage:item.stage,error:item.record?.error,outputs:item.record?.outputs?.length||0};})};}}
+ catch(error){summary={unavailable:true,error:String(error)};}
+ const roots=(await Promise.all(traceRoots.map(root=>fs.realpath(root).catch(()=>'')))).filter(Boolean);
+ for(const candidate of [...new Set(traceFiles)].slice(0,11)){try{const stat=await fs.lstat(candidate);if(!stat.isFile()||stat.isSymbolicLink()||Date.now()-stat.mtimeMs>7*86400000)continue;const real=await fs.realpath(candidate);if(!roots.some(root=>within(real,root)))continue;const reader=await fs.open(candidate,'r');try{const size=Math.min(128*1024,stat.size),buffer=Buffer.alloc(size);const{bytesRead}=await reader.read(buffer,0,size,Math.max(0,stat.size-size));attachments.push({name:`errors/error-${attachments.length+1}.log`,text:buffer.subarray(0,bytesRead).toString('utf8')});}finally{await reader.close();}}catch{}}
+ return{summary,attachments};
+}
 app.whenReady().then(async()=>{
  await thumbnails.prune(true).catch(()=>{});
  await pruneUpdates(updateRoot).catch(()=>{});
  await pruneRequests().catch(()=>{});
  await libraryStore.load();
  try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));playerAudio=normalizePlayerAudio(saved.playerAudio);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
+ diagnostics.alias(dataRoot,'<data>');diagnostics.alias(output,'<output>');diagnostics.log('info','startup','设置已载入',{options,theme:preferences.mode});
  protocol.handle('apex-media',async request=>{try{const url=new URL(request.url);if(url.hostname==='video')return videos.respond(request);const p=images.get(url.pathname.slice(1));if(url.hostname!=='image'||!p)return new Response('Not found',{status:404});const data=await fs.readFile(p);return new Response(data,{headers:{'Content-Type':p.endsWith('.png')?'image/png':'image/jpeg','Cache-Control':'private, max-age=60'}});}catch{return new Response('Unavailable',{status:404});}});
  const initial=theme();const dark=preferences.mode==='dark'||(preferences.mode==='system'&&initial.dark);
  win=new BrowserWindow({width:1120,height:820,minWidth:760,minHeight:620,show:false,title:'Apex Highlight Clipper',backgroundColor:'#211e1a',titleBarStyle:'hidden',titleBarOverlay:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ win.webContents.on('console-message',details=>{if(details.level==='error')diagnostics.log('error','renderer-console',details.message,{line:details.lineNumber,source:details.sourceId});});
+ win.webContents.on('render-process-gone',(_event,details)=>diagnostics.log('error','renderer-process','界面进程退出',details));
+ win.on('unresponsive',()=>diagnostics.log('warning','renderer','界面无响应'));
  const windowState=()=>({maximized:win.isMaximized()});
  const publishWindowState=()=>{if(!win.isDestroyed())win.webContents.send('window-state',windowState());};
  win.on('maximize',publishWindowState);win.on('unmaximize',publishWindowState);win.on('restore',publishWindowState);
  handle('window-state',windowState);
  handle('window-command',(command:unknown)=>{if(command==='minimize')win.minimize();else if(command==='maximize'){if(win.isMaximized())win.unmaximize();else win.maximize();}else if(command==='close')win.close();else throw new Error('窗口操作无效');});
+ handle('diagnostics-info',()=>diagnostics.info());
+ let rendererReports=0,rendererReportWindow=Date.now();
+ handle('renderer-diagnostic',(report:unknown)=>{if(!report||typeof report!=='object')return;const{type,message,stack}=report as Record<string,unknown>;if(!['error','action'].includes(String(type))||typeof message!=='string')return;if(Date.now()-rendererReportWindow>60000){rendererReports=0;rendererReportWindow=Date.now();}if(++rendererReports>120)return;diagnostics.log(type==='error'?'error':'info','renderer-'+type,message.slice(0,2000),{stack:typeof stack==='string'?stack.slice(0,8000):undefined});});
+ handle('open-diagnostics',async()=>{const info=await diagnostics.info();if(!info.available)throw new Error(info.message||'日志尚未生成');const error=await shell.openPath(diagnostics.directory);if(error)throw new Error(error);});
+ handle('export-diagnostics',async()=>{const choice=await dialog.showSaveDialog(win,{title:'导出诊断包',defaultPath:path.join(app.getPath('desktop'),`AHC-diagnostics-v${app.getVersion()}-${new Date().toISOString().slice(0,10)}.zip`),filters:[{name:'诊断包 ZIP',extensions:['zip']}]});if(choice.canceled||!choice.filePath)return null;const file=choice.filePath.endsWith('.zip')?choice.filePath:choice.filePath+'.zip',task=await diagnosticTask();let gpu:unknown;try{const info=await app.getGPUInfo('basic') as Record<string,unknown>;if(Array.isArray(info.gpuDevice))gpu=info.gpuDevice.map(device=>Object.fromEntries(['vendorId','deviceId','driverVendor','driverVersion','deviceString','active'].filter(key=>device[key]!==undefined).map(key=>[key,device[key]])));}catch{}await diagnostics.export(file,{createdAt:new Date().toISOString(),version:app.getVersion(),system:{platform:process.platform,release:os.release(),arch:process.arch,cpu:os.cpus()[0]?.model,logicalCores:os.cpus().length,memoryMiB:Math.round(os.totalmem()/1024**2),versions:process.versions,gpu},options,theme:preferences,task:task.summary,library:{unreadable:unreadableTasks.length},update:{status:updateInfo.status,latestVersion:updateInfo.latestVersion,installState:updateInfo.installState,installMessage:updateInfo.installMessage},runtime:{cpu:existsSync(pythonFor('cpu')),dml:existsSync(pythonFor('dml'))}},task.attachments);return file;});
+ handle('open-feedback',()=>shell.openExternal('https://github.com/LilycleHeart/apex-highlight-clipper/issues/new?title='+encodeURIComponent(`[v${app.getVersion()}] 问题反馈`)+'&body='+encodeURIComponent(`软件版本：v${app.getVersion()}\n\n问题现象：\n\n复现步骤：\n1. \n\n请将“剪辑设置 → 诊断与反馈 → 导出诊断包”生成的 ZIP 拖入此处上传。`)));
  let shown=false;handle('ui-ready',()=>{if(!shown&&!win.isDestroyed()){shown=true;win.show();scheduleUpdate();scheduleMaintenance();}});setTimeout(()=>{if(!shown&&!win.isDestroyed())win.show();},10000).unref();
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());
  win.on('minimize',()=>send({type:'visibility',hidden:true}));win.on('hide',()=>send({type:'visibility',hidden:true}));win.on('restore',()=>send({type:'visibility',hidden:false}));win.on('show',()=>send({type:'visibility',hidden:false}));
@@ -201,7 +229,7 @@ app.whenReady().then(async()=>{
   if(worker||launching||hudWorker||hudLaunching||repairWorker)throw new Error('请先暂停或完成当前任务后更新');
   if(!app.isPackaged)throw new Error('开发预览请使用发布页安装正式程序');
   updating=true;let scheduled=false;
-  const report=(installState:UpdateInfo['installState'],installProgress?:number,installMessage?:string)=>{updateInfo={...updateInfo,installState,installProgress,installMessage};if(!win.isDestroyed())win.webContents.send('update-status',updateInfo);};
+  const report=(installState:NonNullable<UpdateInfo['installState']>,installProgress?:number,installMessage?:string)=>{if(installState!==updateInfo.installState||installProgress!==undefined&&installProgress%10===0)diagnostics.log(installState==='error'?'error':'info','update-install',installState,{progress:installProgress,message:installMessage});updateInfo={...updateInfo,installState,installProgress,installMessage};if(!win.isDestroyed())win.webContents.send('update-status',updateInfo);};
   try{
    const latest=await updater.check();if(latest.status!=='available')throw new Error(latest.message||'当前没有可安装的新版本');if(!latest.installer)throw new Error('该版本没有可校验的安装包，请使用发布页安装');
    const target=path.dirname(path.dirname(app.getPath('exe'))),helper=path.join(target,'scripts/update-install.ps1');
@@ -239,6 +267,6 @@ app.whenReady().then(async()=>{
   handle('validation-import',imports);handle('validation-task',taskInfo);handle('validation-project',()=>project);
  }
  const renderer=path.join(__dirname,'../../dist/index.html');if(process.env.APEX_UI_DEV_URL)await win.loadURL(process.env.APEX_UI_DEV_URL);else await win.loadFile(renderer);
-}).catch(error=>{dialog.showErrorBox('Apex 启动失败',String(error));app.quit();});
+}).catch(error=>{diagnostics.fatal(error instanceof Error?error:new Error(String(error)));dialog.showErrorBox('Apex 启动失败',String(error));app.quit();});
 app.on('window-all-closed',()=>app.quit());
 app.on('before-quit',()=>{updateAbort?.abort();if(maintenanceTimer)clearTimeout(maintenanceTimer);maintenance?.kill();hudWorker?.kill();thumbnails.dispose();});

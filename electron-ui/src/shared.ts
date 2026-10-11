@@ -26,6 +26,11 @@ export interface LibrarySnapshot {results:Result[];tasks:number;errors:number}
 export type WindowCommand='minimize'|'maximize'|'close';
 export interface WindowState {maximized:boolean}
 export interface DesktopAPI {
+ diagnosticsInfo():Promise<{directory:string;available:boolean;message?:string}>;
+ openDiagnostics():Promise<void>;
+ exportDiagnostics():Promise<string|null>;
+ openFeedback():Promise<void>;
+ reportDiagnostic(value:{type:'error'|'action';message:string;stack?:string}):Promise<void>;
  windowState():Promise<WindowState>;
  windowCommand(value:WindowCommand):Promise<void>;
  onWindowState(cb:(state:WindowState)=>void):()=>void;
