@@ -16,7 +16,7 @@ class ClipDeletionTests(unittest.TestCase):
 
     def test_intentional_deletion_is_intact_but_unexpected_missing_output_is_not(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);clip=root/'clip.mp4';clip.write_bytes(b'clip')
+            root=Path(folder).resolve();clip=root/'clip.mp4';clip.write_bytes(b'clip')
             record={'status':'complete','outputs':[str(clip)],'output_identities':[fingerprint(clip)]}
             ledger=root/'clip-deletions.json';ledger.write_text(json.dumps({'version':1,'files':[str(clip)]}),encoding='utf-8')
             with patch.dict(os.environ,{'APEX_CLIP_DELETIONS':str(ledger)}):
@@ -26,7 +26,7 @@ class ClipDeletionTests(unittest.TestCase):
 
     def test_resume_does_not_regenerate_deleted_clip_or_shift_remaining_manifest(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);source=root/'source.mp4';source.write_bytes(b'source');output=root/'videos';output.mkdir();meta=root/'metadata';meta.mkdir()
+            root=Path(folder).resolve();source=root/'source.mp4';source.write_bytes(b'source');output=root/'videos';output.mkdir();meta=root/'metadata';meta.mkdir()
             targets=[output/'1.mp4',output/'2.mp4'];targets[1].write_bytes(b'clip')
             segments=[{'start':0,'end':1},{'start':4,'end':5}];keys=[0,2,4,6];aligned=align_segments(segments,keys,8);summaries=[{},{}]
             clips=[{'output':str(file),'segment':segment,'summary':{},'metadata':{'format':{'duration':'2'}},'output_identity':fingerprint(file) if file.exists() else {}} for file,segment in zip(targets,aligned)]
