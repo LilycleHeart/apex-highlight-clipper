@@ -10,7 +10,7 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build --base=./ && tsc -p tsconfig.electron.json",
     "start": "electron .",
     "package": "npm run build && node scripts/package.cjs",
-    "test": "node --test tests/protocol.test.cjs tests/clip-stats.test.cjs tests/updates.test.cjs tests/update-installer.test.cjs tests/media.test.cjs tests/blanca-state.test.cjs tests/surface-geometry.test.cjs tests/library.test.cjs tests/diagnostics.test.cjs tests/media-geometry.test.cjs tests/library-sort.test.cjs tests/clip-deletions.test.cjs",
+    "test": "node --test tests/protocol.test.cjs tests/clip-stats.test.cjs tests/updates.test.cjs tests/update-installer.test.cjs tests/media.test.cjs tests/blanca-state.test.cjs tests/surface-geometry.test.cjs tests/library.test.cjs tests/diagnostics.test.cjs tests/media-geometry.test.cjs tests/library-sort.test.cjs tests/clip-deletions.test.cjs tests/processing-times.test.cjs",
     "validate": "npm run lint && vite build --base=./ && npm test",
     "lint": "tsc -p tsconfig.json --noEmit false --rootDir src --outDir output/lint-renderer && tsc -p tsconfig.electron.json && node scripts/lint.cjs"
   },

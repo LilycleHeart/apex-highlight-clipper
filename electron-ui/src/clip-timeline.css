@@ -16,3 +16,5 @@
 
 .clip-day-heading{view-transition-class:library-date}
 :root[data-library-reveal]::view-transition-group(.library-date){background:transparent;border-radius:0}
+.queue-processing-time{font-variant-numeric:tabular-nums;white-space:nowrap}
+.queue-item.running .queue-processing-time{color:var(--card-accent);font-weight:600}

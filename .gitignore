@@ -107,3 +107,4 @@ electron-ui/.playwright*/
 !/electron-ui/tests/clip-deletions.test.cjs
 
 !/electron-ui/tests/diagnostics.test.cjs
+!/electron-ui/tests/processing-times.test.cjs

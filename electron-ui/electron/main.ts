@@ -14,6 +14,7 @@ import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo} from './upd
 import {downloadInstaller,pruneUpdates} from './updateInstaller';
 import {VideoRegistry} from './media';
 import {ClipDeletions} from './clipDeletions';
+import {ProcessingTimes,historicProcessingSeconds} from './processingTimes';
 import {LibraryStore,mergeLibrary} from './library';
 import {validateTaskStorage,videoDirectory,isRecordedVideo,recordedSampleDirectories} from './taskStorage';
 import {mediaGeometry} from '../src/mediaGeometry';
@@ -47,6 +48,7 @@ function pythonFor(backend:'cpu'|'dml'='cpu'){const bundled=path.join(project,'r
 const development=!app.isPackaged||process.argv.includes('--preview');
 let win:BrowserWindow;let worker:ChildProcess|null=null;let launching=false;let stopFile='';let stopRequested=false;let closing=false;let terminal=false;let currentTask='';let currentSource='';let eventChain=Promise.resolve();
 let updating=false;let updateAbort:AbortController|null=null;
+const processingTimes=new ProcessingTimes(path.join(dataRoot,'processing-times.json'),(source,seconds)=>send({type:'file-timing',source,processing_seconds:seconds}),error=>diagnostics.log('error','processing-time',String(error)));
 const updateRoot=path.join(app.getPath('userData'),'updates');
 let workerExit:Promise<void>=Promise.resolve();let resolveWorkerExit:(()=>void)|null=null;let closeSaveFinished=false;
 let playerAudio:PlayerAudioPreferences={...defaultPlayerAudio};
@@ -108,7 +110,7 @@ async function imageUrl(p:string){
  let key=imageKeys.get(real);if(!key){key=randomUUID();images.set(key,real);imageKeys.set(real,key);if(images.size>6000){const oldest=images.keys().next().value!;imageKeys.delete(images.get(oldest)!);images.delete(oldest);}}
  return `apex-media://image/${key}`;
 }
-async function taskInfo(p:string):Promise<TaskInfo>{const task=await readJson(p);validateTaskStorage(task,p);const historic={...task,items:task.items.filter((item:any)=>[item.analysis_cache,item.record?.analysis_cache].some(raw=>typeof raw==='string'&&path.isAbsolute(raw)&&![validationRoot,legacyValidationRoot].some(root=>within(path.resolve(raw),root))&&![...taskSampleRoots].some(root=>within(root,path.resolve(raw)))))};for(const root of await recordedSampleDirectories(historic))taskSampleRoots.add(root);allowedTasks.add(normalized(p));allowedPaths.add(normalized(task.directory));for(const item of task.items){allowedPaths.add(normalized(item.source));originalVideos.add(normalized(item.source));diagnostics.alias(item.source,'<video>');diagnostics.alias(path.basename(item.source),'<video>');}return{path:p,directory:task.directory,output:task.request.output||path.dirname(task.directory),finished:task.finished,legacyRule:!task.result_filter_version,samplingWarning:task.request.fps<1?'旧任务低采样率可能漏掉交战；新建任务建议至少1帧/秒':'',options:safeOptions({...defaults,...task.request},true),items:task.items.map((i:any)=>({id:normalized(i.source),path:i.source,name:path.basename(i.source),status:i.status==='error'?'error':i.status==='complete'?'complete':i.status==='running'?'stopped':'pending',missing:!existsSync(i.source),error:i.record?.error}))};}
+async function taskInfo(p:string):Promise<TaskInfo>{const task=await readJson(p);validateTaskStorage(task,p);const historic={...task,items:task.items.filter((item:any)=>[item.analysis_cache,item.record?.analysis_cache].some(raw=>typeof raw==='string'&&path.isAbsolute(raw)&&![validationRoot,legacyValidationRoot].some(root=>within(path.resolve(raw),root))&&![...taskSampleRoots].some(root=>within(root,path.resolve(raw)))))};for(const root of await recordedSampleDirectories(historic))taskSampleRoots.add(root);allowedTasks.add(normalized(p));allowedPaths.add(normalized(task.directory));for(const item of task.items){allowedPaths.add(normalized(item.source));originalVideos.add(normalized(item.source));diagnostics.alias(item.source,'<video>');diagnostics.alias(path.basename(item.source),'<video>');}return{path:p,directory:task.directory,output:task.request.output||path.dirname(task.directory),finished:task.finished,legacyRule:!task.result_filter_version,samplingWarning:task.request.fps<1?'旧任务低采样率可能漏掉交战；新建任务建议至少1帧/秒':'',options:safeOptions({...defaults,...task.request},true),items:task.items.map((i:any)=>({id:normalized(i.source),path:i.source,name:path.basename(i.source),status:i.status==='error'?'error':i.status==='complete'?'complete':i.status==='running'?'stopped':'pending',missing:!existsSync(i.source),processingSeconds:processingTimes.seconds(p,i.source,historicProcessingSeconds(i)),error:i.record?.error}))};}
 async function lastTask(){for(const root of [validationRoot,legacyValidationRoot])try{const record=await readJson(path.join(root,'app-last-task.json'));if(!libraryStore.isIgnored(record.task))return await taskInfo(record.task);}catch{}return libraryStore.recoverLastTask([output,path.join(dataRoot,'tasks')],path.join(validationRoot,'app-last-task.json'),taskInfo);}
 const repairedCounters=new Set<string>();let counterRepair:Promise<void>|null=null;let repairWorker:ChildProcess|null=null;
 async function repairLegacyCounters(task:any){
@@ -162,14 +164,18 @@ async function start(payload:any,resume=false){if(clipDeletions.busy)throw new E
   const proc=spawn(python,['app_worker.py',requestPath],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1',PYTHONIOENCODING:'utf-8'}});worker=proc;workerExit=new Promise<void>(resolve=>{resolveWorkerExit=resolve;});
   let stderr='';const lines=new JsonLines(e=>{eventChain=eventChain.then(async()=>{const event=e as unknown as WorkerEvent;
    if(event.type==='run'&&event.task_path){currentTask=event.task_path;await taskInfo(currentTask);await libraryStore.remember(currentTask);}
-   if(event.type==='file')currentSource=event.source||'';
+   if(event.type==='file'){
+    currentSource=event.source||'';const task=await readJson(currentTask);const item=task.items.find((i:any)=>normalized(i.source)===normalized(currentSource));
+    processingTimes.begin(currentTask,currentSource,historicProcessingSeconds(item)??0);event.processing_seconds=processingTimes.seconds(currentTask,currentSource);
+   }
    if(event.type==='preview'&&event.sample_path){try{event.imageUrl=await imageUrl(event.sample_path);}catch{try{const task=await readJson(currentTask);validateTaskStorage(task,currentTask);for(const root of await recordedSampleDirectories(task,path.dirname(event.sample_path)))taskSampleRoots.add(root);event.imageUrl=await imageUrl(event.sample_path);}catch{return;}}delete event.sample_path;}
-   if(event.type==='result'&&currentTask){const list=await collectResults(currentTask);event.result=list.find(r=>normalized(r.source)===normalized(event.source||currentSource));}
+   if(event.type==='result'&&currentTask){event.processing_seconds=processingTimes.finish(!!event.skipped);const list=await collectResults(currentTask);event.result=list.find(r=>normalized(r.source)===normalized(event.source||currentSource));}
+   if(['error','done','stopped','fatal'].includes(event.type))processingTimes.finish();
    if(['done','stopped','fatal'].includes(event.type))terminal=true;send(event);
   }).catch(error=>send({type:'log',message:'界面状态读取：'+error.message}));},line=>send({type:'log',message:'后台非状态输出：'+line}));
   proc.stdout!.on('data',chunk=>lines.push(chunk));proc.stderr!.setEncoding('utf8');proc.stderr!.on('data',chunk=>{stderr=(stderr+chunk).slice(-20000);send({type:'stderr',message:chunk});});
-  proc.on('error',error=>{send({type:'fatal',message:'无法启动处理进程：'+error.message});});
-  proc.on('close',code=>{lines.end();eventChain=eventChain.then(async()=>{await fs.unlink(requestPath).catch(()=>{});if(stopFile)await fs.unlink(stopFile).catch(()=>{});worker=null;launching=false;stopFile='';resolveWorkerExit?.();resolveWorkerExit=null;if(!terminal){send({type:code===75?'stopped':'fatal',message:code===75?'断点已保存':`处理进程退出（${code}）。${stderr.slice(-1200)}`});}send({type:'exit'});scheduleMaintenance(true);if(closing){closing=false;win.close();}});});
+  proc.on('error',error=>{processingTimes.finish();send({type:'fatal',message:'无法启动处理进程：'+error.message});});
+  proc.on('close',code=>{lines.end();eventChain=eventChain.then(async()=>{processingTimes.finish();await processingTimes.flush();await fs.unlink(requestPath).catch(()=>{});if(stopFile)await fs.unlink(stopFile).catch(()=>{});worker=null;launching=false;stopFile='';resolveWorkerExit?.();resolveWorkerExit=null;if(!terminal){send({type:code===75?'stopped':'fatal',message:code===75?'断点已保存':`处理进程退出（${code}）。${stderr.slice(-1200)}`});}send({type:'exit'});scheduleMaintenance(true);if(closing){closing=false;win.close();}});});
  }catch(error){launching=false;throw error;}finally{if(worker)launching=false;}
 }
 async function stop(){stopRequested=true;if(stopFile)await fs.writeFile(stopFile,'stop','utf8');}
@@ -211,6 +217,7 @@ app.whenReady().then(async()=>{
  await pruneRequests().catch(()=>{});
  await libraryStore.load();
  await clipDeletions.load();
+ await processingTimes.load();
  try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));playerAudio=normalizePlayerAudio(saved.playerAudio);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
  diagnostics.alias(dataRoot,'<data>');diagnostics.alias(output,'<output>');diagnostics.log('info','startup','设置已载入',{options,theme:preferences.mode});
  protocol.handle('apex-media',async request=>{try{const url=new URL(request.url);if(url.hostname==='video')return videos.respond(request);const p=images.get(url.pathname.slice(1));if(url.hostname!=='image'||!p)return new Response('Not found',{status:404});const data=await fs.readFile(p);return new Response(data,{headers:{'Content-Type':p.endsWith('.png')?'image/png':'image/jpeg','Cache-Control':'private, max-age=60'}});}catch{return new Response('Unavailable',{status:404});}});

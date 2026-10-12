@@ -4,15 +4,16 @@ export const initial:Model={state:'empty',stage:'idle',files:[],results:[],progr
 export function eventReducer(model:Model,e:WorkerEvent):Model{
  const log=e.message?[...model.logs,e.message].slice(-180):model.logs;let m={...model,logs:log};
  if(e.type==='run')return{...m,state:'running',task:e.task_path||model.task,directory:e.directory||'',message:e.message||'',legacyRule:!!e.legacy_rule,rule:e.result_filter_rule||'',samplingWarning:e.sampling_warning||''};
- if(e.type==='file')return{...m,state:'running',index:e.index||0,total:e.total||0,progress:0,preview:null,cached:false,files:m.files.map(f=>f.path===e.source?{...f,status:'running'}:f)};
+ if(e.type==='file-timing'&&typeof e.processing_seconds==='number'&&Number.isFinite(e.processing_seconds)&&e.processing_seconds>=0)return{...m,files:m.files.map(f=>f.path.toLowerCase()===e.source?.toLowerCase()?{...f,processingSeconds:e.processing_seconds}:f)};
+ if(e.type==='file')return{...m,state:'running',index:e.index||0,total:e.total||0,progress:0,preview:null,cached:false,files:m.files.map(f=>f.path===e.source?{...f,status:'running',processingSeconds:e.processing_seconds??f.processingSeconds??0}:f)};
  if(e.type==='stage')return{...m,stage:e.stage&&Object.hasOwn(stageCopy,e.stage)?e.stage:'unknown',message:e.message||'',progress:e.progress??null,cached:!!e.cached};
  if(e.type==='progress'||e.type==='log')return{...m,progress:Math.max(m.progress??0,e.progress??m.progress??0)};
  if(e.type==='preview'&&e.imageUrl){const active=m.files.find(f=>f.status==='running');if(active&&e.source&&active.path.toLowerCase()!==e.source.toLowerCase())return m;return{...m,preview:{url:e.imageUrl,time:e.timestamp_seconds||0,stage:e.stage&&Object.hasOwn(stageCopy,e.stage)?e.stage:m.stage}};}
- if(e.type==='result'&&e.result)return{...m,results:[...m.results.filter(r=>r.source!==e.result!.source),e.result],files:m.files.map(f=>f.path===e.source?{...f,status:'complete'}:f),progress:100};
+ if(e.type==='result'&&e.result)return{...m,results:[...m.results.filter(r=>r.source!==e.result!.source),e.result],files:m.files.map(f=>f.path===e.source?{...f,status:'complete',processingSeconds:e.processing_seconds??f.processingSeconds}:f),progress:100};
  if(e.type==='error')return{...m,stage:'error',message:e.message||'处理失败',files:m.files.map(f=>f.path===e.source||f.status==='running'?{...f,status:'error',error:e.message}:f),results:e.source?[...m.results.filter(r=>r.source!==e.source),{source:e.source,status:'error',outputs:[],directory:'',clips:[],error:e.message}]:m.results};
  if(e.type==='done'){const allFailed=!!e.failures&&m.total>0&&e.failures>=m.total;return{...m,state:allFailed?'failed':e.failures?'completed_with_errors':'completed',stage:e.failures?'error':'completed',progress:100,filterSummary:e.result_filter_version==='own-center-result-v4'?e.result_filter_summary||null:null,message:allFailed?'这批录像处理失败，请查看具体原因':e.failures?`${e.failures} 个录像处理失败，其余结果已保存`:'本批交战片段已整理完成'};}
  if(e.type==='stopped')return{...m,state:'stopped',stage:'stopped',message:e.message||'进度已保存',files:m.files.map(f=>f.status==='running'?{...f,status:'stopped'}:f)};
- if(e.type==='fatal')return{...m,state:'failed',stage:'error',message:e.message||'任务启动失败'};
+ if(e.type==='fatal')return{...m,state:'failed',stage:'error',message:e.message||'任务启动失败',files:m.files.map(f=>f.status==='running'?{...f,status:'error'}:f)};
  if(e.type==='close-request')return{...m,state:'stopping',stage:'stopping',message:e.message||''};
  if(e.type==='metadata')return{...model,files:model.files.map(f=>f.path===e.source?{...f,...e} as unknown as FileItem:f)};
  return m;
@@ -20,6 +21,7 @@ export function eventReducer(model:Model,e:WorkerEvent):Model{
 export const isBusy=(state:State)=>['starting','running','stopping'].includes(state);
 export function appendUnique(existing:FileItem[],incoming:FileItem[]){const keys=new Set(existing.map(f=>f.path.toLowerCase()));return incoming.filter(f=>{const p=f.path.toLowerCase();if(keys.has(p))return false;keys.add(p);return true;});}
 export function clock(value:number){const s=Math.max(0,Math.floor(value));return `${Math.floor(s/60)}分${String(s%60).padStart(2,'0')}秒`;}
+export function processingClock(value:number|undefined){if(value===undefined||!Number.isFinite(value))return'—';const seconds=Math.max(0,Math.floor(value));return seconds<3600?clock(seconds):`${Math.floor(seconds/3600)}小时${Math.floor(seconds/60)%60}分${String(seconds%60).padStart(2,'0')}秒`;}
 export function resultSummary(model:Model){if(model.legacyRule)return null;if(model.filterSummary)return model.filterSummary;const values=model.results.filter(r=>r.result_filter_version==='own-center-result-v4'&&r.result_filter_summary).map(r=>r.result_filter_summary!);if(!values.length)return null;return values.reduce((a,v)=>({kept:a.kept+v.kept,rejected:a.rejected+v.rejected,review:a.review+v.review,rule:v.rule}),{kept:0,rejected:0,review:0,rule:''});}
 export const stageCopy:Record<Stage,[string,string]>={
  hud_info:['交战导出已完成','正在补充所选账号、武器、队友、英雄或段位信息。'],
