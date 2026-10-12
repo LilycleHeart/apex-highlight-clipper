@@ -1,0 +1,16 @@
+.clip-day-heading{box-sizing:border-box;height:40px;display:flex;align-items:center;gap:12px;color:var(--page-on);font-size:16px;min-width:0}
+.clip-day-heading::before{content:"";width:9px;height:9px;flex:none;border-radius:50%;background:currentColor;box-shadow:0 0 0 5px color-mix(in srgb,var(--page-on) 12%,transparent)}
+.clip-day-heading::after{content:"";height:1px;flex:1;background:color-mix(in srgb,var(--page-on) 25%,transparent)}
+.clip-day-heading time{white-space:nowrap;font-weight:600}
+.clip-day-heading>span{font-size:11px;padding:4px 9px;border-radius:12px;background:color-mix(in srgb,var(--page-on) 12%,transparent);white-space:nowrap}
+.clip-file-actions>.clip-delete{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--card-muted);margin-left:auto}
+.clip-file-actions>.clip-delete:hover:not(:disabled){color:var(--error);background:var(--errorContainer)}
+.clip-file-actions>.clip-delete:disabled{opacity:.45}
+.clip-delete[data-deleting=true]>svg{animation:clip-delete-spin 1s linear infinite}
+@keyframes clip-delete-spin{to{transform:rotate(360deg)}}
+:root[data-reduced=true] .clip-delete[data-deleting=true]>svg{animation:none}
+
+.clip-expanded .clip-cover .player-controls .player-delete:hover:not(:disabled){color:var(--error)}
+
+.clip-day-heading{view-transition-class:library-date}
+:root[data-library-reveal]::view-transition-group(.library-date){background:transparent;border-radius:0}

@@ -17,6 +17,7 @@
     "src/mediaGeometry.ts",
     "src/eventTimeline.ts",
     "src/librarySort.ts",
+    "src/clipTimeline.ts",
     "src/blancaState.ts"
   ]
 }

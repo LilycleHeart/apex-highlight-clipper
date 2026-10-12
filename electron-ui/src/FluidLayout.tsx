@@ -8,10 +8,10 @@ class BeforeLayout extends Component<{revision:string;capture:()=>Map<string,Box
 export default function FluidLayout({children,revision,reduced,className,style,positioned=false,allKeys=[]}:{children:ReactNode;revision:string;reduced:boolean;className:string;style?:CSSProperties;positioned?:boolean;allKeys?:string[]}){
  const root=useRef<HTMLDivElement>(null),snapshots=useRef(new Map<string,Box>()),previousMode=useRef(className),seen=useRef(new Set<string>());
  const collection=allKeys.join('\0'),snapshotRevision=revision+':'+collection;
- const capture=useCallback(()=>{const map=new Map<string,Box>();for(const el of root.current?.querySelectorAll<HTMLElement>(':scope > .clip-card')||[]){const r=el.getBoundingClientRect();map.set(el.dataset.identity!,{x:r.x,y:r.y,width:r.width,height:r.height});}return map;},[]);
+ const capture=useCallback(()=>{const map=new Map<string,Box>();for(const el of root.current?.querySelectorAll<HTMLElement>(':scope > .clip-card,:scope > .clip-day-heading')||[]){const r=el.getBoundingClientRect();map.set(el.dataset.identity!,{x:r.x,y:r.y,width:r.width,height:r.height});}return map;},[]);
  useLayoutEffect(()=>{
   const node=root.current;if(!node)return;
-  const elements=[...node.querySelectorAll<HTMLElement>(':scope > .clip-card')],modeChanged=previousMode.current!==className;previousMode.current=className;
+  const elements=[...node.querySelectorAll<HTMLElement>(':scope > .clip-card,:scope > .clip-day-heading')],modeChanged=previousMode.current!==className;previousMode.current=className;
   const viewport=node.closest('.library-scroll')?.getBoundingClientRect()||{top:0,bottom:innerHeight},animations:Animation[]=[];
   let live=true,entryIndex=0;
   if(!positioned){const columns=getComputedStyle(node).gridTemplateColumns.split(' ').length,chosen=elements.findIndex(el=>el.dataset.selected==='true'),group=chosen>=0?Math.floor(chosen/columns)*columns:-1;elements.forEach((el,i)=>el.style.order=String(i===chosen?group*2:i>=group&&i<group+columns&&group>=0?i*2+1:i*2));}

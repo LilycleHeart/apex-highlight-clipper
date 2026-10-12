@@ -2,11 +2,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {Readable} from 'node:stream';
+import type {ReadStream} from 'node:fs';
 import {videoExtensions} from './protocol';
 
 /** 仅为已授权的结果片段发放不含文件路径的本地播放地址。 */
 export class VideoRegistry{
- private files=new Map<string,string>();private keys=new Map<string,string>();
+ private files=new Map<string,string>();private keys=new Map<string,string>();private streams=new Map<string,Set<ReadStream>>();
  constructor(private allowed:(file:string)=>boolean){}
  async url(input:unknown){
   if(typeof input!=='string'||!this.allowed(path.resolve(input)))throw new Error('请先选择本任务已导出的片段');
@@ -28,11 +29,16 @@ export class VideoRegistry{
    const headers:Record<string,string>={'Content-Type':type,'Accept-Ranges':'bytes','Content-Length':String(range.end-range.start+1),'Cache-Control':'no-store'};
    if(range.partial)headers['Content-Range']=`bytes ${range.start}-${range.end}/${stat.size}`;
    if(request.method==='HEAD')return new Response(null,{status:range.partial?206:200,headers});
-   const handle=await fs.open(real,'r');const stream=handle.createReadStream({start:range.start,end:range.end,highWaterMark:64*1024,autoClose:true});
-   const abort=()=>stream.destroy();request.signal.addEventListener('abort',abort,{once:true});stream.once('close',()=>request.signal.removeEventListener('abort',abort));
+   const handle=await fs.open(real,'r');if(this.files.get(key)!==real){await handle.close();return new Response('Not found',{status:404});}const stream=handle.createReadStream({start:range.start,end:range.end,highWaterMark:64*1024,autoClose:true});
+   const streams=this.streams.get(real)||new Set<ReadStream>();streams.add(stream);this.streams.set(real,streams);
+   const abort=()=>stream.destroy();request.signal.addEventListener('abort',abort,{once:true});stream.once('close',()=>{request.signal.removeEventListener('abort',abort);streams.delete(stream);if(!streams.size)this.streams.delete(real);});
    if(request.signal.aborted)stream.destroy();
    return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>,{status:range.partial?206:200,headers});
   }catch{return new Response('Video unavailable',{status:404});}
+ }
+ async release(file:string){
+  const real=await fs.realpath(file).catch(()=>path.resolve(file)),id=this.keys.get(real);if(id){this.files.delete(id);this.keys.delete(real);}
+  await Promise.all([...this.streams.get(real)||[]].map(stream=>new Promise<void>(resolve=>{if(stream.closed){resolve();return;}stream.once('close',resolve);stream.destroy();})));
  }
 }
 

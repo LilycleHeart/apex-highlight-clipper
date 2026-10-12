@@ -267,22 +267,23 @@ def _run_task(request_path):
                             export_input=export_segments if options['filter_enabled'] and any(options[k]>0 for k in ['min_damage','min_kills','min_assists','min_duration']) else segments
                             outputs=stage('export','无损导出独立交战视频（支持续接）',90 if result_filter else 86,95,lambda:export_lossless(source,export_input,video_directory,events,resume=True,statistics=export_statistics,metadata_dir=destination,name_suffix=item.get('export_suffix','')))
                             manifest=load(destination/'export.json')
-                            for clip_index,clip in enumerate(manifest['clips']):
+                            for clip in manifest['clips']:
                                 bound=clip['segment'];left=bound.get('requested_start',bound['start']);right=bound.get('requested_end',bound['end'])
                                 related=[s for s in segments if s['start']<right and s['end']>left]
                                 unique={}
                                 for event in [e for s in related for e in s.get('own_result_filter',{}).get('events',[])]:
                                     if event.get('ownership')=='self' and bound['start']<=event['time']<bound['end']:
                                         unique[(event['kind'],event['time'],event.get('text',''))]=event
-                                evidence=[e for e in export_statistics['segments'][clip_index]['events'] if e['confirmed']];ranks=[s.get('rank') for s in related]
+                                stats=next(s for s in export_statistics['segments'] if abs(s['start']-bound['start'])<.001 and abs(s['end']-bound['end'])<.001)
+                                evidence=[e for e in stats['events'] if e['confirmed']];ranks=[s.get('rank') for s in related]
                                 rank=ranks[0] if ranks and all(ranks) and all((r['tier'],r['division'])==(ranks[0]['tier'],ranks[0]['division']) for r in ranks) else None
                                 round_index=sum(event['time']<=bound['start'] for event in saved.get('outcome_events',[]))
                                 match_key=hashlib.sha256((json.dumps(identity,sort_keys=True)+':'+str(round_index)).encode()).hexdigest()[:16]
                                 clip['recognition']={'scope':'self','rank':rank,'match_key':match_key,'outcome_evidence':evidence,
                                     'assists_minimum':sum(e['kind']=='assist' for e in evidence) or None,
                                     'knockdowns_minimum':sum(e['kind']=='knock' for e in evidence) or None,
-                                    'outcome_counts_complete':not any(export_statistics['segments'][clip_index]['partial'].values()),
-                                    'statistics':export_statistics['segments'][clip_index]}
+                                    'outcome_counts_complete':not any(stats['partial'].values()),
+                                    'statistics':stats}
                             write_json(destination/'export.json',manifest)
                             if options['hud_info_enabled'] and options['hud_info_fields']:
                                 from hud_enrichment import enrich_manifest

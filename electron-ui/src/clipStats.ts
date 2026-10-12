@@ -24,7 +24,8 @@ export function recordingTime(source:string):string|null{
  const name=source.split(/[\\/]/).pop()||source;
  const standard=name.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})[ T_-]+(\d{2})[-_:]?(\d{2})(?:[-_:]?(\d{2}))?/);
  const natural=name.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s*(\d{1,2})点(\d{1,2})分(?:(\d{1,2})秒)?/);
- const match=standard||natural;if(!match)return null;
+ const outplayed=name.match(/(?:Apex Legends|Outplayed)[_-](\d{2})-(\d{2})-(\d{4})[_-](\d{2})-(\d{2})-(\d{2})/i);
+ const match=(outplayed?[outplayed[0],outplayed[3],outplayed[1],outplayed[2],outplayed[4],outplayed[5],outplayed[6]]:null)||standard||natural;if(!match)return null;
  const [year,month,day,hour,minute,second]=match.slice(1).map(v=>v===undefined?undefined:Number(v));
  const date=new Date(Date.UTC(year!,month!-1,day!,hour!,minute!,second??0));
  if(date.getUTCFullYear()!==year||date.getUTCMonth()!==month!-1||date.getUTCDate()!==day||hour!>23||minute!>59||(second??0)>59)return null;

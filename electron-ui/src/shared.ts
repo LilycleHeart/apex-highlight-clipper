@@ -37,6 +37,7 @@ export interface DesktopAPI {
  savePlayerAudio(value:PlayerAudioPreferences):Promise<void>;
  enrichHud(files:string[],fields:HudField[]):Promise<{updated:number;errors:{directory:string;message:string}[]}>;
  library():Promise<LibrarySnapshot>;
+ deleteClip(file:string):Promise<void>;
  ignoreLibraryErrors():Promise<LibrarySnapshot>;
  chooseLibraryRoot():Promise<boolean>;
  ready():Promise<void>;

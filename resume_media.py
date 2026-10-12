@@ -125,6 +125,7 @@ def export_with_resume(source,segments,output,events=None,on_checkpoint=None,sta
     from apex_clipper import probe,fingerprint,write_json,tool,run,align_segments,keyframes,segment_summary,informative_filename
     import csv
     from app_cancel import check_cancel
+    from clip_deletions import is_removed
     source=Path(source).resolve(); output=Path(output).resolve(); output.mkdir(parents=True,exist_ok=True)
     metadata_dir=Path(metadata_dir).resolve() if metadata_dir else output
     metadata_dir.mkdir(parents=True,exist_ok=True)
@@ -153,6 +154,8 @@ def export_with_resume(source,segments,output,events=None,on_checkpoint=None,sta
     for i,(segment,target,summary) in enumerate(zip(aligned,targets,summaries)):
         check_cancel()
         target.relative_to(output)
+        if is_removed(target):
+            print(f'导出续接：保留用户已删除的第 {i+1} 段',flush=True);continue
         previous=next((c for c in state['clips'] if c['output']==str(target)),None)
         if previous and target.is_file() and previous.get('output_identity')==fingerprint(target):
             clips.append(previous); print(f'导出续接：跳过已完成第 {i+1} 段',flush=True); continue
@@ -182,6 +185,7 @@ def export_with_resume(source,segments,output,events=None,on_checkpoint=None,sta
         clips.append(clip); state['clips']=[c for c in state['clips'] if c['output']!=str(target)]+[clip]
         state['commands'].append({'args':args,'log':log}); write_json(checkpoint,state)
         if on_checkpoint: on_checkpoint(state)
+    targets=[Path(clip['output']) for clip in clips]
     manifest={'mode':'segments','video_directory':str(output),'metadata_directory':str(metadata_dir),'source':fingerprint(source),'segments':aligned,'outputs':[str(p) for p in targets],
               'commands':state['commands'],'clips':clips}
     write_json(metadata_dir/'export.json',manifest)

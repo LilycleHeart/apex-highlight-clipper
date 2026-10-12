@@ -1,6 +1,6 @@
 import {memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties} from 'react';
 import type {ClipView} from './ClipLibrary';
-import {ExternalLink,Film,Minimize2,Play} from 'lucide-react';
+import {ExternalLink,Film,Minimize2,Play,Trash2,LoaderCircle} from 'lucide-react';
 import type {Clip} from './shared';
 import {clock} from './state';
 import ClipDetails from './ClipDetails';
@@ -10,7 +10,7 @@ import useThumbnail from './useThumbnail';
 import MotionDetails from './MotionDetails';
 import {applyPlayerAudio} from './playerAudio';
 
-function ClipCard({clip,index,identity,view,playback,selected,disabled,reduced,onSelect,onOpen,onGeometryChange,position,total,layoutRow,layoutColumn}:{clip:Clip;index:number;identity:string;view:ClipView;playback:Map<string,number>;selected:boolean;disabled:boolean;reduced:boolean;onSelect:(id:string|null)=>void;onOpen:(file:string,folder:boolean)=>void;onGeometryChange:()=>void;position?:number;total?:number;layoutRow?:number;layoutColumn?:number}){
+function ClipCard({clip,index,identity,view,playback,selected,disabled,deleting,deleteDisabled,reduced,onSelect,onOpen,onDelete,onGeometryChange,position,total,layoutRow,layoutColumn}:{clip:Clip;index:number;identity:string;view:ClipView;playback:Map<string,number>;selected:boolean;disabled:boolean;deleting:boolean;deleteDisabled:boolean;reduced:boolean;onDelete:(file:string)=>void;onSelect:(id:string|null)=>void;onOpen:(file:string,folder:boolean)=>void;onGeometryChange:()=>void;position?:number;total?:number;layoutRow?:number;layoutColumn?:number}){
  const [detailsOpen,setDetailsOpen]=useState(false);
  const[ratio,setRatio]=useState(displayRatio(clip.media)||16/9);const ratioRef=useRef(ratio);
  const[media,setMedia]=useState<string|null>(null);const[error,setError]=useState('');const[playing,setPlaying]=useState(false);const[needsPlay,setNeedsPlay]=useState(false);
@@ -43,13 +43,13 @@ function ClipCard({clip,index,identity,view,playback,selected,disabled,reduced,o
    {selected&&!media&&!error&&<div className="player-loading" role="status">正在打开视频…</div>}
    {selected&&needsPlay&&!error&&<button className="player-resume" aria-label="开始播放" onClick={()=>void video.current?.play().catch(()=>setError('无法开始播放，请重试或用系统播放器打开'))}><Play size={22}/>开始播放</button>}
    {selected&&error&&<div className="player-error" role="alert"><p>{error}</p><button className="secondary" onClick={()=>onOpen(clip.path,false)}>系统播放器打开<ExternalLink size={14}/></button></div>}
-  </div>{selected&&media&&<PlayerControls clip={clip} video={video} stage={cover} roundTotals={clip.roundTotals} onError={setError} onCollapse={collapse} onDetails={()=>{setDetailsOpen(!detailsOpen);onGeometryChange();}}/>}</div>
+  </div>{selected&&media&&<PlayerControls onDelete={()=>onDelete(clip.path)} deleteDisabled={deleteDisabled} clip={clip} video={video} stage={cover} roundTotals={clip.roundTotals} onError={setError} onCollapse={collapse} onDetails={()=>{setDetailsOpen(!detailsOpen);onGeometryChange();}}/>}</div>
   <div className="clip-info">
    <div className="clip-number">交战 {String(index).padStart(2,'0')}{selected&&<button className="player-collapse" aria-label={`收起第${index}段`} onClick={collapse}><Minimize2 size={14}/>收起播放</button>}</div>
    {selected&&<div className="player-caption"><span>{playing?'正在播放':'已暂停'} · {clock(clip.duration)}</span></div>}
    <h3 title={clip.name}>{displayName}</h3><ClipDetails clip={clip} compact={view!=='detail'&&!selected}/>
    <div className="clip-tail">{view!=='detail'&&!selected&&<MotionDetails className="compact-details" label="详情 →" onGeometryChange={onGeometryChange}><ClipDetails clip={clip}/></MotionDetails>}
-   <div className="clip-file-actions"><button className="text-button" disabled={disabled} onClick={()=>onOpen(clip.path,true)}>查看文件<ExternalLink size={13}/></button></div></div>
+   <div className="clip-file-actions"><button className="text-button" disabled={disabled} onClick={()=>onOpen(clip.path,true)}>查看文件<ExternalLink size={13}/></button><button type="button" className="clip-delete" data-deleting={deleting} disabled={deleteDisabled} aria-label={`删除片段 ${displayName}`} title="移至回收站" onClick={()=>onDelete(clip.path)}>{deleting?<LoaderCircle size={16}/>:<Trash2 size={16}/>}</button></div></div>
   </div>
  </article>;
 }

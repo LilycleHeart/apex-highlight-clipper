@@ -146,9 +146,10 @@ def save_task(path,task):
 
 def outputs_intact(record):
     from apex_clipper import fingerprint
+    from clip_deletions import is_removed
     if not record or record.get('status')!='complete': return False
     outputs=record.get('outputs',[]); identities=record.get('output_identities',[])
     if not outputs:
         return (Path(record['directory'])/'analysis.json').is_file()
     if len(outputs)!=len(identities): return False
-    return all(Path(path).is_file() and fingerprint(path)==identity for path,identity in zip(outputs,identities))
+    return all(is_removed(path) or Path(path).is_file() and fingerprint(path)==identity for path,identity in zip(outputs,identities))

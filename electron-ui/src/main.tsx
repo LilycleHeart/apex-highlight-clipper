@@ -14,6 +14,7 @@ import './choice-fixes.css';
 import './player-hover.css';
 import './home-options.css';
 import './list-motion.css';
+import './clip-timeline.css';
 import './fullscreen-player.css';
 import './form-controls.css';
 import './interaction-motion.css';

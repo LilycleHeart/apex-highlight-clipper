@@ -16,7 +16,7 @@ export function revealLibraryView(scroller:HTMLElement|null,update:()=>void,anim
  const token=generation,root=document.documentElement,previousName=root.style.viewTransitionName,box=scroller.getBoundingClientRect(),names=new Map<string,string>(),named=new Set<HTMLElement>();
  root.style.viewTransitionName='none';root.dataset.libraryReveal='true';
  root.style.setProperty('--library-reveal-clip',`inset(${Math.max(0,box.top)}px ${Math.max(0,innerWidth-box.right)}px ${Math.max(0,innerHeight-box.bottom)}px ${Math.max(0,box.left)}px)`);
- const nameCards=()=>{for(const card of scroller.querySelectorAll<HTMLElement>('.clip-card')){const identity=card.dataset.identity!;let name=names.get(identity);if(!name){name='library-card-'+names.size;names.set(identity,name);}card.style.viewTransitionName=name;named.add(card);}};
+ const nameCards=()=>{for(const card of scroller.querySelectorAll<HTMLElement>('.clip-card,.clip-day-heading')){const identity=card.dataset.identity!;let name=names.get(identity);if(!name){name='library-card-'+names.size;names.set(identity,name);}card.style.viewTransitionName=name;named.add(card);}};
  const restore=()=>{for(const card of named)card.style.removeProperty('view-transition-name');root.style.viewTransitionName=previousName;delete root.dataset.libraryReveal;root.style.removeProperty('--library-reveal-clip');};
  nameCards();
  let transition:ViewTransition;
