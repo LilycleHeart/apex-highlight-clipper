@@ -6,6 +6,8 @@
 .clip-file-actions>.clip-delete{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--card-muted);margin-left:auto}
 .clip-file-actions>.clip-delete:hover:not(:disabled){color:var(--error);background:var(--errorContainer)}
 .clip-file-actions>.clip-delete:disabled{opacity:.45}
+.clip-file-actions>.clip-delete[data-confirming=true],.clip-expanded .clip-cover .player-controls .player-delete[data-confirming=true]{width:auto;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:0 9px;background:var(--errorContainer);color:var(--onErrorContainer);white-space:nowrap}
+.clip-delete[data-confirming=true]>span,.player-delete[data-confirming=true]>span{font-size:11px;font-weight:600}
 .clip-delete[data-deleting=true]>svg{animation:clip-delete-spin 1s linear infinite}
 @keyframes clip-delete-spin{to{transform:rotate(360deg)}}
 :root[data-reduced=true] .clip-delete[data-deleting=true]>svg{animation:none}

@@ -1,6 +1,6 @@
 import {memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties} from 'react';
 import type {ClipView} from './ClipLibrary';
-import {ExternalLink,Film,Minimize2,Play,Trash2,LoaderCircle} from 'lucide-react';
+import {ExternalLink,Film,Minimize2,Play} from 'lucide-react';
 import type {Clip} from './shared';
 import {clock} from './state';
 import ClipDetails from './ClipDetails';
@@ -9,6 +9,7 @@ import {displayRatio} from './mediaGeometry';
 import useThumbnail from './useThumbnail';
 import MotionDetails from './MotionDetails';
 import {applyPlayerAudio} from './playerAudio';
+import ClipDeleteButton from './ClipDeleteButton';
 
 function ClipCard({clip,index,identity,view,playback,selected,disabled,deleting,deleteDisabled,reduced,onSelect,onOpen,onDelete,onGeometryChange,position,total,layoutRow,layoutColumn}:{clip:Clip;index:number;identity:string;view:ClipView;playback:Map<string,number>;selected:boolean;disabled:boolean;deleting:boolean;deleteDisabled:boolean;reduced:boolean;onDelete:(file:string)=>void;onSelect:(id:string|null)=>void;onOpen:(file:string,folder:boolean)=>void;onGeometryChange:()=>void;position?:number;total?:number;layoutRow?:number;layoutColumn?:number}){
  const [detailsOpen,setDetailsOpen]=useState(false);
@@ -49,7 +50,7 @@ function ClipCard({clip,index,identity,view,playback,selected,disabled,deleting,
    {selected&&<div className="player-caption"><span>{playing?'正在播放':'已暂停'} · {clock(clip.duration)}</span></div>}
    <h3 title={clip.name}>{displayName}</h3><ClipDetails clip={clip} compact={view!=='detail'&&!selected}/>
    <div className="clip-tail">{view!=='detail'&&!selected&&<MotionDetails className="compact-details" label="详情 →" onGeometryChange={onGeometryChange}><ClipDetails clip={clip}/></MotionDetails>}
-   <div className="clip-file-actions"><button className="text-button" disabled={disabled} onClick={()=>onOpen(clip.path,true)}>查看文件<ExternalLink size={13}/></button><button type="button" className="clip-delete" data-deleting={deleting} disabled={deleteDisabled} aria-label={`删除片段 ${displayName}`} title="移至回收站" onClick={()=>onDelete(clip.path)}>{deleting?<LoaderCircle size={16}/>:<Trash2 size={16}/>}</button></div></div>
+   <div className="clip-file-actions"><button className="text-button" disabled={disabled} onClick={()=>onOpen(clip.path,true)}>查看文件<ExternalLink size={13}/></button><ClipDeleteButton label={`删除片段 ${displayName}`} resetKey={clip.path+':'+view+':'+selected} deleting={deleting} disabled={deleteDisabled} onDelete={()=>onDelete(clip.path)}/></div></div>
   </div>
  </article>;
 }
