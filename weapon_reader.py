@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
 import unicodedata
 import urllib.request
 
@@ -146,6 +147,62 @@ def recognize_text_views(views,catalog=None):
     text,confidence=max(views,key=lambda item:item[1])
     return {'text':text,'confidence':float(confidence)},None
 
+
+def ctc_label_score(probabilities, tokens):
+    """已知词的 CTC 概率；沿用模型概率，不重新推理或补猜缺失文字。"""
+    sequence=[0]
+    for token in tokens:sequence.extend([token,0])
+    log=np.log(np.maximum(probabilities[:,sequence],1e-12))
+    state=np.full(len(sequence),-np.inf);state[0]=log[0,0];state[1]=log[0,1]
+    skip=np.array([False,False]+[sequence[i]!=0 and sequence[i]!=sequence[i-2] for i in range(2,len(sequence))])
+    for row in log[1:]:
+        one=np.r_[-np.inf,state[:-1]];two=np.r_[-np.inf,-np.inf,state[:-2]]
+        state=np.logaddexp(np.logaddexp(state,one),np.where(skip,two,-np.inf))+row
+    return float(np.exp(np.logaddexp(state[-1],state[-2])))
+
+
+class WeaponTextReader:
+    """枪名使用独立窄行批次和封闭词表；模糊模型字符有明确词表证据才修正。"""
+    def __init__(self,recognizer):
+        self.recognizer=recognizer;self.catalog=load_catalog();self.labels=[]
+        dictionary=recognizer.postprocess_op.dict
+        for weapon in self.catalog['weapons']+self.catalog.get('supplemental_weapons',[]):
+            for alias in set(weapon['aliases']):
+                for text in {alias,alias.upper()}:
+                    if text and all(c in dictionary for c in text):
+                        self.labels.append((weapon['id'],text,[dictionary[c] for c in text]))
+
+    def constrained(self,probabilities,greedy):
+        text,confidence=greedy
+        if resolve_weapon_text(text,confidence,self.catalog) and confidence>=.85:return greedy
+        clean=normalized(text)
+        if not clean:return greedy
+        peaks=probabilities.max(axis=0);scores={}
+        for ident,alias,tokens in self.labels:
+            label=normalized(alias)
+            # 一字灰色枪名允许再查另一字的模型概率；长名称最多一处缺字/错字。
+            if not (clean==label or min(len(clean),len(label))>=2 and SequenceMatcher(None,clean,label).ratio()>=.70 or
+                    len(clean)==1 and not clean.isascii() and len(label)==2 and clean in label):continue
+            if any(peaks[token]<.08 for token in tokens):continue
+            probability=ctc_label_score(probabilities,tokens)
+            if probability>scores.get(ident,(0,''))[0]:scores[ident]=(probability,alias)
+        ranked=sorted(scores.values(),reverse=True)
+        if ranked and ranked[0][0]>=.12 and (len(ranked)==1 or ranked[0][0]>=ranked[1][0]*8):
+            # 这是词表分类的接受门槛；仍需不同画面的确认，不冒充高置信自由文本。
+            return ranked[0][1],.75
+        return greedy
+
+    def __call__(self,images):
+        started=time.perf_counter();result=[];reader=self.recognizer
+        # 长玩家名不能给两字枪名增加整批补白；固定小批宽度也使缓存结果稳定。
+        for offset in range(0,len(images),4):
+            group=images[offset:offset+4]
+            ratio=max(reader.rec_image_shape[2]/reader.rec_image_shape[1],max(im.shape[1]/im.shape[0] for im in group))
+            batch=np.stack([reader.resize_norm_img(im,ratio) for im in group]).astype(np.float32)
+            probabilities=reader.session(batch)[0];greedy=reader.postprocess_op(probabilities)
+            result.extend(self.constrained(p,g) for p,g in zip(probabilities,greedy))
+        return result,time.perf_counter()-started
+
 def native_hud(path, row, cache, profile, ffmpeg):
     path.parent.mkdir(parents=True,exist_ok=True)
     if path.exists():
@@ -178,7 +235,7 @@ def native_hud(path, row, cache, profile, ffmpeg):
 
 def enrich_weapon_labels(cache, samples, profile, ffmpeg,optimize=True,checkpoint=None,segments=None):
     config={k:profile[k] for k in ['weapon_name_boxes','weapon_name_metrics','weapon_native_crop']}
-    signature=hashlib.sha256(json.dumps({'version':3,'model':MODEL_SHA,'profile':config,
+    signature=hashlib.sha256(json.dumps({'version':4,'model':MODEL_SHA,'profile':config,
                                         'catalog':load_catalog()},sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     if cache.get('weapon_label_signature')==signature: return cache
     if segments is not None:
@@ -215,7 +272,8 @@ def enrich_weapon_labels(cache, samples, profile, ffmpeg,optimize=True,checkpoin
         cache['weapon_label_signature']=signature; return cache
     engine=new_engine(); catalog=load_catalog()
     from ocr_cache import ExactTextCache
-    recognize=ExactTextCache(engine.text_rec) if optimize else engine.text_rec
+    text_reader=WeaponTextReader(engine.text_rec)
+    recognize=ExactTextCache(text_reader) if optimize else text_reader
     rw,rh=profile['reference_size']; cx,cy,cw,ch=profile['weapon_native_crop']
     for offset in range(0,len(order),24):
         if checkpoint:

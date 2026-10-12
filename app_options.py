@@ -45,12 +45,10 @@ def parse_options(request,legacy=False):
     return values
 
 def recycle_source(source,identity,outputs,verification,review,segments,recycler=None):
-    """从已完成记录回收源文件；拒绝未完成、来源变化或有待复核内容的任务。"""
+    """独立回收开关：已导出且文件完整即可；识别复核不控制此开关。"""
     from apex_clipper import fingerprint
     source=Path(source).resolve()
     if not outputs: return {'status':'kept','reason':'没有交战视频输出'}
-    if review or any(s.get('team_end_needs_review') for s in segments):
-        return {'status':'kept','reason':'有待复核候选或交战结束边界，保留原录像'}
     if verification is not None and not all(verification.get(k) is True for k in
         ['passed','encoded_payloads_unchanged','all_tracks_preserved','monotonic_dts']):
         return {'status':'kept','reason':'无损校验未通过'}

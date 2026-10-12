@@ -122,10 +122,8 @@ def _run_task(request_path):
                 previous=item.get('record')
                 from hud_layout import needs_layout_retry
                 if outputs_intact(previous) and item['status'] in ['complete','cleanup'] and not (source.is_file() and needs_layout_retry(previous,item.get('hud_profile'))):
-                    if item['status']=='cleanup':
-                        if options['filter_enabled']:
-                            previous['source_cleanup']={'status':'kept','reason':'处理保留阈值已启用，原录像保留'}
-                        elif not source.exists():
+                    if item['status']=='cleanup' or (options['delete_source'] and source.is_file() and previous.get('source_cleanup',{}).get('status')!='recycled'):
+                        if not source.exists():
                             previous['source_cleanup']={'status':'source_absent_after_cleanup','reason':'成片已完成；原录像在回收阶段后已不存在'}
                         else:
                             verification=None
@@ -264,6 +262,10 @@ def _run_task(request_path):
                         write_json(destination/'analysis.json',analysis);write_json(destination/'review-candidates.json',review)
                         if options['filter_enabled']:emit('log',message=f"战绩过滤：保留 {len(export_segments)} 段，未达标 {len(quality_rejected)} 段，待复核 {len(quality_review)} 段",progress=90)
                         if export_segments:
+                            saved=stage('weapons','确认保留交战的枪械名称',90,90,
+                                lambda:enrich_weapon_labels(saved,samples,profile,tool('ffmpeg'),checkpoint=hud_path,segments=export_segments))
+                            label_event_weapons(events,saved['rows']);write_json(hud_path,saved)
+                            analysis['events']=events;write_json(destination/'analysis.json',analysis)
                             export_input=export_segments if options['filter_enabled'] and any(options[k]>0 for k in ['min_damage','min_kills','min_assists','min_duration']) else segments
                             outputs=stage('export','无损导出独立交战视频（支持续接）',90 if result_filter else 86,95,lambda:export_lossless(source,export_input,video_directory,events,resume=True,statistics=export_statistics,metadata_dir=destination,name_suffix=item.get('export_suffix','')))
                             manifest=load(destination/'export.json')
@@ -304,9 +306,7 @@ def _run_task(request_path):
                         result_filter_summary={'kept':len(outputs),'rejected':len(rejected),'review':len(review),
                                                'rule':'击倒/助攻/消灭任一' if result_filter else '沿用旧任务交战规则'})
                     item['record']=record
-                    if options['filter_enabled']:
-                        record['source_cleanup']={'status':'kept','reason':'处理保留阈值已启用，原录像保留'}
-                    elif options['delete_source']:
+                    if options['delete_source']:
                         record['source_cleanup']={'status':'pending','reason':'等待移入回收站'}
                         item.update(status='cleanup',stage='cleanup'); save_task(task_path,task)
                         check_cancel()

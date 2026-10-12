@@ -41,10 +41,17 @@ class AppOptionsTests(unittest.TestCase):
                     review=[],segments=[],recycler=self.recycler)
         values.update(overrides); return recycle_source(**values)
 
-    def test_review_and_unresolved_end_keep_source(self):
-        for values in [dict(review=[{'start':30,'end':40}]),dict(segments=[{'team_end_needs_review':True}])]:
-            self.assertEqual(self.recycle(**values)['status'],'kept')
-        self.recycler.assert_not_called()
+    def test_batch_recycles_every_exported_source_despite_review_or_thresholds(self):
+        # 与用户四个原录像的情形一致；不操作用户录像或实际回收站。
+        self.assertTrue(parse_options({'delete_source':True,'filter_enabled':True})['delete_source'])
+        self.recycler.side_effect=lambda path:Path(path).unlink()
+        for i in range(4):
+            source=Path(self.temp.name)/f'source-{i}.mp4';source.write_bytes(b'original')
+            output=Path(self.temp.name)/f'clip-{i}.mp4';output.write_bytes(b'exported')
+            result=self.recycle(source=source,identity=fingerprint(source),outputs=[output],verification=None,
+                review=[{'start':30,'end':40}] if i else [],segments=[{'team_end_needs_review':True}])
+            self.assertEqual(result['status'],'recycled');self.assertTrue(output.exists())
+        self.assertEqual(self.recycler.call_count,4)
 
     def test_missing_outputs_and_failed_verification_keep_source(self):
         self.assertEqual(self.recycle(outputs=[])['status'],'kept')

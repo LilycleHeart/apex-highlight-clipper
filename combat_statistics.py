@@ -12,8 +12,9 @@ from image_io import read_image
 
 from apex_clipper import BASE,crop,counter_offset,numeric,write_json,fingerprint
 from combat_outcome_reader import inspect_combat_outcomes,parse_result_line,clean_target_name,PARSER_VERSION
+from player_names import consensus_name
 
-VERSION='combat-statistics-v7'
+VERSION='combat-statistics-v8'
 ASSIST_BOX=[2202,94,2228,124]
 FIELDS=('kills','assists','damage')
 
@@ -45,14 +46,23 @@ def unique_toasts(events):
         if matched:
             matched['last_seen']=event['time'];matched['frames']=sorted(set(matched['frames']+[event.get('frame','')]))
             matched['observations']+=1
+            matched['_name_reads'].append({'name':event.get('target_text',''),'confidence':event.get('text_confidence',event.get('confidence',0)),'frame':event.get('frame','')})
             if event.get('confidence',0)>matched.get('confidence',0):
                 for key in ['text','confidence']: matched[key]=event.get(key)
             if event.get('target_text') and not matched.get('target_text'):matched['target_text']=event['target_text']
             if event.get('action')=='elimination': matched['action']='elimination'
         else:
-            tracks.append({**event,'last_seen':event['time'],'frames':[event.get('frame','')],'observations':1})
+            tracks.append({**event,'last_seen':event['time'],'frames':[event.get('frame','')],'observations':1,
+                '_name_reads':[{'name':event.get('target_text',''),'confidence':event.get('text_confidence',event.get('confidence',0)),'frame':event.get('frame','')}]})
     for event in tracks:
         event['confirmed']=len([f for f in event['frames'] if f])>=2
+        reads={}
+        for value in event.pop('_name_reads'):
+            frame=value['frame']
+            if frame and (frame not in reads or value['confidence']>reads[frame]['confidence']):reads[frame]=value
+        name=consensus_name(list(reads.values()))
+        event['target_text']=name['name'] if name else ''
+        event['target_confidence']=name['confidence'] if name else 0.
     return tracks
 
 def stable_value(rows,key):

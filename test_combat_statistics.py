@@ -31,6 +31,12 @@ class StatisticsTests(unittest.TestCase):
         parsed=parse_result_line('助攻，擎倒 DAFT+1OO合')
         self.assertEqual((parsed['action'],parsed['target_text']),('knock','DAFT'))
 
+    def test_enemy_name_uses_repeated_spelling_instead_of_first_bad_ocr(self):
+        raw=[self.event('knock',name,t,str(i)) for i,(name,t) in enumerate([('NAG1SA',1),('NAGISA',1.5),('NAGISA',2)])]
+        self.assertEqual(unique_toasts(raw)[0]['target_text'],'NAGISA')
+        uncertain=[self.event('knock',name,t,str(i)) for i,(name,t) in enumerate([('NAG1SA',1),('NAGISA',1.5)])]
+        self.assertEqual(unique_toasts(uncertain)[0]['target_text'],'')
+
     def endpoint(self):return {'baseline':{'kills':3,'assists':4,'damage':1250},'last_hud':{'kills':4,'assists':8,'damage':2280},'last_hud_update':{'kills':100}}
     def coverage(self):return {'checked_frames':10,'expected_frames':10,'ambiguous_frames':[],'calibrated_style_confirmed':True}
 

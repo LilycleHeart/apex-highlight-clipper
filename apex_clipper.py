@@ -562,6 +562,15 @@ def label_event_weapons(events, rows):
     catalog_path=BASE/'weapon-catalog.json'
     catalog=json.loads(catalog_path.read_text(encoding='utf-8')) if catalog_path.exists() else {'weapons':[]}
     by_time={round(r['time'],6):r for r in rows}
+    name_times={}
+    for r in rows:
+        if r.get('current_weapon'):name_times.setdefault(r['current_weapon']['id'],[]).append(r['time'])
+    for times in name_times.values():times.sort()
+    def trusted(r):
+        if not r or not r.get('current_weapon'):return False
+        if r.get('current_weapon_confidence',0)>=.90:return True
+        times=name_times[r['current_weapon']['id']]
+        return bisect.bisect_right(times,r['time']+1.1)-bisect.bisect_left(times,r['time']-1.1)>=2
     # 同一录像中，多次可靠的当前槽文字可以提供该皮肤/光照下的图标回退。
     local={}
     for r in rows:
@@ -571,10 +580,10 @@ def label_event_weapons(events, rows):
     for event in events:
         if event['kind']!='shoot': continue
         row=by_time.get(round(event['time'],6))
-        match=row.get('current_weapon') if row else None
+        match=row.get('current_weapon') if trusted(row) else None
         confidence=row.get('current_weapon_confidence',0) if row else 0
         if row and not match:
-            neighbours=[r for r in rows if abs(r['time']-event['time'])<=.6 and r.get('current_weapon')
+            neighbours=[r for r in rows if abs(r['time']-event['time'])<=.6 and trusted(r)
                         and icon_similarity(row['weapon_icon'],r['weapon_icon'])>=.80]
             if neighbours:
                 neighbour=max(neighbours,key=lambda r:r['current_weapon_confidence'])

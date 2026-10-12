@@ -14,7 +14,7 @@ from weapon_reader import new_engine,MODEL_SHA
 
 KINDS={'knock','assist','elimination'}
 RULE_VERSION='own-center-result-v4'
-PARSER_VERSION='target-name-v3'
+PARSER_VERSION='target-name-v4'
 
 
 def same_english_target(left,right):

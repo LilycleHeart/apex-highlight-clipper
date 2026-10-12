@@ -2,8 +2,10 @@
 import json
 import unittest
 from pathlib import Path
-from weapon_reader import load_catalog, resolve_weapon_text, active_slot
-from apex_clipper import ammo_number, classify_combat_candidates, detect_events
+from weapon_reader import load_catalog, resolve_weapon_text, active_slot,ctc_label_score,WeaponTextReader
+import numpy as np
+from types import SimpleNamespace
+from apex_clipper import ammo_number, classify_combat_candidates, detect_events,label_event_weapons
 from test_core import row
 
 EXPECTED_IDS={'havoc','flatline','hemlok','r301','nemesis','alternator','prowler','r99','volt','car',
@@ -12,6 +14,23 @@ EXPECTED_IDS={'havoc','flatline','hemlok','r301','nemesis','alternator','prowler
               'peacekeeper','re45','p2020','wingman'}
 
 class WeaponCoverageTests(unittest.TestCase):
+    def test_weak_gun_label_requires_temporal_confirmation(self):
+        sample={'time':1,'current_weapon':{'id':'nemesis','name':'死敌'},'current_weapon_confidence':.75}
+        event={'time':1,'kind':'shoot'}
+        self.assertEqual(label_event_weapons([dict(event)],[sample])[0]['weapon'],'未知枪')
+        self.assertEqual(label_event_weapons([dict(event)],[sample,{**sample,'time':1.5}])[0]['weapon'],'死敌')
+
+    def test_closed_dictionary_recovers_supported_character_but_never_blank_noise(self):
+        # 贪心漏读第二字，但模型仍给“兽”明确概率；完全无文字则保持未知。
+        chars=['blank','獵','獸','死','敵']
+        reader=WeaponTextReader(SimpleNamespace(postprocess_op=SimpleNamespace(dict={c:i for i,c in enumerate(chars)})))
+        p=np.array([[.01,.98,.01,0,0],[.9,.05,.05,0,0],[.48,0,.52,0,0],[.98,0,.02,0,0]])
+        text,confidence=reader.constrained(p,('獵',.98))
+        self.assertEqual(resolve_weapon_text(text,confidence)['id'],'prowler')
+        blank=np.zeros_like(p);blank[:,0]=1
+        self.assertEqual(reader.constrained(blank,('',0)),('',0))
+        self.assertLess(ctc_label_score(blank,[1,2]),.001)
+
     def test_official_roster_and_all_three_language_aliases(self):
         catalog=load_catalog()
         self.assertEqual({w['id'] for w in catalog['weapons']},EXPECTED_IDS)
