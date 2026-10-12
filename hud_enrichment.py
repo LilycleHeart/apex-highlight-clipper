@@ -3,6 +3,11 @@ from pathlib import Path
 from functools import lru_cache
 import hashlib
 import json
+import os
+import queue
+import subprocess
+import sys
+import threading
 
 import cv2
 from image_io import read_image
@@ -135,7 +140,7 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None):
     ids={w['id'] for w in weapons}
     uncertain=uncertain or ('weapons' in fields and (not ids or any(len({w['time'] for w in weapons if w['id']==ident})<2 for ident in ids)))
     if uncertain:
-        seeds=sorted(observations,key=lambda r:len(r.get('weapon_ids',[]))*3+sum(r.get(k,{}).get('confidence',0) for k in ['account','hero','rank'])+len(r.get('teammates',[])),reverse=True)
+        seeds=sorted(observations,key=lambda r:len(r.get('weapon_ids',[]))*3+sum((r.get(k) or {}).get('confidence',0) for k in ['account','hero','rank'])+len(r.get('teammates',[])),reverse=True)
         times=[]
         for seed in seeds or [{'time':start+(end-start)*.15}]:
             for delta in [.4,-.4,.9]:
@@ -218,15 +223,81 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None):
     return manifest
 
 
+def _child_python(backend):
+    executable=Path(sys.executable).resolve()
+    if backend=='cpu':
+        for candidate in [executable.parent.parent/'cpu'/executable.name,BASE/'.venv/Scripts/python.exe']:
+            if candidate.is_file():return str(candidate)
+    return str(executable)
+
+
+def _run_hud_child(request,on_progress=None):
+    """原生访问冲突无法用 try/except 捕获；子进程只读取成片并更新软件元数据。"""
+    process=subprocess.Popen([_child_python(request['backend']),'-X','faulthandler',str(BASE/'hud_enrichment.py'),'--stdin','--direct'],
+        cwd=BASE,env={**os.environ,'PYTHONUTF8':'1','PYTHONFAULTHANDLER':'1'},
+        stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace',
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+    messages=queue.Queue();tail=[];done=None
+    def read_lines():
+        try:
+            for line in process.stdout:messages.put(line)
+        finally:messages.put(None)
+    reader=threading.Thread(target=read_lines,daemon=True);reader.start()
+    try:
+        process.stdin.write(json.dumps(request,ensure_ascii=False));process.stdin.close()
+        while True:
+            check_cancel()
+            try:line=messages.get(timeout=.2)
+            except queue.Empty:continue
+            if line is None:break
+            tail.append(line.strip());tail=tail[-30:]
+            try:event=json.loads(line)
+            except (ValueError,TypeError):continue
+            if event.get('type')=='hud-info-progress' and on_progress:
+                on_progress(event['index'],event['total'],event['file'])
+            elif event.get('type')=='hud-info-done':done=event
+        code=process.wait()
+        if code!=0:
+            raise RuntimeError(f'补充识别子进程退出（{code} / 0x{code & 0xffffffff:08X}）：'+'\n'.join(tail)[-1500:])
+        if done is None:raise RuntimeError('补充识别没有返回完成记录')
+        if done.get('errors'):raise RuntimeError('; '.join(e['message'] for e in done['errors']))
+        return done
+    finally:
+        if process.poll() is None:process.kill()
+        process.wait()
+        reader.join(timeout=2)
+        for stream in [process.stdin,process.stdout]:stream.close()
+
+
+def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,on_log=None):
+    """GPU 原生崩溃只影响补充子进程；已有成片保留，并用独立 CPU 进程续接。"""
+    directory=Path(directory).resolve()
+    manifest=json.loads((directory/'export.json').read_text('utf-8-sig'))
+    files=files or manifest.get('outputs',[])
+    backend=os.environ.get('APEX_OCR_BACKEND','cpu')
+    request={'jobs':[{'directory':str(directory),'files':[str(f) for f in files]}],
+        'fields':fields or FIELDS,'backend':backend,'gpu_load':os.environ.get('APEX_GPU_LOAD','low')}
+    from app_cancel import TaskStopped
+    try:_run_hud_child(request,on_progress)
+    except TaskStopped:raise
+    except Exception as error:
+        if backend=='cpu':raise
+        message='GPU补充识别异常，已导出视频保留，改用CPU补齐：'+str(error)
+        if on_log:on_log(message)
+        else:print(message,flush=True)
+        _run_hud_child({**request,'backend':'cpu'},on_progress)
+    return json.loads((directory/'export.json').read_text('utf-8-sig'))
+
+
 if __name__=='__main__':
-    import os,sys
-    request=json.loads(Path(sys.argv[1]).read_text('utf-8-sig'))
+    request=json.loads(sys.stdin.read() if '--stdin' in sys.argv else Path(sys.argv[1]).read_text('utf-8-sig'))
     os.environ['APEX_OCR_BACKEND']=request.get('backend','cpu')
     os.environ['APEX_GPU_LOAD']=request.get('gpu_load','low')
     errors=[];done=0
     for job in request['jobs']:
         try:
-            enrich_manifest(job['directory'],job['files'],request.get('fields'),
+            enrich=enrich_manifest if '--direct' in sys.argv else enrich_manifest_isolated
+            enrich(job['directory'],job['files'],request.get('fields'),
                 lambda index,total,file:print(json.dumps({'type':'hud-info-progress','index':index,'total':total,'file':file}),flush=True))
             done+=len(job['files'])
         except Exception as error:errors.append({'directory':job['directory'],'message':str(error)})

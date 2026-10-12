@@ -1,9 +1,30 @@
 import unittest
+import tempfile
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+import numpy as np
 from player_names import player_name,consensus_name,canonical_name
 from hud_enrichment import reconcile_manifest_names,VERSION
 
 
 class PlayerNameTests(unittest.TestCase):
+    def test_all_fields_unknown_still_complete_bounded_reads(self):
+        from hud_enrichment import recognize_video,FIELDS
+        from hud_layout import make_profile
+        image=np.zeros((1080,1920,3),dtype=np.uint8)
+        profile=make_profile(1920,1080)
+        def frames(source,start,end,moments=None):
+            return iter((time,image) for time in (moments or [1.,4.,8.]))
+        def empty(crops):return [('',0.) for _ in crops],0.
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/'clip.mp4';source.write_bytes(b'fixture')
+            with patch('hud_enrichment.native_frames',side_effect=frames),patch('hud_enrichment.probe',return_value=({'format':{'duration':10}},{})),patch('hud_enrichment.inactive_view',return_value=False),patch('engine_pool.pooled_engine',return_value=SimpleNamespace(text_rec=empty)),patch('weapon_reader.WeaponTextReader',return_value=empty),patch('hero_reader.HeroReader') as hero,patch('rank_reader.RankReader') as rank:
+                hero.return_value.inspect.return_value=None;rank.return_value.inspect.return_value=None
+                result=recognize_video(source,FIELDS,profile=profile)
+        self.assertEqual(result['checked_frames'],6)
+        self.assertTrue(all(v=='unknown' for v in result['field_status'].values()))
+
     def test_fixed_hud_text_and_conflicting_names_are_not_confirmed(self):
         for text in ['MAX LEVEL','下個等級 749 進化','造成150伤害','KNOCKED DOWN','\ufffd口□']:
             self.assertEqual(player_name(text),'')

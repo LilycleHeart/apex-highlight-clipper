@@ -288,11 +288,12 @@ def _run_task(request_path):
                                     'statistics':stats}
                             write_json(destination/'export.json',manifest)
                             if options['hud_info_enabled'] and options['hud_info_fields']:
-                                from hud_enrichment import enrich_manifest
+                                from hud_enrichment import enrich_manifest_isolated
                                 from app_cancel import TaskStopped
                                 try:
                                     stage('hud_info','导出完成，补充所选HUD信息',99,99,
-                                        lambda:enrich_manifest(destination,fields=options['hud_info_fields']))
+                                        lambda:enrich_manifest_isolated(destination,fields=options['hud_info_fields'],
+                                            on_log=lambda message:emit('log',message=message,progress=99)))
                                 except TaskStopped:raise
                                 except Exception as error:
                                     emit('log',message='片段已导出，HUD信息尚未补齐，可稍后继续：'+str(error),progress=99)
@@ -336,6 +337,8 @@ def main(request_path):
         emit('stopped',message='断点已保存，可以继续上次任务'); return 75
 
 if __name__=='__main__':
+    import faulthandler
+    faulthandler.enable()
     try: raise SystemExit(main(sys.argv[1]))
     except Exception as error:
         emit('fatal',message=str(error)); traceback.print_exc(file=sys.stderr); raise SystemExit(1)

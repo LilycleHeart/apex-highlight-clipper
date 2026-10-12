@@ -213,12 +213,14 @@
         "tactical": {
           "file": "horizon-tactical.png",
           "url": "https://drop-assets.ea.com/images/5mYni5G1koYL2aHvkdGwJp/ccfbd81938530e6434d15867b95c1f3f/apex-grid-tile-legends-abilities-tactical-horizon.png",
-          "sha256": "2ad8a59b0521c5f45e9a690d23291ba79daae1919d7b4d67110e9c0741df369c"
+          "sha256": "0bc56aa1d66bd902da7a629e9e64a58c7599d4dc29604321d1881093bb897cfc",
+          "source_sha256": "2ad8a59b0521c5f45e9a690d23291ba79daae1919d7b4d67110e9c0741df369c"
         },
         "ultimate": {
           "file": "horizon-ultimate.png",
           "url": "https://drop-assets.ea.com/images/4YYAaIxDxixb39EavbH3Sr/792295b58d7e046ae2d5b3cb35a25052/apex-grid-tile-legends-abilities-ultimate-horizon.png",
-          "sha256": "7c4f6ea10d18164a626da58bd315469d78663a7e5c966548d3f69f351bf35c9d"
+          "sha256": "5f259dd97ba891f1fbe8242b1f02db3ae7a3c013e1fc28cd7490ae18857721ea",
+          "source_sha256": "7c4f6ea10d18164a626da58bd315469d78663a7e5c966548d3f69f351bf35c9d"
         }
       }
     },
