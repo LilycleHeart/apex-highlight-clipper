@@ -1,7 +1,15 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
-const {JsonLines,safeOptions}=require('../dist-electron/electron/protocol');
+const {JsonLines,safeOptions,safeHudFiles}=require('../dist-electron/electron/protocol');
 const {eventReducer,initial,appendUnique,resultSummary}=require('../dist-electron/src/state');
 const {defaults}=require('../dist-electron/src/shared');
+
+test('515 个 HUD 片段全部通过真实请求校验，仍拒绝库外路径并去重',()=>{
+ const files=Array.from({length:515},(_,i)=>`C:\\exports\\clip-${i}.mp4`),normalize=file=>file.toLowerCase(),allowed=new Set(files.map(normalize));
+ assert.deepEqual(safeHudFiles(files,allowed,normalize),files);
+ assert.deepEqual(safeHudFiles([...files,files[0].toUpperCase()],allowed,normalize),files);
+ assert.throws(()=>safeHudFiles([...files.slice(0,514),'C:\\originals\\source.mp4'],allowed,normalize),/刷新后重试/);
+ assert.throws(()=>safeHudFiles([],allowed,normalize),/请选择/);
+});
 test('中文跨 chunk、多行与尾行完整消费',()=>{const events=[],bad=[];const p=new JsonLines(e=>events.push(e),e=>bad.push(e));const b=Buffer.from('{"type":"stage","message":"检查伤害"}\n{"type":"done","clips":2}');for(let i=0;i<b.length;i++)p.push(b.subarray(i,i+1));p.end();assert.equal(events[0].message,'检查伤害');assert.equal(events[1].clips,2);assert.equal(bad.length,0);});
 test('坏行不会阻止后续状态',()=>{const good=[],bad=[];const p=new JsonLines(e=>good.push(e),e=>bad.push(e));p.push(Buffer.from('bad\n{"type":"stopped"}\n'));p.end();assert.equal(good[0].type,'stopped');assert.equal(bad.length,1);});
 test('旧校验字段被移除，回收仍由独立开关控制',()=>{for(const verify of [true,false])for(const delete_source of [true,false]){const s=safeOptions({...defaults,verify,delete_source});assert.equal(s.verify,undefined);assert.equal(s.delete_source,delete_source);}});

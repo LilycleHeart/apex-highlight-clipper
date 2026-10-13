@@ -9,6 +9,17 @@ export class JsonLines {
   private line(value:string){if(!value.trim())return;try{const parsed=JSON.parse(value);if(parsed&&typeof parsed==='object'&&typeof parsed.type==='string')this.receive(parsed);else this.malformed(value.slice(0,500));}catch{this.malformed(value.slice(0,500));}}
 }
 export const videoExtensions=new Set(['.mp4','.mkv','.mov','.ts','.m4v']);
+export function safeHudFiles(value:unknown,allowed:ReadonlySet<string>,normalize:(file:string)=>string):string[]{
+ if(!Array.isArray(value)||!value.length)throw new Error('请选择片段库中已导出的片段');
+ const selected=new Map<string,string>();
+ for(const file of value){
+  if(typeof file!=='string')throw new Error('请选择片段库中已导出的片段');
+  const key=normalize(file);
+  if(!allowed.has(key))throw new Error('所选片段已不在当前片段库中，请刷新后重试');
+  if(!selected.has(key))selected.set(key,file);
+ }
+ return [...selected.values()];
+}
 export function safeOptions(value:any,legacy=false){
  const export_layout=value.export_layout??'task';if(!['task','flat'].includes(export_layout))throw new Error('导出布局无效');
  const limits:Record<string,[number,number]>={fps:[legacy?.5:1,5],gap:[0,600],pre:[0,120],post:[0,180]};
