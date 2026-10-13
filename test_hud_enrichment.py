@@ -64,5 +64,20 @@ class HudEnrichmentTests(unittest.TestCase):
             self.assertEqual(result['clips'][1],before['clips'][1])
             self.assertTrue(all(file.read_bytes()==b'exported video fixture' for file in files))
 
+    def test_missing_preserves_confirmed_account_even_with_stronger_name_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);files,manifest=self.fixture(root)
+            for index,name in enumerate(['YURI Liiumeordis','[YURI] Liliumcordis']):
+                info=manifest['clips'][index]['recognition']['hud_info']
+                account={'name':name,'confidence':.85 if index==0 else .95}
+                info['account']=account
+                info['name_observations']=[{'time':i,'account':account} for i in range(3 if index==0 else 6)]
+            before=copy.deepcopy(manifest)
+            (root/'export.json').write_text(json.dumps(manifest),encoding='utf-8')
+            with patch('hud_enrichment.recognize_video') as read:
+                result=enrich_manifest(root,[str(files[0])],['account'])
+                read.assert_not_called()
+            self.assertEqual(result,before)
+
 
 if __name__=='__main__':unittest.main()

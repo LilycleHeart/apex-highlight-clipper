@@ -170,7 +170,7 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None):
     return result
 
 
-def reconcile_manifest_names(manifest,fields=None,targets=None):
+def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None):
     """本人按原录像、队友按同一局的槽位确认；不跨局套用队友姓名。"""
     clips=manifest.get('clips',[]);accounts=[];teams={}
     fields=set(['account','teammates'] if fields is None else fields)
@@ -187,11 +187,12 @@ def reconcile_manifest_names(manifest,fields=None,targets=None):
     for clip in clips if targets is None else targets:
         info=clip.get('recognition',{}).get('hud_info',{})
         if info.get('version')!=VERSION:continue
-        if 'account' in fields:
+        writable=fields if updates is None else fields&updates.get(id(clip),set())
+        if 'account' in writable:
             values=[canonical_name(row.get('account'),account) for row in info.get('name_observations',[])]
             info['account']=consensus_name(values) or canonical_name(info.get('account'),account)
         key=clip.get('recognition',{}).get('match_key') or str(clip.get('output',clip.get('file','')))
-        if 'teammates' in fields:
+        if 'teammates' in writable:
             for n,value in enumerate(info.get('teammates',[])):
                 info['teammates'][n]=canonical_name(value,references.get((key,value.get('slot'))))
 
@@ -221,6 +222,7 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
     for clip in selected:
         file=Path(clip.get('output',clip.get('file',''))).resolve()
         if not file.is_relative_to(video_directory) or file.suffix.lower()!='.mp4' or str(file).casefold() not in recorded:raise ValueError('成片路径不属于对应导出目录')
+    name_updates={}
     for index,clip in enumerate(selected):
         check_cancel();file=Path(clip.get('output',clip.get('file','')));identity=fingerprint(file)
         recognition=clip.setdefault('recognition',{});previous=recognition.get('hud_info',{})
@@ -234,10 +236,11 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
                 requested_fields=list(dict.fromkeys(previous.get('requested_fields',[])+pending)),
                 field_status={**previous.get('field_status',{}),**current['field_status']})
             if force:info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+pending))
+            name_updates[id(clip)]=set(pending)
             recognition['hud_info']=info;write_json(path,manifest)
         if on_progress:on_progress(index+1,len(selected),str(file))
     # 手动重读只使用本次所选片段的姓名证据，旧片段不能把误识别带回来。
-    reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected)
+    reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected,updates=name_updates)
     write_json(path,manifest)
     return manifest
 
