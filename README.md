@@ -20,7 +20,7 @@
 
 ## 下载即用
 
-当前正式版本为 **v1.0.8**，可在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载安装包或便携包。
+当前正式版本为 **v1.0.9**，可在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载安装包或便携包。
 
 1. 运行 EXE 安装包，或将便携 ZIP 完整解压到可写目录。
 2. 安装版从开始菜单启动；便携版双击 **Start.cmd**。包内已附 CPU / DirectML Python 运行环境和 OCR 模型，无需另装 Python 或 Node.js。

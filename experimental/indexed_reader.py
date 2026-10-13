@@ -45,7 +45,10 @@ class IndexedKeyframeReader:
                 raise UnsupportedIndexedVideo('Missing authoritative stream timestamps')
             self.time_base=Fraction(self.stream.time_base)
             self.source_frames=len(entries)
-            self.seek_bias=self.stream.start_time-self.keyframes[0].dts
+            # A replay can begin between keyframes. The seek origin belongs to
+            # the first video packet, not the first retained keyframe; using
+            # the latter shifts every seek backwards by the initial GOP gap.
+            self.seek_bias=self.stream.start_time-entries[0].timestamp
             self.stream.codec_context.thread_count=threads
             self.stream.codec_context.thread_type='SLICE'
             self.stream.codec_context.skip_frame='NONKEY'

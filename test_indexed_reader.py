@@ -48,6 +48,26 @@ class IndexedReaderTests(unittest.TestCase):
                 np.testing.assert_array_equal(last.to_ndarray(format='bgr24'),self.reference[last.pts])
                 self.assertEqual(reader.read_keyframe(i).pts,pts)
 
+    def test_replay_starting_between_keyframes_keeps_exact_index_positions(self):
+        import av
+        import numpy as np
+        from apex_clipper import tool
+        from experimental.indexed_reader import IndexedKeyframeReader
+        path=Path(self.temp.name)/'mid-gop.mp4'
+        subprocess.run([tool('ffmpeg'),'-hide_banner','-loglevel','error','-i',str(self.path),
+            '-ss','0.3','-t','3','-c','copy','-copyinkf',str(path)],check=True,capture_output=True)
+        with av.open(str(path)) as container:
+            entries=container.streams.video[0].index_entries
+            self.assertFalse(entries[0].is_keyframe)
+            reference={frame.pts:frame.to_ndarray(format='bgr24') for frame in container.decode(video=0)}
+        with IndexedKeyframeReader(path) as reader:
+            for index in [0,len(reader.keyframes)-1]:
+                frame=reader.read_keyframe(index)
+                np.testing.assert_array_equal(frame.to_ndarray(format='bgr24'),reference[frame.pts])
+            first,last,_=reader.read_burst(0)
+            np.testing.assert_array_equal(first.to_ndarray(format='bgr24'),reference[first.pts])
+            np.testing.assert_array_equal(last.to_ndarray(format='bgr24'),reference[last.pts])
+
     def test_closed_reader_and_invalid_span_are_rejected(self):
         from experimental.indexed_reader import IndexedKeyframeReader
         reader=IndexedKeyframeReader(self.path)
