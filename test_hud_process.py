@@ -29,11 +29,12 @@ class HudProcessTests(unittest.TestCase):
             logs=[]
             children=[Child(3221225477,'Windows fatal exception: access violation\n'),Child(0,json.dumps({'type':'hud-info-done','errors':[]})+'\n')]
             with patch('hud_enrichment.subprocess.Popen',side_effect=children) as child:
-                result=enrich_manifest_isolated(root,fields=['account'],on_log=logs.append)
+                result=enrich_manifest_isolated(root,fields=['account'],on_log=logs.append,force=True)
                 # 请求必须冻结，第二次重试不能回写第一次的后端记录。
                 self.assertEqual(child.call_count,2)
                 first,last=[json.loads(p.stdin.payload) for p in children]
                 self.assertEqual(first['backend'],'dml');self.assertEqual(last['backend'],'cpu')
+                self.assertTrue(first['force']);self.assertTrue(last['force'])
                 self.assertEqual(last['jobs'][0]['files'],[str(video)])
             self.assertEqual(result,manifest);self.assertEqual(video.read_bytes(),b'exported')
             self.assertTrue(any('改用CPU' in text for text in logs))

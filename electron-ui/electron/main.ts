@@ -180,17 +180,18 @@ async function start(payload:any,resume=false){if(clipDeletions.busy)throw new E
 }
 async function stop(){stopRequested=true;if(stopFile)await fs.writeFile(stopFile,'stop','utf8');}
 function trusted(event:Electron.IpcMainInvokeEvent){if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)throw new Error('不允许的界面请求');}
-async function enrichHud(files:unknown,fields:unknown){
+async function enrichHud(files:unknown,fields:unknown,mode:unknown='missing'){
  if(updating)throw new Error('正在更新软件，请稍后补充信息');
  if(clipDeletions.busy||worker||launching||hudWorker||hudLaunching)throw new Error('请先等待当前处理结束');
  if(!Array.isArray(files)||!files.length||files.length>500||files.some(file=>typeof file!=='string'||!allowedClips.has(normalized(file))))throw new Error('请选择片段库中已导出的片段');
  if(!Array.isArray(fields)||!fields.length||fields.some(field=>!['account','weapons','teammates','hero','rank'].includes(field)))throw new Error('请选择要补充的HUD信息');
+ if(mode!=='missing'&&mode!=='refresh')throw new Error('HUD识别模式无效');
  for(const file of files){diagnostics.alias(file,'<clip>');diagnostics.alias(path.basename(file),'<clip>');}hudLaunching=true;let requestPath='';
  try{
  if(maintenance){maintenance.kill();await maintenanceExit;}
  const grouped=new Map<string,string[]>();for(const file of files){const dir=clipDirectories.get(normalized(file));if(!dir)throw new Error('片段没有对应任务记录');grouped.set(dir,[...(grouped.get(dir)||[]),file]);}
  const root=path.join(validationRoot,'app-requests');await fs.mkdir(root,{recursive:true});requestPath=path.join(root,randomUUID()+'.json');
- await fs.writeFile(requestPath,JSON.stringify({jobs:[...grouped].map(([directory,files])=>({directory,files})),fields,backend:options.backend,gpu_load:options.gpu_load}),'utf8');
+ await fs.writeFile(requestPath,JSON.stringify({jobs:[...grouped].map(([directory,files])=>({directory,files})),fields,force:mode==='refresh',backend:options.backend,gpu_load:options.gpu_load}),'utf8');
  return await new Promise<{updated:number;errors:{directory:string;message:string}[]}>((resolve,reject)=>{
   const proc=spawn(pythonFor(options.backend),['hud_enrichment.py',requestPath],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});hudWorker=proc;
   let done:{updated:number;errors:{directory:string;message:string}[]}|null=null,stderr='';

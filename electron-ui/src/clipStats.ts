@@ -46,13 +46,14 @@ export function clipStatistics(clip:any,candidates:any[]=[],analysis:PlaybackAna
  for(const e of found)if(['knock','assist','elimination'].includes(e.kind)&&Number.isFinite(e.time)&&e.ownership==='self'&&e.time>=segment.start&&e.time<segment.end)unique.set(`${e.kind}-${e.time}-${e.text||''}`,{kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:outcomeTarget(e),weapon:typeof e.weapon==='string'?e.weapon:undefined});
  const evidence=withProcessStarts([...unique.values()].sort((a,b)=>a.time-b.time),segment,related,analysis);
  const ranks=related.map(s=>s.rank).filter(Boolean);
- const rank=hudInfo?.rank||clip.recognition?.rank||segment.rank||(ranks.length===related.length&&ranks.length&&ranks.every(r=>r.tier===ranks[0].tier&&r.division===ranks[0].division)?ranks[0]:null);
+ const rank=hudInfo?.refreshed_fields?.includes('rank')?(hudInfo.rank||null):hudInfo?.rank||clip.recognition?.rank||segment.rank||(ranks.length===related.length&&ranks.length&&ranks.every(r=>r.tier===ranks[0].tier&&r.division===ranks[0].division)?ranks[0]:null);
+ const weapons=hudInfo?.refreshed_fields?.includes('weapons')||hudInfo?.weapons?.length?(hudInfo.weapons||[]).map((w:{name:string})=>w.name):Array.isArray(summary.weapons)?summary.weapons.filter((w:unknown)=>typeof w==='string'):[];
  const observed=(kind:string)=>{const n=evidence.filter(e=>e.kind===kind).length;return n||null;};
  const precise=!!summary.statistics_version;
  const lastHud=clip.recognition?.statistics?.endpoint?.last_hud;
  const roundKills=count(lastHud?.kills),roundDamage=count(lastHud?.damage);
  const roundTotals=roundKills!==null||roundDamage!==null?{kills:roundKills,damage:roundDamage}:undefined;
- return {kills:count(summary.kills),damage:count(summary.damage),weapons:hudInfo?.weapons?.length?hudInfo.weapons.map((w:{name:string})=>w.name):Array.isArray(summary.weapons)?summary.weapons.filter((w:unknown)=>typeof w==='string'):[],
+ return {kills:count(summary.kills),damage:count(summary.damage),weapons,
   hudInfo,accountName:hudInfo?.account?.name||null,teammates:hudInfo?.teammates||[],hero:hudInfo?.hero||null,matchKey:clip.recognition?.match_key,
   assists:precise?count(summary.assists):count(summary.assists)??observed('assist'),knockdowns:precise?count(summary.knockdowns):count(summary.knockdowns)??observed('knock'),
   outcomeCountsPartial:summary.assists===undefined||summary.knockdowns===undefined,evidence,rank,

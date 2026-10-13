@@ -170,9 +170,11 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None):
     return result
 
 
-def reconcile_manifest_names(manifest):
+def reconcile_manifest_names(manifest,fields=None,targets=None):
     """本人按原录像、队友按同一局的槽位确认；不跨局套用队友姓名。"""
     clips=manifest.get('clips',[]);accounts=[];teams={}
+    fields=set(['account','teammates'] if fields is None else fields)
+    if not fields&{'account','teammates'}:return
     for clip in clips:
         info=clip.get('recognition',{}).get('hud_info',{})
         if info.get('version')!=VERSION:continue
@@ -182,19 +184,33 @@ def reconcile_manifest_names(manifest):
             for value in row.get('teammates',[]):teams.setdefault((key,value['slot']),[]).append(value)
     account=consensus_name(accounts,minimum=3)
     references={key:consensus_name(values,minimum=3) for key,values in teams.items()}
-    for clip in clips:
+    for clip in clips if targets is None else targets:
         info=clip.get('recognition',{}).get('hud_info',{})
         if info.get('version')!=VERSION:continue
-        values=[canonical_name(row.get('account'),account) for row in info.get('name_observations',[])]
-        info['account']=consensus_name(values) or canonical_name(info.get('account'),account)
+        if 'account' in fields:
+            values=[canonical_name(row.get('account'),account) for row in info.get('name_observations',[])]
+            info['account']=consensus_name(values) or canonical_name(info.get('account'),account)
         key=clip.get('recognition',{}).get('match_key') or str(clip.get('output',clip.get('file','')))
-        for n,value in enumerate(info.get('teammates',[])):
-            info['teammates'][n]=canonical_name(value,references.get((key,value.get('slot'))))
+        if 'teammates' in fields:
+            for n,value in enumerate(info.get('teammates',[])):
+                info['teammates'][n]=canonical_name(value,references.get((key,value.get('slot'))))
 
 
-def enrich_manifest(directory,files=None,fields=None,on_progress=None):
+def merge_name_observations(previous,current,fields):
+    """替换重读字段的观察证据，保留未选字段，避免旧姓名重新覆盖新结果。"""
+    rows=[]
+    for observations,fresh in [(previous,False),(current,True)]:
+        for row in observations:
+            names={key:row[key] for key in ['account','teammates']
+                if row.get(key) and (key in fields)==fresh}
+            if names:rows.append({'time':row.get('time'),**names})
+    return rows
+
+
+def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=False):
     """只追加识别元数据，保持所有视频字节、名称与已冻结交战/计数不变。"""
     directory=Path(directory).resolve();path=directory/'export.json';manifest=json.loads(path.read_text('utf-8-sig'))
+    fields=list(dict.fromkeys(fields or FIELDS))
     if manifest.get('metadata_directory') and Path(manifest['metadata_directory']).resolve()!=directory:raise ValueError('成片元数据目录不匹配')
     video_directory=Path(manifest.get('video_directory',directory)).resolve()
     wanted={str(Path(file).resolve()).casefold() for file in files} if files else None
@@ -208,18 +224,21 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None):
     for index,clip in enumerate(selected):
         check_cancel();file=Path(clip.get('output',clip.get('file','')));identity=fingerprint(file)
         recognition=clip.setdefault('recognition',{});previous=recognition.get('hud_info',{})
-        pending=[field for field in (fields or FIELDS) if previous.get('version')!=VERSION or previous.get('source_identity')!=identity or field not in previous.get('requested_fields',[]) or previous.get('field_status',{}).get(field)!='confirmed']
+        pending=[field for field in fields if force or previous.get('version')!=VERSION or previous.get('source_identity')!=identity or field not in previous.get('requested_fields',[]) or previous.get('field_status',{}).get(field)!='confirmed']
         if pending:
             current=recognize_video(file,pending)
             info={**previous,**{field:current[field] for field in pending}}
-            names=current['name_observations'] if set(pending)&{'account','teammates'} else previous.get('name_observations',[])
+            names=merge_name_observations(previous.get('name_observations',[]),current['name_observations'],pending)
             info.update(version=VERSION,source_identity=identity,profile=current['profile'],checked_frames=current['checked_frames'],
                 name_observations=names,frame_times=current['frame_times'],
                 requested_fields=list(dict.fromkeys(previous.get('requested_fields',[])+pending)),
                 field_status={**previous.get('field_status',{}),**current['field_status']})
+            if force:info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+pending))
             recognition['hud_info']=info;write_json(path,manifest)
         if on_progress:on_progress(index+1,len(selected),str(file))
-    reconcile_manifest_names(manifest);write_json(path,manifest)
+    # 手动重读只使用本次所选片段的姓名证据，旧片段不能把误识别带回来。
+    reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected)
+    write_json(path,manifest)
     return manifest
 
 
@@ -269,14 +288,14 @@ def _run_hud_child(request,on_progress=None):
         for stream in [process.stdin,process.stdout]:stream.close()
 
 
-def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,on_log=None):
+def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,on_log=None,*,force=False):
     """GPU 原生崩溃只影响补充子进程；已有成片保留，并用独立 CPU 进程续接。"""
     directory=Path(directory).resolve()
     manifest=json.loads((directory/'export.json').read_text('utf-8-sig'))
     files=files or manifest.get('outputs',[])
     backend=os.environ.get('APEX_OCR_BACKEND','cpu')
     request={'jobs':[{'directory':str(directory),'files':[str(f) for f in files]}],
-        'fields':fields or FIELDS,'backend':backend,'gpu_load':os.environ.get('APEX_GPU_LOAD','low')}
+        'fields':fields or FIELDS,'backend':backend,'gpu_load':os.environ.get('APEX_GPU_LOAD','low'),'force':force}
     from app_cancel import TaskStopped
     try:_run_hud_child(request,on_progress)
     except TaskStopped:raise
@@ -298,7 +317,8 @@ if __name__=='__main__':
         try:
             enrich=enrich_manifest if '--direct' in sys.argv else enrich_manifest_isolated
             enrich(job['directory'],job['files'],request.get('fields'),
-                lambda index,total,file:print(json.dumps({'type':'hud-info-progress','index':index,'total':total,'file':file}),flush=True))
+                lambda index,total,file:print(json.dumps({'type':'hud-info-progress','index':index,'total':total,'file':file}),flush=True),
+                force=request.get('force',False))
             done+=len(job['files'])
         except Exception as error:errors.append({'directory':job['directory'],'message':str(error)})
     print(json.dumps({'type':'hud-info-done','updated':done,'errors':errors},ensure_ascii=False),flush=True)

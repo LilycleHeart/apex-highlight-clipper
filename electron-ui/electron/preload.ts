@@ -14,7 +14,7 @@ const api:DesktopAPI={
  library:()=>ipcRenderer.invoke('library'),
  deleteClip:file=>ipcRenderer.invoke('delete-clip',file),
  ignoreLibraryErrors:()=>ipcRenderer.invoke('ignore-library-errors'),
- enrichHud:(files,fields)=>ipcRenderer.invoke('enrich-hud',files,fields),
+ enrichHud:(files,fields,mode)=>ipcRenderer.invoke('enrich-hud',files,fields,mode),
  chooseLibraryRoot:()=>ipcRenderer.invoke('choose-library-root'),
  ready:()=>ipcRenderer.invoke('ui-ready'),chrome:(color,foreground)=>ipcRenderer.invoke('chrome',color,foreground),
  bootstrap:()=>ipcRenderer.invoke('bootstrap'),chooseFiles:()=>ipcRenderer.invoke('choose-files'),chooseFolder:()=>ipcRenderer.invoke('choose-folder'),

@@ -10,6 +10,14 @@ test('旧成片没有战果与段位数据时保持未知，不将未识别写�
  const data=clipStatistics({segment:{start:0,end:10},summary:{kills:null,damage:null,weapons:['未知枪']}});
  assert.equal(data.assists,null);assert.equal(data.knockdowns,null);assert.equal(data.rank,null);assert.equal(data.kills,null);
 });
+
+test('手动重新识别未确认的枪械与段位不回退到旧错误数据',()=>{
+ const clip={segment:{start:0,end:10,rank:{tier:'gold'}},summary:{kills:2,damage:123,weapons:['错误旧武器']},recognition:{hud_info:{rank:null,weapons:[],refreshed_fields:['rank','weapons']}}};
+ const data=clipStatistics(clip);
+ assert.equal(data.rank,null);assert.deepEqual(data.weapons,[]);assert.equal(data.kills,2);assert.equal(data.damage,123);
+ delete clip.recognition.hud_info.refreshed_fields;
+ const legacy=clipStatistics(clip);assert.equal(legacy.rank.tier,'gold');assert.deepEqual(legacy.weapons,['错误旧武器']);
+});
 test('跨段合并遇到不同段位，不展示其中一个当作整段段位',()=>{
  const data=clipStatistics({segment:{start:0,end:20}},[{start:0,end:10,rank:{tier:'gold',division:'II'}},{start:10,end:20,rank:{tier:'diamond',division:'II'}}]);assert.equal(data.rank,null);
 });
