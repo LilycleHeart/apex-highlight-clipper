@@ -36,3 +36,12 @@ test('战果回看从连续交战起点开始，长TTK及同目标延迟击杀�
  assert.equal(clipStatistics(old).evidence[0].processStart,144);
  assert.equal(clipStatistics({...old,segment:{start:148,end:200}}).evidence[0].processStart,148);
 });
+
+test('多个目标的连续交战各自回看过程，不全部跳到整段起点',()=>{
+ const evidence=[125,145,165].map((time,i)=>({kind:'elimination',time,target:['ALPHA','BRAVO','CHARLIE'][i],ownership:'self'}));
+ const clip={segment:{start:100,end:180},summary:{statistics_version:'fixture'},recognition:{outcome_evidence:evidence}};
+ const data=clipStatistics(clip,[],{events:Array.from({length:12},(_,i)=>({time:110+i*5,kind:'shoot'}))});
+ const {clipEvents}=require('../dist-electron/src/eventTimeline');
+ assert.deepEqual(data.evidence.map(e=>e.processStart),[104,124,144]);
+ assert.deepEqual(clipEvents({start:100,duration:80,evidence:data.evidence}).map(e=>e.seekTime),[4,24,44]);
+});

@@ -16,8 +16,9 @@ export function withProcessStarts(events:OutcomeEvidence[],clip:Bounds,candidate
   let start:number|undefined;
   // A delayed elimination of the same downed player belongs to their earlier fight.
   if(event.kind!=='knock'&&event.target){const target=event.target.normalize('NFKC').toLocaleUpperCase();const knock=result.slice().reverse().find(e=>e.kind==='knock'&&e.target?.normalize('NFKC').toLocaleUpperCase()===target&&event.time-e.time<=120);start=knock?.processStart;}
-  if(start===undefined){const group=groups.slice().reverse().find(g=>g.start<=event.time&&event.time-g.end<=12);if(group)start=group.start-lead;}
-  if(start===undefined){const candidate=candidates.slice().reverse().find(c=>c.start<=event.time&&c.end>=event.time&&Number.isFinite(c.first_signal)&&c.first_signal! <= event.time);if(candidate)start=candidate.first_signal!-lead;}
+  const previous=result.slice().reverse().find(e=>e.time<event.time&&(!event.target||!e.target||e.target.normalize('NFKC').toLocaleUpperCase()!==event.target.normalize('NFKC').toLocaleUpperCase()));
+  if(start===undefined){const group=groups.slice().reverse().find(g=>g.start<=event.time&&event.time-g.end<=12);if(group){const first=signals.find(s=>s.time>=group.start&&s.time<=event.time&&(!previous||s.time>previous.time));if(first)start=first.time-lead;}}
+  if(start===undefined){const candidate=candidates.slice().reverse().find(c=>c.start<=event.time&&c.end>=event.time&&Number.isFinite(c.first_signal)&&c.first_signal! <= event.time&&(!previous||c.first_signal!>previous.time));if(candidate)start=candidate.first_signal!-lead;}
   // Old records without a timeline retain a bounded lead-in rather than land on the result.
   if(start===undefined)start=event.time-6;
   result.push({...event,processStart:Math.max(clip.start,Math.min(event.time,start))});

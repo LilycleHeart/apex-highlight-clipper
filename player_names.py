@@ -8,12 +8,12 @@ def name_key(value):
     return ''.join(c for c in unicodedata.normalize('NFKC', value or '').casefold() if c.isalnum())
 
 
-def close_name(left, right):
+def close_name(left, right,minimum_length=6):
     left, right = name_key(left), name_key(right)
     if left == right:
         return bool(left)
     limit=2 if min(len(left),len(right))>=12 else 1
-    if min(len(left), len(right)) < 6 or abs(len(left)-len(right)) > limit:
+    if min(len(left), len(right)) < minimum_length or abs(len(left)-len(right)) > limit:
         return False
     previous=list(range(len(right)+1))
     for i,a in enumerate(left,1):
@@ -57,9 +57,11 @@ def consensus_name(values, minimum=2):
     return {**best, 'confidence': min(v['confidence'] for v in selected), 'votes': len(selected)}
 
 
-def canonical_name(value, reference):
-    if not value or not reference or not close_name(value['name'], reference['name']):
+def canonical_name(value, reference,*,same_player=False):
+    if not value or not reference or not close_name(value['name'], reference['name'],2 if same_player else 6):
         return value
+    if same_player and reference.get('confidence',0)>=.86 and reference.get('votes',0)>=max(4,2*value.get('votes',1)):
+        return {**value,'name':reference['name'],'method':'same_player_frame_consensus'}
     if name_key(value['name']) != name_key(reference['name']) and (
         value.get('confidence', 0) >= .92 or reference.get('confidence', 0) < .86 or reference.get('votes', 0) < 3):
         return value

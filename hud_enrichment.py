@@ -18,7 +18,7 @@ from app_cancel import check_cancel
 from hud_layout import detect_images
 from player_names import player_name,consensus_name,canonical_name,name_key
 
-VERSION='optional-hud-v3'
+VERSION='optional-hud-v4'
 FIELDS=['account','weapons','teammates','hero','rank']
 
 
@@ -34,7 +34,8 @@ def name_value(views):
     for text,confidence in views:
         name=player_name(text)
         if confidence>=.80 and name:choices.append({'name':name,'confidence':float(confidence)})
-    return max(choices,key=lambda row:row['confidence']) if choices else None
+    for value in choices:value['view_agreement']=sum(name_key(other['name'])==name_key(value['name']) for other in choices)
+    return max(choices,key=lambda row:(row['view_agreement'],row['confidence'])) if choices else None
 
 
 def native_frames(source,start,end,moments=None):
@@ -65,7 +66,7 @@ def voice_template(sx,sy):
 def name_patch(image,profile,bounds):
     # 给首尾字符留边距，再用固定语音图标确定名字右边界，避免图标被读成数字/字母。
     sx,sy=profile.get('hud_scale',[1,1]);rw,rh=profile['reference_size'];h,w=image.shape[:2]
-    bounds=[bounds[0]-round(4*sx),bounds[1],bounds[2]+round(40*sx),bounds[3]]
+    bounds=[bounds[0]-round(8*sx),bounds[1]-round(2*sy),bounds[2]+round(48*sx),bounds[3]+round(2*sy)]
     patch=roi(image,profile,bounds);template=voice_template(round(sx*w/rw,4),round(sy*h/rh,4))
     if patch.shape[0]>=template.shape[0] and patch.shape[1]>=template.shape[1]:
         gray=cv2.cvtColor(patch,cv2.COLOR_BGR2GRAY)
@@ -75,20 +76,24 @@ def name_patch(image,profile,bounds):
     return patch
 
 
-def recognize_video(source,fields=None,start=0.,end=None,profile=None):
+def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activity=None):
     fields=list(dict.fromkeys(fields or FIELDS));source=Path(source)
+    def notify(message,frames_done=0,frames_total=3):
+        if on_activity:on_activity({'message':message,'fields':fields,'frames_done':frames_done,'frames_total':frames_total,'backend':os.environ.get('APEX_OCR_BACKEND','cpu')})
+    notify('检查片段并读取 HUD 画面')
     before=fingerprint(source);meta,video=probe(source);end=min(float(meta['format']['duration']),end or float(meta['format']['duration']))
     frames=list(native_frames(source,start,end))
     if not frames:raise ValueError('片段中没有可读取的HUD画面')
     if not profile:profile=detect_images([image for _,image in frames],video['width'],video['height'])
+    notify('载入所选信息的识别模型',frames_total=len(frames))
     from weapon_reader import caption_views,recognize_text_views,MODEL_PATH,WeaponTextReader
     reader=None
     if set(fields)&{'account','weapons','teammates'}:
-        import os
         from engine_pool import pooled_engine
         from gpu_ocr_backend import create_ocr_engine
         backend=os.environ.get('APEX_OCR_BACKEND','cpu')
-        reader=pooled_engine(('optional-hud',backend),lambda:create_ocr_engine(backend=backend,model_path=MODEL_PATH)).text_rec
+        # 名字没有固定词表，长短混批的补白可能吞掉细笔画；每个视图独立保留比例。
+        reader=pooled_engine(('optional-hud',VERSION,backend),lambda:create_ocr_engine(backend=backend,model_path=MODEL_PATH,rec_batch_num=1)).text_rec
     from rank_reader import RankReader
     rank_reader=RankReader() if 'rank' in fields else None
     from hero_reader import HeroReader
@@ -133,7 +138,8 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None):
         if rank_reader:row['rank']=rank_reader.inspect(image,profile)
         if hero_reader:row['hero']=hero_reader.inspect(image,profile)
         observations.append(row)
-    for second,image in frames:inspect(second,image)
+    for second,image in frames:
+        inspect(second,image);notify('识别所选 HUD 信息',len(frame_times),len(frames))
     # 未确认才在已有清晰 HUD 附近补最多三帧，避免三个固定时刻都落在遮挡/换枪动画。
     uncertain=any(not stable(observations,f) for f in ['account','hero','rank'] if f in fields)
     uncertain=uncertain or ('teammates' in fields and any(not stable(team,'teammate') for team in teams))
@@ -148,7 +154,9 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None):
                 if second>=start and all(abs(second-t)>.1 for t in frame_times+times):times.append(second)
                 if len(times)==3:break
             if len(times)==3:break
-        for second,image in native_frames(source,start,end,sorted(times)):inspect(second,image)
+        planned=len(frame_times)+len(times);notify('复核未确认的信息',len(frame_times),planned)
+        for second,image in native_frames(source,start,end,sorted(times)):
+            inspect(second,image);notify('复核未确认的信息',len(frame_times),planned)
     names=[{k:v for k,v in row.items() if k in ['time','account','teammates']} for row in observations]
     result={'version':VERSION,'source_identity':before,'requested_fields':fields,'profile':profile,
         'checked_frames':len(frame_times),'frame_times':frame_times,'account':None,'teammates':[],'name_observations':names,
@@ -180,8 +188,10 @@ def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None):
         if info.get('version')!=VERSION:continue
         key=clip.get('recognition',{}).get('match_key') or str(clip.get('output',clip.get('file','')))
         for row in info.get('name_observations',[]):
-            if row.get('account'):accounts.append(row['account'])
-            for value in row.get('teammates',[]):teams.setdefault((key,value['slot']),[]).append(value)
+            versions=info.get('field_versions',{})
+            if row.get('account') and versions.get('account',info.get('version'))==VERSION:accounts.append(row['account'])
+            if versions.get('teammates',info.get('version'))==VERSION:
+                for value in row.get('teammates',[]):teams.setdefault((key,value['slot']),[]).append(value)
     account=consensus_name(accounts,minimum=3)
     references={key:consensus_name(values,minimum=3) for key,values in teams.items()}
     for clip in clips if targets is None else targets:
@@ -189,12 +199,12 @@ def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None):
         if info.get('version')!=VERSION:continue
         writable=fields if updates is None else fields&updates.get(id(clip),set())
         if 'account' in writable:
-            values=[canonical_name(row.get('account'),account) for row in info.get('name_observations',[])]
-            info['account']=consensus_name(values) or canonical_name(info.get('account'),account)
+            values=[canonical_name(row.get('account'),account,same_player=True) for row in info.get('name_observations',[])]
+            info['account']=consensus_name(values) or canonical_name(info.get('account'),account,same_player=True)
         key=clip.get('recognition',{}).get('match_key') or str(clip.get('output',clip.get('file','')))
         if 'teammates' in writable:
             for n,value in enumerate(info.get('teammates',[])):
-                info['teammates'][n]=canonical_name(value,references.get((key,value.get('slot'))))
+                info['teammates'][n]=canonical_name(value,references.get((key,value.get('slot'))),same_player=True)
 
 
 def merge_name_observations(previous,current,fields):
@@ -208,7 +218,7 @@ def merge_name_observations(previous,current,fields):
     return rows
 
 
-def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=False):
+def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=False,on_activity=None):
     """只追加识别元数据，保持所有视频字节、名称与已冻结交战/计数不变。"""
     directory=Path(directory).resolve();path=directory/'export.json';manifest=json.loads(path.read_text('utf-8-sig'))
     fields=list(dict.fromkeys(fields or FIELDS))
@@ -224,20 +234,27 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
         if not file.is_relative_to(video_directory) or file.suffix.lower()!='.mp4' or str(file).casefold() not in recorded:raise ValueError('成片路径不属于对应导出目录')
     name_updates={}
     for index,clip in enumerate(selected):
-        check_cancel();file=Path(clip.get('output',clip.get('file','')));identity=fingerprint(file)
+        check_cancel();file=Path(clip.get('output',clip.get('file','')))
+        def activity(details):
+            if on_activity:on_activity({'type':'hud-info-activity','index':index+1,'total':len(selected),'file':str(file),**details})
+        activity({'message':'检查已有识别结果','frames_done':0,'frames_total':0})
+        identity=fingerprint(file)
         recognition=clip.setdefault('recognition',{});previous=recognition.get('hud_info',{})
-        pending=[field for field in fields if force or previous.get('version')!=VERSION or previous.get('source_identity')!=identity or field not in previous.get('requested_fields',[]) or previous.get('field_status',{}).get(field)!='confirmed']
+        versions=previous.get('field_versions') or {field:previous.get('version') for field in previous.get('requested_fields',[])}
+        pending=[field for field in fields if force or versions.get(field)!=VERSION or previous.get('source_identity')!=identity or field not in previous.get('requested_fields',[]) or previous.get('field_status',{}).get(field)!='confirmed']
         if pending:
-            current=recognize_video(file,pending)
+            current=recognize_video(file,pending,**({'on_activity':activity} if on_activity else {}))
             info={**previous,**{field:current[field] for field in pending}}
             names=merge_name_observations(previous.get('name_observations',[]),current['name_observations'],pending)
             info.update(version=VERSION,source_identity=identity,profile=current['profile'],checked_frames=current['checked_frames'],
                 name_observations=names,frame_times=current['frame_times'],
                 requested_fields=list(dict.fromkeys(previous.get('requested_fields',[])+pending)),
                 field_status={**previous.get('field_status',{}),**current['field_status']})
+            info['field_versions']={**versions,**{field:VERSION for field in pending}}
             if force:info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+pending))
             name_updates[id(clip)]=set(pending)
             recognition['hud_info']=info;write_json(path,manifest)
+        else:activity({'message':'所选信息已确认，跳过读取','frames_done':0,'frames_total':0})
         if on_progress:on_progress(index+1,len(selected),str(file))
     # 手动重读只使用本次所选片段的姓名证据，旧片段不能把误识别带回来。
     reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected,updates=name_updates)
@@ -253,7 +270,7 @@ def _child_python(backend):
     return str(executable)
 
 
-def _run_hud_child(request,on_progress=None):
+def _run_hud_child(request,on_progress=None,on_activity=None):
     """原生访问冲突无法用 try/except 捕获；子进程只读取成片并更新软件元数据。"""
     process=subprocess.Popen([_child_python(request['backend']),'-X','faulthandler',str(BASE/'hud_enrichment.py'),'--stdin','--direct'],
         cwd=BASE,env={**os.environ,'PYTHONUTF8':'1','PYTHONFAULTHANDLER':'1'},
@@ -277,6 +294,7 @@ def _run_hud_child(request,on_progress=None):
             except (ValueError,TypeError):continue
             if event.get('type')=='hud-info-progress' and on_progress:
                 on_progress(event['index'],event['total'],event['file'])
+            elif event.get('type')=='hud-info-activity' and on_activity:on_activity(event)
             elif event.get('type')=='hud-info-done':done=event
         code=process.wait()
         if code!=0:
@@ -291,7 +309,7 @@ def _run_hud_child(request,on_progress=None):
         for stream in [process.stdin,process.stdout]:stream.close()
 
 
-def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,on_log=None,*,force=False):
+def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,on_log=None,*,force=False,on_activity=None):
     """GPU 原生崩溃只影响补充子进程；已有成片保留，并用独立 CPU 进程续接。"""
     directory=Path(directory).resolve()
     manifest=json.loads((directory/'export.json').read_text('utf-8-sig'))
@@ -300,28 +318,38 @@ def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,o
     request={'jobs':[{'directory':str(directory),'files':[str(f) for f in files]}],
         'fields':fields or FIELDS,'backend':backend,'gpu_load':os.environ.get('APEX_GPU_LOAD','low'),'force':force}
     from app_cancel import TaskStopped
-    try:_run_hud_child(request,on_progress)
+    try:_run_hud_child(request,on_progress,on_activity)
     except TaskStopped:raise
     except Exception as error:
         if backend=='cpu':raise
         message='GPU补充识别异常，已导出视频保留，改用CPU补齐：'+str(error)
         if on_log:on_log(message)
         else:print(message,flush=True)
-        _run_hud_child({**request,'backend':'cpu'},on_progress)
+        if on_activity:on_activity({'type':'hud-info-activity','index':0,'total':len(files),'file':'','message':'GPU 异常，改用 CPU 继续识别','backend':'cpu','frames_done':0,'frames_total':0})
+        _run_hud_child({**request,'backend':'cpu'},on_progress,on_activity)
     return json.loads((directory/'export.json').read_text('utf-8-sig'))
+
+
+def run_jobs(request,direct=False,emit=None):
+    emit=emit or (lambda event:print(json.dumps(event,ensure_ascii=False),flush=True))
+    os.environ['APEX_OCR_BACKEND']=request.get('backend','cpu')
+    os.environ['APEX_GPU_LOAD']=request.get('gpu_load','low')
+    errors=[];done=0;offset=0;total=sum(len(job['files']) for job in request['jobs'])
+    for job in request['jobs']:
+        try:
+            enrich=enrich_manifest if direct else enrich_manifest_isolated
+            enrich(job['directory'],job['files'],request.get('fields'),
+                lambda index,local_total,file:emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file}),
+                force=request.get('force',False),on_activity=lambda event:emit({**event,'index':offset+event['index'],'total':total}))
+            done+=len(job['files'])
+        except Exception as error:
+            errors.append({'directory':job['directory'],'message':str(error)})
+            emit({'type':'hud-info-error','index':offset,'total':total,'message':'本组片段尚未完成，继续下一组','failures':len(errors)})
+        offset+=len(job['files'])
+    result={'type':'hud-info-done','updated':done,'errors':errors,'total':total}
+    emit(result);return result
 
 
 if __name__=='__main__':
     request=json.loads(sys.stdin.read() if '--stdin' in sys.argv else Path(sys.argv[1]).read_text('utf-8-sig'))
-    os.environ['APEX_OCR_BACKEND']=request.get('backend','cpu')
-    os.environ['APEX_GPU_LOAD']=request.get('gpu_load','low')
-    errors=[];done=0
-    for job in request['jobs']:
-        try:
-            enrich=enrich_manifest if '--direct' in sys.argv else enrich_manifest_isolated
-            enrich(job['directory'],job['files'],request.get('fields'),
-                lambda index,total,file:print(json.dumps({'type':'hud-info-progress','index':index,'total':total,'file':file}),flush=True),
-                force=request.get('force',False))
-            done+=len(job['files'])
-        except Exception as error:errors.append({'directory':job['directory'],'message':str(error)})
-    print(json.dumps({'type':'hud-info-done','updated':done,'errors':errors},ensure_ascii=False),flush=True)
+    run_jobs(request,direct='--direct' in sys.argv)

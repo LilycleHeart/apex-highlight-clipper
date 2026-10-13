@@ -21,9 +21,18 @@ class PlayerNameTests(unittest.TestCase):
             source=Path(tmp)/'clip.mp4';source.write_bytes(b'fixture')
             with patch('hud_enrichment.native_frames',side_effect=frames),patch('hud_enrichment.probe',return_value=({'format':{'duration':10}},{})),patch('hud_enrichment.inactive_view',return_value=False),patch('engine_pool.pooled_engine',return_value=SimpleNamespace(text_rec=empty)),patch('weapon_reader.WeaponTextReader',return_value=empty),patch('hero_reader.HeroReader') as hero,patch('rank_reader.RankReader') as rank:
                 hero.return_value.inspect.return_value=None;rank.return_value.inspect.return_value=None
-                result=recognize_video(source,FIELDS,profile=profile)
+                activity=[];result=recognize_video(source,FIELDS,profile=profile,on_activity=activity.append)
         self.assertEqual(result['checked_frames'],6)
         self.assertTrue(all(v=='unknown' for v in result['field_status'].values()))
+        self.assertEqual(activity[-1]['frames_done'],6)
+
+    def test_same_player_evidence_can_correct_confident_ocr_without_merging_other_players(self):
+        weak={'name':'[YURI] Liiumeordis','confidence':.96}
+        real={'name':'[YURI] Liliumcordis','confidence':.95,'votes':8}
+        self.assertEqual(canonical_name(weak,real)['name'],weak['name'])
+        self.assertEqual(canonical_name(weak,real,same_player=True)['name'],real['name'])
+        self.assertEqual(canonical_name({'name':'落生','confidence':.97},{'name':'落生烬','confidence':.95,'votes':12},same_player=True)['name'],'落生烬')
+        self.assertEqual(canonical_name({'name':'[YURI] LilycleHeart','confidence':.99},real,same_player=True)['name'],'[YURI] LilycleHeart')
 
     def test_fixed_hud_text_and_conflicting_names_are_not_confirmed(self):
         for text in ['MAX LEVEL','下個等級 749 進化','造成150伤害','KNOCKED DOWN','\ufffd口□']:

@@ -26,11 +26,15 @@
   mix-blend-mode: normal;
 }
 
-/* Height caps previously changed the box ratio without changing its width.
-   Metadata owns the inline aspect ratio; fullscreen alone overrides it. */
+/* Fit both dimensions inside the library scrollport without changing the ratio. */
+.clip-expanded .clip-cover:not(:fullscreen) {
+  width: var(--player-fitted-width,100%);
+  max-width: 100%;
+  margin-inline: auto;
+}
 .clip-expanded .clip-cover:not(:fullscreen) .media-frame {
   width: 100%;
-  height: auto;
+  height: var(--player-fitted-height,auto);
   max-height: none;
   margin: 0;
 }

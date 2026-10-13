@@ -68,6 +68,13 @@
 .hud-settings{margin:16px 0;padding-top:12px;border-top:1px solid var(--card-line)}
 .hud-field-picker{display:flex;flex-wrap:wrap;gap:10px 16px;margin:12px 0}.hud-field-picker label{display:flex;align-items:center;gap:6px}.hud-field-picker input{accent-color:var(--primary)}
 .hud-enrichment-panel>p,.hud-enrichment-panel>.hud-field-picker{grid-column:1/-1}.hud-enrichment-panel>p{margin:0;color:var(--text-muted)}
+.hud-run-progress{grid-column:1/-1;min-width:0;padding:12px 14px;background:var(--card-tint);border-radius:14px;font-size:12px}
+.hud-run-heading{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+.hud-run-progress progress{appearance:none;display:block;width:100%;height:6px;margin:10px 0;border:0;border-radius:6px;overflow:hidden}
+.hud-run-progress progress::-webkit-progress-bar{background:var(--card-line)}
+.hud-run-progress progress::-webkit-progress-value{background:var(--card-accent);border-radius:6px;transition:width .18s ease}
+.hud-current-file{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px}
+.hud-run-activity,.hud-run-fields{font-size:11px;color:var(--card-muted);line-height:1.6}
 .clip-identity{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-top:6px}.clip-identity span{color:var(--text-muted)}.clip-identity b{font-weight:500;overflow-wrap:anywhere;text-align:right}
 .preference-summary{margin:20px 0}.preference-summary>div:first-child{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px}.preference-summary span{font-size:12px;color:var(--text-muted)}
 .browse-filter-panel select{width:100%;height:36px;margin-top:6px;padding:0 10px;border:1px solid var(--card-line);border-radius:9px;background:var(--card-tint);color:var(--card-ink)}

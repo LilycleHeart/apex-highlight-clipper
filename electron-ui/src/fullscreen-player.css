@@ -1,8 +1,16 @@
 .clip-expanded .clip-cover{position:relative}
 .clip-expanded .clip-cover .player-controls{position:absolute;inset:auto 0 0;z-index:10;box-sizing:border-box;width:100%;background:transparent;color:var(--card-accent);--card-line:color-mix(in srgb,var(--card-accent) 38%,transparent)}
-.clip-expanded .clip-cover .player-control-row button,.clip-expanded .clip-cover .event-marker{background:transparent;color:var(--card-accent);filter:drop-shadow(0 1px 2px #000b)}
+.clip-expanded .clip-cover{--player-glass:color-mix(in srgb,var(--card-paper) 82%,transparent)}
+.player-main-controls,.player-end-controls{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:18px;background:var(--player-glass);backdrop-filter:blur(8px);box-shadow:0 2px 12px #0003}
+.player-end-controls{margin-left:auto}
+.player-control-row{flex-wrap:wrap;gap:8px}
+.player-control-row .player-volume{margin:0}
+.player-main-controls>time{font:12px Cal Sans,GenSen Rounded,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+.clip-expanded .clip-cover .player-control-row button{width:32px;height:32px;padding:0;display:grid;place-items:center;border-radius:12px;background:transparent;color:var(--card-accent)}
+.clip-expanded .clip-cover .player-control-row .player-details-button,.clip-expanded .clip-cover .player-control-row .player-collapse-button{width:auto;padding:0 10px;font-size:11px;white-space:nowrap}
+.clip-expanded .clip-cover .event-marker{background:var(--player-glass);color:var(--card-accent);border-radius:16px;backdrop-filter:blur(8px);box-shadow:0 2px 8px #0003}
 .clip-expanded .clip-cover .player-control-row button:hover,.clip-expanded .clip-cover .event-marker:hover,.clip-expanded .clip-cover .event-marker:focus-visible{background:rgba(0,0,0,.2)}
-.clip-expanded .clip-cover .player-control-row>time,.clip-expanded .clip-cover .event-marker{text-shadow:0 1px 3px #000}
+.clip-expanded .clip-cover .event-marker:hover,.clip-expanded .clip-cover .event-marker:focus-visible{background:color-mix(in srgb,var(--card-paper) 94%,transparent)}
 .clip-expanded .clip-cover .video-seek{filter:drop-shadow(0 1px 2px #000b)}
 .clip-cover:fullscreen{position:relative;display:block;overflow:hidden;border-radius:0;width:100vw;height:100vh;max-height:none}
 .clip-cover:fullscreen .media-frame{position:absolute;inset:0;width:100%;height:100%;max-height:none;aspect-ratio:auto!important}
@@ -13,7 +21,7 @@
 .clip-cover .player-controls,.player-round-totals{opacity:1;visibility:visible;transition:opacity .2s ease,visibility 0s}
 .clip-cover .player-controls[data-visible=false],.player-round-totals[data-visible=false]{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s .2s}
 .clip-cover:fullscreen[data-controls-visible=false]{cursor:none}
-.player-round-totals{position:absolute;top:22px;right:28px;z-index:10;display:flex;gap:18px;align-items:center;padding:10px 14px;color:var(--card-accent);font-size:13px;text-shadow:0 1px 3px #000,0 0 8px #000;pointer-events:none}
+.player-round-totals{position:absolute;top:22px;right:28px;z-index:10;display:flex;gap:18px;align-items:center;padding:10px 14px;color:var(--card-accent);font-size:13px;background:var(--player-glass);border-radius:20px;backdrop-filter:blur(8px);box-shadow:0 2px 12px #0003;pointer-events:none}
 .player-round-totals>span{display:flex;align-items:center;gap:8px}
 .player-round-totals>span:first-child{font-size:12px}
 .player-round-totals b{font-size:22px;font-variant-numeric:tabular-nums}

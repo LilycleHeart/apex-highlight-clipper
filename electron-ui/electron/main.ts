@@ -192,6 +192,7 @@ async function enrichHud(files:unknown,fields:unknown,mode:unknown='missing'){
  const grouped=new Map<string,string[]>();for(const file of selectedFiles){const dir=clipDirectories.get(normalized(file));if(!dir)throw new Error('片段没有对应任务记录');const group=grouped.get(dir);if(group)group.push(file);else grouped.set(dir,[file]);}
  const root=path.join(validationRoot,'app-requests');await fs.mkdir(root,{recursive:true});requestPath=path.join(root,randomUUID()+'.json');
  await fs.writeFile(requestPath,JSON.stringify({jobs:[...grouped].map(([directory,files])=>({directory,files})),fields,force:mode==='refresh',backend:options.backend,gpu_load:options.gpu_load}),'utf8');
+ send({type:'hud-info-start',index:0,total:selectedFiles.length,message:mode==='refresh'?'准备重新识别':'准备补充未识别信息'});
  return await new Promise<{updated:number;errors:{directory:string;message:string}[]}>((resolve,reject)=>{
   const proc=spawn(pythonFor(options.backend),['hud_enrichment.py',requestPath],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});hudWorker=proc;
   let done:{updated:number;errors:{directory:string;message:string}[]}|null=null,stderr='';
@@ -285,7 +286,7 @@ app.whenReady().then(async()=>{
  handle('delete-clip',async(file:string)=>{await clipDeletions.remove(file);allowedClips.delete(normalized(file));diagnostics.log('info','library','片段已移至回收站');});
  handle('thumbnail-url',async(file:string)=>{if(typeof file!=='string'||!allowedClips.has(normalized(file)))throw new Error('只允许读取片段库中已导出的录像');return imageUrl(await thumbnails.get(file,clipDurations.get(normalized(file))||0));});
  handle('thumbnail-stats',()=>thumbnails.stats());
- handle('open',async(p:string,folder=false)=>{if(typeof p!=='string'||!allowedPaths.has(normalized(p)))throw new Error('只允许打开本任务的录像或成片');const stat=await fs.stat(p);if(!stat.isDirectory()&&!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error('只允许打开录像或输出文件夹');if(folder)shell.showItemInFolder(p);else{const error=await shell.openPath(p);if(error)throw new Error(error);}});
+ handle('open',async(p:string,folder=false)=>{if(typeof p!=='string'||!allowedPaths.has(normalized(p))&&normalized(p)!==normalized(output))throw new Error('只允许打开本任务的录像或成片');const stat=await fs.stat(p);if(!stat.isDirectory()&&!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error('只允许打开录像或输出文件夹');if(folder)shell.showItemInFolder(p);else{const error=await shell.openPath(p);if(error)throw new Error(error);}});
  if(process.env.APEX_UI_VALIDATE==='1'){
   handle('validation-import',imports);handle('validation-task',taskInfo);handle('validation-project',()=>project);
  }

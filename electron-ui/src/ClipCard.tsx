@@ -5,7 +5,7 @@ import type {Clip} from './shared';
 import {clock} from './state';
 import ClipDetails from './ClipDetails';
 import PlayerControls from './PlayerControls';
-import {displayRatio} from './mediaGeometry';
+import {displayRatio,fitPlayerSize} from './mediaGeometry';
 import useThumbnail from './useThumbnail';
 import MotionDetails from './MotionDetails';
 import {applyPlayerAudio} from './playerAudio';
@@ -21,6 +21,13 @@ function ClipCard({clip,index,identity,view,playback,selected,disabled,deleting,
  const collapse=()=>{if(document.fullscreenElement===cover.current)void document.exitFullscreen().catch(()=>{}).finally(()=>onSelect(null));else onSelect(null);};
  useLayoutEffect(()=>{if(selected)onGeometryChange();},[media,selected,detailsOpen,onGeometryChange]);
  useLayoutEffect(()=>{if(selected){scrolled.current=false;onGeometryChange();}},[view,selected,onGeometryChange]);
+ useLayoutEffect(()=>{
+  const element=cover.current,root=element?.closest<HTMLElement>('.library-scroll');if(!selected||!element||!root)return;
+  let previous='',raf=0;
+  const fit=()=>{const box=fitPlayerSize(Math.min(root.clientWidth,element.parentElement?.clientWidth||root.clientWidth),root.clientHeight,ratio),key=box.width.toFixed(2)+':'+box.height.toFixed(2);if(key===previous)return;previous=key;element.style.setProperty('--player-fitted-width',box.width+'px');element.style.setProperty('--player-fitted-height',box.height+'px');onGeometryChange();cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{if(document.fullscreenElement===element)return;const r=element.getBoundingClientRect(),v=root.getBoundingClientRect();if(r.bottom>v.top&&r.top<v.bottom)element.scrollIntoView({block:'nearest',behavior:'instant'});});};
+  const observer=new ResizeObserver(fit);observer.observe(root);if(element.parentElement)observer.observe(element.parentElement);fit();
+  return()=>{observer.disconnect();cancelAnimationFrame(raf);element.style.removeProperty('--player-fitted-width');element.style.removeProperty('--player-fitted-height');};
+ },[selected,view,ratio,onGeometryChange]);
  const displayName=clip.name.replace('未知杀',clip.kills===null?'—杀':`${clip.kills}杀`).replace('未知伤',clip.damage===null?'—伤':`${clip.damage}伤`).replaceAll('未知枪','—枪');
  useEffect(()=>{
   let live=true;setError('');setPlaying(false);setNeedsPlay(false);scrolled.current=false;setDetailsOpen(false);

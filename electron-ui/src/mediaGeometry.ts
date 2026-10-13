@@ -9,3 +9,8 @@ export function mediaGeometry(metadata:any):MediaGeometry|undefined{
  return{width,height,displayWidth,displayHeight,rotation,sampleAspectRatio:sar};
 }
 export function displayRatio(media:MediaGeometry|undefined){if(!media)return;const r=media.displayWidth/media.displayHeight;return Number.isFinite(r)&&r>0?r:undefined;}
+export function fitPlayerSize(width:number,viewportHeight:number,ratio:number){
+ const r=Number.isFinite(ratio)&&ratio>0?ratio:16/9;
+ const fittedWidth=Math.min(Math.max(1,width),Math.max(1,viewportHeight-36)*r);
+ return {width:fittedWidth,height:fittedWidth/r};
+}

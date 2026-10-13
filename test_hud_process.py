@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from app_cancel import TaskStopped
-from hud_enrichment import enrich_manifest_isolated,_run_hud_child
+from hud_enrichment import enrich_manifest_isolated,_run_hud_child,run_jobs
 
 
 class Input(io.StringIO):
@@ -22,6 +22,23 @@ class Child:
 
 
 class HudProcessTests(unittest.TestCase):
+    def test_multi_job_progress_is_global_and_activity_survives_child_protocol(self):
+        request={'backend':'cpu','fields':['weapons'],'force':True,'jobs':[{'directory':'first','files':['a','b']},{'directory':'second','files':['c']}]}
+        events=[]
+        def enrich(directory,files,fields,on_progress,*,force,on_activity):
+            self.assertTrue(force)
+            for index,file in enumerate(files,1):
+                on_activity({'type':'hud-info-activity','index':index,'total':len(files),'file':file,'message':'识别武器','frames_done':1,'frames_total':3})
+                on_progress(index,len(files),file)
+        with patch('hud_enrichment.enrich_manifest_isolated',side_effect=enrich):result=run_jobs(request,emit=events.append)
+        progress=[e for e in events if e['type']=='hud-info-progress'];activity=[e for e in events if e['type']=='hud-info-activity']
+        self.assertEqual([e['index'] for e in progress],[1,2,3]);self.assertTrue(all(e['total']==3 for e in progress+activity))
+        self.assertEqual([e['file'] for e in activity],['a','b','c']);self.assertEqual(result['updated'],3)
+        child=Child(0,json.dumps(activity[0])+'\n'+json.dumps({'type':'hud-info-done','errors':[]})+'\n')
+        forwarded=[]
+        with patch('hud_enrichment.subprocess.Popen',return_value=child):_run_hud_child({'backend':'cpu'},on_activity=forwarded.append)
+        self.assertEqual(forwarded,[activity[0]])
+
     def test_native_gpu_exit_retries_cpu_using_exported_clips_only(self):
         with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'APEX_OCR_BACKEND':'dml'}):
             root=Path(tmp);video=root/'clip.mp4';video.write_bytes(b'exported')

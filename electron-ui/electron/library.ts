@@ -1,3 +1,4 @@
+import {normalizeLibraryNames} from '../src/libraryNames';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -16,7 +17,7 @@ export async function discoverTasks(roots:string[],registered:string[]=[]){
  return [...found.values()];
 }
 export function mergeLibrary(results:Result[]){
- const seen=new Set<string>();return results.map(result=>({...result,clips:result.clips.filter(clip=>{const id=key(clip.path);if(seen.has(id))return false;seen.add(id);return true;})})).filter(result=>result.clips.length>0);
+ const seen=new Set<string>();return normalizeLibraryNames(results.map(result=>({...result,clips:result.clips.filter(clip=>{const id=key(clip.path);if(seen.has(id))return false;seen.add(id);return true;})})).filter(result=>result.clips.length>0));
 }
 export class LibraryStore{
  private tasks=new Map<string,string>();private roots=new Map<string,string>();private ignored=new Map<string,string>();private writes=Promise.resolve();
