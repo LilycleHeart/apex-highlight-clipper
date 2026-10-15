@@ -24,7 +24,7 @@ v1.0.1 保持安装器 AppId `{AF948615-855F-4699-8640-11A9E2F08854}` 与用户�
 
 两个runtime/*/python.exe入口保留。python311._pth只包含当前模式、包内源码与runtime/shared/Lib/site-packages，不读取PYTHONPATH或系统Python包。sitecustomize检查必需资源、保留AddDllDirectory句柄，并处理共享pywin32.pth；不会将另一模式的ONNX Runtime加入DLL搜索目录。Windows对多个新增DLL目录不保证顺序，因此构建时拒绝当前模式内不同内容的同名DLL。依据：[Python嵌入式路径](https://docs.python.org/3.11/using/windows.html#finding-modules)、[add_dll_directory](https://docs.python.org/3.11/library/os.html#os.add_dll_directory)、[Windows DLL搜索规则](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order)。
 
-发布ZIP不含FFmpeg命令行可执行程序；Start.cmd首次通过scripts/setup-ffmpeg.ps1获取固定官方供应版本并校验SHA256，或由用户提供工具。模型在发布包内，源码仓库记录下载校验逻辑。
+发布ZIP不含FFmpeg命令行可执行程序；根目录的 Apex Highlight Clipper.exe 启动器首次通过 scripts/setup-ffmpeg.ps1 获取固定官方供应版本并校验SHA256，后续版本共用已验证工具。Start.cmd 仅作为兼容入口转到启动EXE。启动器由 Windows .NET Framework 自带的 C# 编译器生成，无控制台窗口；模型在发布包内，源码仓库记录下载校验逻辑。
 
 只运行本次改动直接影响的最小检查，复用同一代码状态下已通过的结果；不因发布重复运行全部界面组合。共享运行库改动需要验证包移出项目后两种provider的OCR、模式切换、重启、缺资源错误，以及一个媒体seek场景。发布与push需要当前任务明确授权，确认目标commit、CI和包清单后再操作。
 

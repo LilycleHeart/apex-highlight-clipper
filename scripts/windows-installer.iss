@@ -21,7 +21,7 @@ LZMANumBlockThreads=2
 SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
-UninstallDisplayIcon={app}\app\Apex Highlight Clipper.exe
+UninstallDisplayIcon={app}\Apex Highlight Clipper.exe
 Uninstallable=not PortableMode
 CreateUninstallRegKey=not PortableMode
 UsePreviousAppDir=not PortableMode
@@ -39,12 +39,12 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; Flags: unchecked; 
 #include PayloadInclude
 
 [Icons]
-Name: "{group}\Apex Highlight Clipper"; Filename: "{app}\app\Apex Highlight Clipper.exe"; WorkingDir: "{app}"; Check: not PortableMode
-Name: "{autodesktop}\Apex Highlight Clipper"; Filename: "{app}\app\Apex Highlight Clipper.exe"; WorkingDir: "{app}"; Tasks: desktopicon; Check: not PortableMode
+Name: "{group}\Apex Highlight Clipper"; Filename: "{app}\Apex Highlight Clipper.exe"; WorkingDir: "{app}"; Check: not PortableMode
+Name: "{autodesktop}\Apex Highlight Clipper"; Filename: "{app}\Apex Highlight Clipper.exe"; WorkingDir: "{app}"; Tasks: desktopicon; Check: not PortableMode
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\setup-ffmpeg.ps1"" -NoDownload"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; Check: not PortableMode
-Filename: "{app}\app\Apex Highlight Clipper.exe"; Description: "启动 Apex Highlight Clipper"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Apex Highlight Clipper.exe"; Description: "启动 Apex Highlight Clipper"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function PortableMode: Boolean;

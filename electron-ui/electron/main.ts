@@ -39,7 +39,7 @@ const libraryStore=new LibraryStore(path.join(app.getPath('userData'),'library.j
 const thumbnails=new ThumbnailStore(path.join(app.getPath('userData'),'thumbnails'),()=>{
  const shared=process.env.LOCALAPPDATA&&path.join(process.env.LOCALAPPDATA,'Apex Highlight Clipper','dependencies','ffmpeg','9.0.2');
  for(const folder of [process.env.APEX_FFMPEG_DIR,shared,path.join(project,'tools'),...(process.env.PATH||'').split(path.delimiter)])if(folder&&existsSync(path.join(folder,'ffmpeg.exe'))&&existsSync(path.join(folder,'ffprobe.exe')))return path.join(folder,'ffmpeg.exe');
- throw new Error('请先通过 Start.cmd 启动以准备视频工具');
+ throw new Error('请通过程序目录中的 Apex Highlight Clipper.exe 启动以准备视频工具');
 });
 const clipDurations=new Map<string,number>();const clipDirectories=new Map<string,string>();
 const clipTasks=new Map<string,string>();const originalVideos=new Set<string>();

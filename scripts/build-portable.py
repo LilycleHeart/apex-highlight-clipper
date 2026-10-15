@@ -34,7 +34,7 @@ def release_files(target):
     for p in target.rglob('*'):
         rel=p.relative_to(target)
         if not p.is_file() or any(part in {'__pycache__','tests','validation','output'} for part in rel.parts): continue
-        if p.suffix=='.pyc' or rel.parts[0]=='tools' or rel.as_posix()=='FILES.sha256.json': continue
+        if p.suffix=='.pyc' or rel.parts[0]=='tools' or rel.as_posix() in {'FILES.sha256.json','ffmpeg.local.json'}: continue
         yield p
 
 def reuse_shared_runtime(source,target):
@@ -76,6 +76,21 @@ def validate_worker(target):
     with tempfile.TemporaryDirectory(prefix='build-smoke-中文路径-',dir=folder) as temporary:
         _validate_worker(target,Path(temporary))
     if not any(folder.iterdir()):folder.rmdir()
+
+def build_launcher(target,version):
+    framework=Path(os.environ.get('WINDIR','C:/Windows'))/'Microsoft.NET'
+    compiler=next((framework/mode/'v4.0.30319/csc.exe' for mode in ['Framework64','Framework']
+        if (framework/mode/'v4.0.30319/csc.exe').is_file()),None)
+    if compiler is None:raise RuntimeError('构建启动EXE需要Windows自带的.NET Framework C#编译器')
+    with tempfile.TemporaryDirectory(prefix='launcher-',dir=target.parent) as temporary:
+        metadata=Path(temporary)/'version.cs'
+        metadata.write_text('using System.Reflection;\n[assembly: AssemblyVersion("'+version+'.0")]\n'
+            '[assembly: AssemblyFileVersion("'+version+'.0")]\n','utf-8')
+        subprocess.run([str(compiler),'/nologo','/codepage:65001','/target:winexe','/platform:x64','/optimize+',
+            '/reference:System.Windows.Forms.dll','/reference:System.Drawing.dll',
+            '/win32icon:'+str(ROOT/'electron-ui/public/brand/cat-clapperboard.ico'),
+            '/out:'+str(target/'Apex Highlight Clipper.exe'),str(ROOT/'scripts/windows-launcher.cs'),
+            str(metadata)],check=True)
 
 def _validate_worker(target,folder):
     # 无交战合成录像仍会经过默认索引、局部OCR、战果/枪械/段位配置加载。
@@ -179,7 +194,11 @@ def build(args):
             "e=create_ocr_engine(backend=sys.argv[1],model_path='models/numeric_rec_en_v4.onnx'); "
             "print('Portable core inference OK',sys.argv[1],len(e.text_rec([np.full((32,96,3),255,np.uint8)])))",mode],cwd=target,check=True)
     if not kernel_reused:validate_worker(target)
-    (target/'Start.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\\setup-ffmpeg.ps1"\r\nif errorlevel 1 (echo FFmpeg setup failed. See README.md. & pause & exit /b 1)\r\nstart "" "%~dp0app\\Apex Highlight Clipper.exe" %*\r\n','utf-8')
+    build_launcher(target,version)
+    (target/'Start.cmd').write_text('@echo off\r\nstart "" "%~dp0Apex Highlight Clipper.exe" %*\r\n','utf-8')
+    package_archive(target,out)
+
+def package_archive(target,out):
     inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(release_files(target))}
     (target/'FILES.sha256.json').write_text(json.dumps(inventory,indent=2),'utf-8')
     archive=out/(target.name+'.zip')
