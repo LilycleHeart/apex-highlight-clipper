@@ -15,7 +15,7 @@ NAMES={'bloodhound':'寻血猎犬','gibraltar':'直布罗陀','lifeline':'命脉
 
 class HeroReader:
  def __init__(self):
-  self.templates=[]
+  self.templates=[];self.contrast_templates=[]
   data=json.loads((BASE/'assets/legends/sources.json').read_text('utf-8'))
   for hero in data['legends']:
    for kind,asset in hero.get('abilities',{}).items():
@@ -26,6 +26,11 @@ class HeroReader:
     if not len(xs):continue
     glyph=(mask[ys.min():ys.max()+1,xs.min():xs.max()+1]>127).astype(np.uint8)*255
     self.templates.append((hero['id'],kind,glyph))
+  hud=BASE/'assets/legends/hud/sources.json'
+  if hud.is_file():
+   for item in json.loads(hud.read_text('utf-8'))['templates']:
+    glyph=read_image(hud.parent/item['file'],cv2.IMREAD_GRAYSCALE)
+    if glyph is not None:self.contrast_templates.append((item['id'],item['slot'],glyph))
  def inspect(self,image,profile):
   rw,rh=profile['reference_size'];sx,sy=profile.get('hud_scale',[1.,1.]);scores={}
   for kind in ['tactical','ultimate']:
@@ -35,14 +40,20 @@ class HeroReader:
    # White HUD glyphs, not colored readiness frames or world geometry.
    hsv=cv2.cvtColor(roi,cv2.COLOR_BGR2HSV)
    masks=[((hsv[:,:,1]<70)&(hsv[:,:,2]>level)).astype(np.uint8)*255 for level in [155,85]]
-   for hero,slot,glyph in self.templates:
+   contrast_masks=list(masks)
+   if any(slot==kind for _,slot,_ in self.contrast_templates):
+    gray=cv2.cvtColor(roi,cv2.COLOR_BGR2GRAY).astype(np.float32)
+    difference=np.abs(gray-np.median(gray,axis=1)[:,None])
+    # 未充能背景有水平条纹，按行移除背景，保留灰色的实际技能符号。
+    contrast_masks.append(np.where(hsv[:,:,1]<70,np.clip((difference-4)*8,0,255),0).astype(np.uint8))
+   for hero,slot,glyph,contrast in [(hero,slot,glyph,False) for hero,slot,glyph in self.templates]+[(hero,slot,glyph,True) for hero,slot,glyph in self.contrast_templates]:
     if slot!=kind:continue
     best=0.
-    for height in range(20,69,3):
+    for height in range(20,81) if contrast else range(20,69,3):
      h=max(4,round(height*sy*image.shape[0]/rh));w=max(4,round(height*glyph.shape[1]/glyph.shape[0]*sx*image.shape[1]/rw))
      if h>=roi.shape[0] or w>=roi.shape[1]:continue
      template=cv2.resize(glyph,(w,h),interpolation=cv2.INTER_AREA)
-     for mask in masks:
+     for mask in contrast_masks if contrast else masks:
       # 技能图形居中；不能把按钮左侧的梯形边框或邻近场景当作技能。
       response=cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED)
       x1=max(0,int(np.ceil(roi.shape[1]*.4-w/2)));x2=min(response.shape[1],int(np.floor(roi.shape[1]*.6-w/2))+1)

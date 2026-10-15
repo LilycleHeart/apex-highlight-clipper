@@ -2,6 +2,7 @@
 import json
 import hashlib
 import math
+import os
 import re
 import unicodedata
 from difflib import SequenceMatcher
@@ -14,7 +15,66 @@ from weapon_reader import new_engine,MODEL_SHA
 
 KINDS={'knock','assist','elimination'}
 RULE_VERSION='own-center-result-v4'
-PARSER_VERSION='target-name-v4'
+PARSER_VERSION='target-name-v5'
+
+TARGET_PREFIX=re.compile(r'^(?:ASSIST[,.:\s]*)?(?:KN[O0]CKED\s*D[O0]WN|ELIMINATED)\s*|^(?:助攻[,，:：\s]*)?(?:[擊击擎驛驿]倒|(?:已)?消[滅灭減减])\s*',re.I)
+
+
+def read_target_span(image,line,reader):
+    """按 CTC 位置裁出拉丁姓名；中日文保留既有整行多帧确认。"""
+    if reader is None or not all(hasattr(reader,key) for key in ['session','resize_norm_img','rec_image_shape','postprocess_op']):return None
+    x1,y1,x2,y2=line['box'];h,w=image.shape[:2]
+    patch=image[max(0,int(y1)-3):min(h,int(y2)+4),max(0,int(x1)-4):min(w,int(x2)+5)]
+    if not patch.size:return None
+    ph,pw=patch.shape[:2];ratio=max(reader.rec_image_shape[2]/reader.rec_image_shape[1],pw/ph)
+    normalized=reader.resize_norm_img(patch,ratio)
+    probabilities=reader.session(normalized[None].astype(np.float32))[0][0]
+    characters=[];positions=[];previous=0
+    for time,index in enumerate(probabilities.argmax(-1)):
+        if index and index!=previous:
+            token=reader.postprocess_op.character[int(index)]
+            if len(token)!=1:return None
+            characters.append(token);positions.append([time,time+1])
+        elif index and positions:positions[-1][1]=time+1
+        previous=index
+    text=''.join(characters);prefix=TARGET_PREFIX.match(text)
+    if not prefix:return None
+    start=prefix.end();suffix=text.find('+',start);end=suffix if suffix>=0 else len(characters)
+    while start<end and text[start].isspace():start+=1
+    while end>start and text[end-1].isspace():end-=1
+    if start>=end:return None
+    if not text[start:end].isascii():return None
+    resized_width=min(normalized.shape[-1],math.ceil(reader.rec_image_shape[1]*pw/ph))
+    factor=normalized.shape[-1]/len(probabilities)*pw/resized_width
+    left=(positions[start-1][1]+positions[start][0])/2 if start else positions[start][0]-.5
+    right=(positions[end-1][1]+positions[end][0])/2 if end<len(positions) else positions[end-1][1]+.5
+    name=patch[:,max(0,math.floor(left*factor)):min(pw,math.ceil(right*factor))]
+    if not name.size:return None
+    name_reader=reader
+    if text[start:end].isascii():
+        # 包内已有英文识别模型；拉丁昵称不用在上万个中日韩字符之间竞争。
+        name_reader=getattr(reader,'_apex_latin_reader',None)
+        if name_reader is None:
+            from gpu_ocr_backend import create_ocr_engine
+            backend=getattr(reader.session,'backend',os.environ.get('APEX_OCR_BACKEND','cpu'))
+            name_reader=create_ocr_engine(backend=backend,model_path=BASE/'models/numeric_rec_en_v4.onnx',rec_batch_num=1).text_rec
+            reader._apex_latin_reader=name_reader
+    # 最大通道保留红/黄姓名，避免白色前缀、积分主导名字的读数。
+    gray=np.max(name,axis=2).astype(np.uint8);reads=[]
+    for view in [name,cv2.cvtColor(255-gray,cv2.COLOR_GRAY2BGR)]:
+        value,confidence=name_reader([view])[0][0]
+        reads.append({'name':clean_target_name(value),'confidence':float(confidence)})
+    from player_names import name_key
+    confirmed=all(read['name'] and read['confidence']>=.90 for read in reads) and name_key(reads[0]['name'])==name_key(reads[1]['name'])
+    best=max(reads,key=lambda read:read['confidence'])
+    return {'name':best['name'] if confirmed else '', 'confidence':min(read['confidence'] for read in reads) if confirmed else 0.,'views':reads,'method':'ctc_span_two_views'}
+
+
+def with_target_read(event,line):
+    read=line.get('target_read')
+    if not event or read is None:return event
+    return {**event,'target_text':read['name'] or event.get('target_text',''),
+        'target_read_confidence':read['confidence'],'target_method':read['method']}
 
 
 def same_english_target(left,right):
@@ -29,7 +89,7 @@ def restore_english_events(observations):
         candidates=[e for e in item.get('possible_events',[]) if e.get('confirmation_basis')!='english_toast_grammar']
         item['events']=[e for e in item.get('events',[]) if e.get('confirmation_basis')!='english_toast_grammar']
         for line in item.get('lines',[]):
-            event=parse_result_line(line['text'])
+            event=with_target_read(parse_result_line(line['text']),line)
             if not event or not re.match(r'^(?:ASSIST|KNOCKED DOWN|ELIMINATED)\b',event['text'],re.I):continue
             if line['prefix_confidence']<.90 or len(event.get('target_text',''))<2:continue
             if any(e['kind']==event['kind'] and same_english_target(e.get('target_text',''),event.get('target_text','')) for e in candidates):continue
@@ -213,7 +273,9 @@ def recognize_frame(image,profile,engine=None,expand_context=False):
         if is_known_dialogue(line['text']): dialogue.append(line); continue
         parsed=parse_result_line(line['text'])
         if parsed and line['prefix_confidence']>=.65:
-            if line['confidence']<.80:parsed['target_text']=''
+            read=read_target_span(image,line,getattr(engine,'text_rec',None))
+            if read is not None:line['target_read']=read;parsed=with_target_read(parsed,line)
+            if line['confidence']<.80 and parsed.get('target_read_confidence',0)<.90:parsed['target_text']=''
             events.append({**parsed,'confidence':line['prefix_confidence'],'text_confidence':line['confidence'],'box':line['box']})
         elif re.search(r'擊倒|击倒|消滅|消灭|助攻|KNOCK|ELIMINAT',line['text'],re.IGNORECASE):
             ambiguous.append(line)
@@ -272,7 +334,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
     checkpoint.parent.mkdir(parents=True,exist_ok=True)
     templates={str(BASE/e['gray']):hashlib.sha256((BASE/e['gray']).read_bytes()).hexdigest() for e in profile.get('prefix_templates',[])}
     signature=hashlib.sha256(json.dumps({'version':RULE_VERSION,'source':identity,'fps':fps,'samples':str(samples.resolve()),
-        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,'stop_after_positive':_stop_after_positive,'reader_version':'toast-lines-v6',
+        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,'stop_after_positive':_stop_after_positive,'reader_version':'toast-lines-v7',
         'bounds':[(c['start'],c['end']) for c in candidates]},sort_keys=True).encode()).hexdigest()
     if checkpoint.exists():
         saved=json.loads(checkpoint.read_text(encoding='utf-8'))

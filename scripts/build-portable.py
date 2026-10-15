@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 import urllib.request
-import uuid
+import tempfile
 import zipfile
 from datetime import datetime, timezone
 
@@ -72,13 +72,17 @@ def reuse_shared_runtime(source,target):
     return not kernel_changed
 
 def validate_worker(target):
+    folder=target/'validation';folder.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='build-smoke-中文路径-',dir=folder) as temporary:
+        _validate_worker(target,Path(temporary))
+    if not any(folder.iterdir()):folder.rmdir()
+
+def _validate_worker(target,folder):
     # 无交战合成录像仍会经过默认索引、局部OCR、战果/枪械/段位配置加载。
     # 真正调用发布包worker，避免只验证第三方import而漏掉内核模块/配置。
     from apex_clipper import tool
     ffmpeg=Path(tool('ffmpeg'));probe=Path(tool('ffprobe'))
     if ffmpeg.parent!=probe.parent: raise RuntimeError('验证需要同目录FFmpeg与FFprobe')
-    folder=target/'validation'/('build-smoke-中文路径-'+uuid.uuid4().hex)
-    folder.mkdir(parents=True)
     source=folder/'Replay 2026-10-10 09-00-00.mp4'
     subprocess.run([str(ffmpeg),'-hide_banner','-loglevel','error','-f','lavfi','-i',
         'color=c=black:s=2560x1080:r=30','-t','3','-c:v','libx264','-preset','ultrafast',

@@ -2,6 +2,8 @@
 
 应用代码不改变第三方作品的许可。发布包保留依赖各自的 LICENSE / NOTICE / dist-info 信息。
 
+`assets/legends/hud/` 中的运行模板仅保留游戏内技能符号的去背景单色掩码，不包含录像帧、玩家名称或其他个人信息；图形版权属于 EA / Respawn，对应英雄页面及文件校验值见该目录的 `sources.json`。官网技能插画与游戏内 HUD 图案可能不同，识别时分别处理。
+
 | 资源 | 来源及许可信息 |
 | --- | --- |
 | Python 3.11.9 嵌入式 x64 | [Python 官方下载](https://www.python.org/downloads/release/python-3119/)，包内 `runtime/*/LICENSE.txt`，PSF License |

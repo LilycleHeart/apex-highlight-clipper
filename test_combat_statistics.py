@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 from combat_statistics import unique_toasts,reconciled_counts,parse_settlement,last_team_settlement,overlay_summaries
 from combat_outcome_reader import parse_result_line
+from combat_outcome_reader import restore_english_events
 from outcome_reader import result_kind
 
 class StatisticsTests(unittest.TestCase):
@@ -36,6 +37,31 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(unique_toasts(raw)[0]['target_text'],'NAGISA')
         uncertain=[self.event('knock',name,t,str(i)) for i,(name,t) in enumerate([('NAG1SA',1),('NAGISA',1.5)])]
         self.assertEqual(unique_toasts(uncertain)[0]['target_text'],'')
+
+    def test_refined_target_is_not_replaced_by_raw_line_spelling(self):
+        raw=[self.event('knock','PLAYER_BB63',time,str(i)) for i,time in enumerate([1,1.5])]
+        for event in raw:event.update(target_text='PLAYER_8863',target_method='ctc_span_two_views',target_read_confidence=.995)
+        result=unique_toasts(raw)
+        self.assertEqual(len(result),1);self.assertTrue(result[0]['confirmed'])
+        self.assertEqual(result[0]['target_text'],'PLAYER_8863')
+        self.assertEqual(result[0]['text_confidence'],.995)
+
+    def test_uncertain_target_hints_track_event_but_cannot_confirm_name(self):
+        raw=[self.event('knock','PLAYER_HINT',time,str(i)) for i,time in enumerate([1,1.5])]
+        for event in raw:event.update(target_method='ctc_span_two_views',target_read_confidence=0.)
+        result=unique_toasts(raw)
+        self.assertEqual(len(result),1);self.assertTrue(result[0]['confirmed'])
+        self.assertEqual(result[0]['target_text'],'')
+
+    def test_cached_english_line_restoration_keeps_verified_target_read(self):
+        observations={}
+        for i,time in enumerate([1.,1.5]):
+            line={'text':'ASSIST.KNOCKEDDOWNPLAYERBB63+100','confidence':.97,'prefix_confidence':.97,
+                'box':[100,200,400,220],'target_read':{'name':'PLAYER8863','confidence':.995,'method':'ctc_span_two_views'}}
+            observations[i]={'time':time,'frame':str(i),'events':[],'lines':[line]}
+        restore_english_events(observations)
+        events=[event for item in observations.values() for event in item['events']]
+        self.assertEqual(unique_toasts(events)[0]['target_text'],'PLAYER8863')
 
     def endpoint(self):return {'baseline':{'kills':3,'assists':4,'damage':1250},'last_hud':{'kills':4,'assists':8,'damage':2280},'last_hud_update':{'kills':100}}
     def coverage(self):return {'checked_frames':10,'expected_frames':10,'ambiguous_frames':[],'calibrated_style_confirmed':True}

@@ -1,7 +1,7 @@
 {
   "name": "apex-highlight-clipper",
   "productName": "Apex Highlight Clipper",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "private": true,
   "main": "dist-electron/electron/main.js",
   "scripts": {

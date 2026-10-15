@@ -8,6 +8,18 @@ from rank_reader import RankReader,read_division,recognize_segments,BASE
 from apex_clipper import fingerprint
 
 class RankTests(unittest.TestCase):
+    def test_similar_badge_shapes_still_require_matching_palette(self):
+        shape=np.zeros((20,22),np.uint8)
+        cv2.polylines(shape,[np.array([[2,18],[11,2],[20,18]],np.int32)],False,255,3)
+        gold=np.zeros((20,22,3),np.uint8);gold[shape>0]=(45,165,220)
+        platinum=np.zeros_like(gold);platinum[shape>0]=(220,205,110)
+        reader=RankReader();reader.templates=[('gold',[gold]),('platinum',[platinum])]
+        profile={'reference_size':[2560,1080],'hud_scale':[1,1],'rank_roi':[0,0,120,108]}
+        for tier,template in [('gold',gold),('platinum',platinum)]:
+            small=np.zeros((54,60,3),np.uint8);small[16:36,19:41]=template
+            image=np.zeros((1080,2560,3),np.uint8);image[:108,:120]=cv2.resize(small,(120,108),interpolation=cv2.INTER_NEAREST)
+            self.assertEqual(reader.inspect(image,profile)['tier'],tier)
+
     def test_real_recording_diamond_two(self):
         frame=BASE/'validation/sample100.jpg'
         if not frame.exists(): self.skipTest('本地真实录像样本不存在')

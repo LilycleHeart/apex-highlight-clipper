@@ -18,7 +18,7 @@ from app_cancel import check_cancel
 from hud_layout import detect_images
 from player_names import player_name,consensus_name,canonical_name,name_key
 
-VERSION='optional-hud-v5'
+VERSION='optional-hud-v6'
 FIELDS=['account','weapons','teammates','hero','rank']
 
 

@@ -9,9 +9,22 @@ from image_io import read_image
 import numpy as np
 
 BASE = Path(__file__).resolve().parent
-VERSION = 'hud-rank-v1'
+VERSION = 'hud-rank-v2'
 NAMES = {'rookie':'菜鸟','bronze':'青铜','silver':'白银','gold':'黄金','platinum':'白金',
          'diamond':'钻石','master':'大师','predator':'猎杀'}
+
+def palette_matches(template,patch):
+    """同形徽章仍需符合其调色板；颜色证据不足时继续使用形状门槛。"""
+    reference=cv2.cvtColor(template,cv2.COLOR_BGR2HSV);observed=cv2.cvtColor(patch,cv2.COLOR_BGR2HSV)
+    mask=(reference[:,:,1]>60)&(reference[:,:,2]>110)
+    colored=mask&(observed[:,:,1]>60)&(observed[:,:,2]>110)
+    if np.count_nonzero(colored)<max(8,np.count_nonzero(mask)*.25):return True
+    def hue(image,selection):
+        angles=image[:,:,0][selection].astype(float)*np.pi/90
+        weights=image[:,:,1][selection].astype(float)*image[:,:,2][selection]
+        return np.arctan2(np.sum(np.sin(angles)*weights),np.sum(np.cos(angles)*weights))*90/np.pi%180
+    difference=abs(hue(reference,mask)-hue(observed,colored))
+    return min(difference,180-difference)<=18
 
 class RankReader:
     def __init__(self):
@@ -48,6 +61,8 @@ class RankReader:
                 th,tw=template.shape[:2]
                 if th>roi.shape[0] or tw>roi.shape[1]: continue
                 _,score,_,point=cv2.minMaxLoc(cv2.matchTemplate(roi,template,cv2.TM_CCOEFF_NORMED))
+                x,y=point
+                if not palette_matches(template,roi[y:y+th,x:x+tw]):continue
                 if score>best[0]: best=(score,point,(tw,th))
             scores.append((best[0],key,best[1],best[2]))
         scores.sort(reverse=True)

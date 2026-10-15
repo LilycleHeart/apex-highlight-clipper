@@ -1,0 +1,14 @@
+{
+  "source": "EA/Respawn in-game HUD symbols; deidentified symbol masks only, with frame and personal-data context removed.",
+  "templates": [
+    {
+      "id": "fuse",
+      "slot": "ultimate",
+      "file": "fuse-ultimate.png",
+      "mode": "stripe_contrast",
+      "sha256": "ab285e3583d6f8bface4c0c85655cfd87279f89eb8298062279e48a35bdaadcd",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/fuse",
+      "note": "HUD glyph differs from website ability artwork. Evaluated using a separate recording from the reference capture."
+    }
+  ]
+}

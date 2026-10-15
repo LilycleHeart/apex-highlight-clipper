@@ -7,6 +7,7 @@ AppId={{AF948615-855F-4699-8640-11A9E2F08854}
 AppName=Apex Highlight Clipper
 AppVersion={#ProductVersion}
 AppPublisher=AHC
+SetupIconFile=..\electron-ui\public\brand\cat-clapperboard.ico
 DefaultDirName={localappdata}\Programs\Apex Highlight Clipper
 DefaultGroupName=Apex Highlight Clipper
 PrivilegesRequired=lowest

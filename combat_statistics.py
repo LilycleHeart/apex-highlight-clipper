@@ -30,7 +30,7 @@ def unique_toasts(events):
     tracks=[]
     for raw in sorted(events,key=lambda e:e['time']):
         parsed=parse_result_line(raw.get('text','')) or {}
-        event={**parsed,**raw};event['target_text']=parsed.get('target_text',clean_target_name(raw.get('target_text','')))
+        event={**parsed,**raw};event['target_text']=clean_target_name(raw.get('target_text','')) if raw.get('target_method') else parsed.get('target_text',clean_target_name(raw.get('target_text','')))
         matched=None
         for track in reversed(tracks):
             gap=event['time']-track['last_seen']
@@ -44,16 +44,17 @@ def unique_toasts(events):
             if track['kind']==event['kind'] and (gap<=3.0 or assist_pair) and (same_target(track.get('target_text'),event.get('target_text')) or gap<=3 and same_prefix):
                 matched=track;break
         if matched:
+            if event.get('target_method'):matched['target_method']=event['target_method']
             matched['last_seen']=event['time'];matched['frames']=sorted(set(matched['frames']+[event.get('frame','')]))
             matched['observations']+=1
-            matched['_name_reads'].append({'name':event.get('target_text',''),'confidence':event.get('text_confidence',event.get('confidence',0)),'frame':event.get('frame','')})
+            matched['_name_reads'].append({'name':event.get('target_text',''),'confidence':event.get('target_read_confidence',event.get('text_confidence',event.get('confidence',0))),'frame':event.get('frame','')})
             if event.get('confidence',0)>matched.get('confidence',0):
                 for key in ['text','confidence']: matched[key]=event.get(key)
             if event.get('target_text') and not matched.get('target_text'):matched['target_text']=event['target_text']
             if event.get('action')=='elimination': matched['action']='elimination'
         else:
             tracks.append({**event,'last_seen':event['time'],'frames':[event.get('frame','')],'observations':1,
-                '_name_reads':[{'name':event.get('target_text',''),'confidence':event.get('text_confidence',event.get('confidence',0)),'frame':event.get('frame','')}]})
+                '_name_reads':[{'name':event.get('target_text',''),'confidence':event.get('target_read_confidence',event.get('text_confidence',event.get('confidence',0))),'frame':event.get('frame','')}]})
     for event in tracks:
         event['confirmed']=len([f for f in event['frames'] if f])>=2
         reads={}
@@ -63,6 +64,8 @@ def unique_toasts(events):
         name=consensus_name(list(reads.values()))
         event['target_text']=name['name'] if name else ''
         event['target_confidence']=name['confidence'] if name else 0.
+        if event.get('target_method'):
+            event['target_method']='two_frame_name_consensus';event['text_confidence']=event['target_confidence']
     return tracks
 
 def stable_value(rows,key):
