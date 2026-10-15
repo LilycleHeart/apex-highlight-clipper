@@ -3,12 +3,13 @@ const{discoverTasks,mergeLibrary,LibraryStore}=require('../dist-electron/electro
 
 test('名称按实际优势拼写归一，保留不同账号和不同中文队友',()=>{
  const accountNames=['[YURI] Liliumcordis','[YURI]Liliumcordis','[YURI] Liliumcordis','[YURI] Liliumcordis','[YURI] Liiumcordis','[YURI] Liliumcordis','[YURI] LilycleHeart','Katahane'];
- const clips=accountNames.map((accountName,i)=>({path:path.resolve(`name-${i}.mp4`),source:`source-${i}`,accountName,teammates:[{name:i%2?'neko':'NEKO',confidence:.95},{name:i%2?'落生烟':'落生烬',confidence:.95}]}));
+ const clips=accountNames.map((accountName,i)=>({path:path.resolve(`name-${i}.mp4`),source:`source-${i}`,accountName,teammates:[{name:i%2?'[BAD]neko':'[BA]NEKO',confidence:.95},{name:i%2?'落生烟':'落生烬',confidence:.95}]}));
  const results=mergeLibrary([{source:'fixture',clips}])[0].clips;
- assert.ok(results.slice(0,6).every(clip=>clip.accountName==='[YURI] Liliumcordis'));
- assert.equal(results[6].accountName,'[YURI] LilycleHeart');assert.equal(results[7].accountName,'Katahane');
- assert.ok(results[4].accountAliases.includes('[YURI] Liiumcordis'));
+ assert.ok(results.slice(0,6).every(clip=>clip.accountName==='Liliumcordis'));
+ assert.equal(results[6].accountName,'LilycleHeart');assert.equal(results[7].accountName,'Katahane');
+ assert.ok(results[4].accountAliases.includes('Liiumcordis'));
  assert.equal(new Set(results.map(clip=>clip.teammates[0].name)).size,1);
+ assert.equal(results[0].teammates[0].name,'NEKO');
  assert.deepEqual(new Set(results.map(clip=>clip.teammates[1].name)),new Set(['落生烟','落生烬']));
  assert.equal(clips[4].accountName,'[YURI] Liiumcordis');
 });

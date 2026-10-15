@@ -1,11 +1,12 @@
 import type {Result,Clip,HudName} from './shared';
-export const playerNameKey=(name:string)=>name.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
-function glyphFamily(key:string){return /^[a-z0-9]{12,}$/.test(key)?key.replace(/[il]+/g,'i'):key;}
+export const withoutClanTag=(name:string)=>name.normalize('NFKC').trim().replace(/^\[?[^\[\]\s]{1,6}\]\s*/,'').replace(/^\[[a-z0-9]{2,6}(?=[\u3040-\u30ff\u3400-\u9fff])/i,'').replace(/^\[[a-z0-9]{2,6}\s+/i,'').trim();
+export const playerNameKey=(name:string)=>withoutClanTag(name).toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
+function glyphFamily(key:string){return /^[a-z0-9]{10,}$/.test(key)?key.replace(/[il]+/g,'i'):key;}
 type Entry={name:string;hits:number;sources:Set<string>;spellings:Map<string,number>};
 function aliases(clips:Clip[],getNames:(clip:Clip)=>string[]){
  const entries=new Map<string,Entry>();
- for(const clip of clips)for(const name of getNames(clip)){const key=playerNameKey(name);if(!key)continue;const entry=entries.get(key)||{name,hits:0,sources:new Set<string>(),spellings:new Map<string,number>()};entry.hits++;entry.sources.add(clip.source||clip.path);entry.spellings.set(name,(entry.spellings.get(name)||0)+1);entries.set(key,entry);}
- for(const entry of entries.values())entry.name=[...entry.spellings].sort((a,b)=>Number(/^\[[^\]]+\]/.test(b[0]))-Number(/^\[[^\]]+\]/.test(a[0]))||b[1]-a[1])[0][0];
+ for(const clip of clips)for(const rawName of getNames(clip)){const name=withoutClanTag(rawName),key=playerNameKey(name);if(!key)continue;const entry=entries.get(key)||{name,hits:0,sources:new Set<string>(),spellings:new Map<string,number>()};entry.hits++;entry.sources.add(clip.source||clip.path);entry.spellings.set(name,(entry.spellings.get(name)||0)+1);entries.set(key,entry);}
+ for(const entry of entries.values())entry.name=[...entry.spellings].sort((a,b)=>b[1]-a[1])[0][0];
  const families=new Map<string,string[]>();for(const key of entries.keys()){const family=glyphFamily(key);families.set(family,[...(families.get(family)||[]),key]);}
  const resolved=new Map<string,{name:string;alternatives:string[]}>();
  for(const keys of families.values()){

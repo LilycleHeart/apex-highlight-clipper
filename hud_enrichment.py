@@ -18,7 +18,7 @@ from app_cancel import check_cancel
 from hud_layout import detect_images
 from player_names import player_name,consensus_name,canonical_name,name_key
 
-VERSION='optional-hud-v4'
+VERSION='optional-hud-v5'
 FIELDS=['account','weapons','teammates','hero','rank']
 
 
@@ -67,12 +67,18 @@ def name_patch(image,profile,bounds):
     # 给首尾字符留边距，再用固定语音图标确定名字右边界，避免图标被读成数字/字母。
     sx,sy=profile.get('hud_scale',[1,1]);rw,rh=profile['reference_size'];h,w=image.shape[:2]
     bounds=[bounds[0]-round(8*sx),bounds[1]-round(2*sy),bounds[2]+round(48*sx),bounds[3]+round(2*sy)]
-    patch=roi(image,profile,bounds);template=voice_template(round(sx*w/rw,4),round(sy*h/rh,4))
-    if patch.shape[0]>=template.shape[0] and patch.shape[1]>=template.shape[1]:
+    patch=roi(image,profile,bounds);matches=[]
+    if patch.size:
         gray=cv2.cvtColor(patch,cv2.COLOR_BGR2GRAY)
-        _,score,_,(x,y)=cv2.minMaxLoc(cv2.matchTemplate(gray,template,cv2.TM_CCOEFF_NORMED))
-        if score>=.83 and x>=round(25*sx*w/rw):
-            patch=patch[max(0,y-2):min(patch.shape[0],y+template.shape[0]+2),:max(1,x-2)]
+        # 名称行图标可能小于计分区 HUD 的缩放，不能只用同一个图标尺寸。
+        for factor in [.75,1.,1.25]:
+            template=voice_template(round(sx*w/rw*factor,4),round(sy*h/rh*factor,4))
+            if patch.shape[0]<template.shape[0] or patch.shape[1]<template.shape[1]:continue
+            _,score,_,(x,y)=cv2.minMaxLoc(cv2.matchTemplate(gray,template,cv2.TM_CCOEFF_NORMED))
+            if score>=.83 and x>=round(25*sx*w/rw):matches.append((score,x,y,template.shape[0]))
+        if matches:
+            _,x,y,height=max(matches)
+            patch=patch[max(0,y-2):min(patch.shape[0],y+height+2),:max(1,x-2)]
     return patch
 
 
@@ -203,8 +209,15 @@ def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None):
             info['account']=consensus_name(values) or canonical_name(info.get('account'),account,same_player=True)
         key=clip.get('recognition',{}).get('match_key') or str(clip.get('output',clip.get('file','')))
         if 'teammates' in writable:
-            for n,value in enumerate(info.get('teammates',[])):
-                info['teammates'][n]=canonical_name(value,references.get((key,value.get('slot'))),same_player=True)
+            raw={}
+            for row in info.get('name_observations',[]):
+                for value in row.get('teammates',[]):raw.setdefault(value['slot'],[]).append(value)
+            known={v.get('slot'):v for v in info.get('teammates',[])};resolved=[]
+            for slot in dict.fromkeys([*known,*raw]):
+                reference=references.get((key,slot))
+                value=consensus_name([canonical_name(v,reference,same_player=True) for v in raw.get(slot,[])]) or canonical_name(known.get(slot),reference,same_player=True)
+                if value:resolved.append(value)
+            info['teammates']=resolved
 
 
 def merge_name_observations(previous,current,fields):
