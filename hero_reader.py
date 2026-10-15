@@ -43,12 +43,17 @@ class HeroReader:
      if h>=roi.shape[0] or w>=roi.shape[1]:continue
      template=cv2.resize(glyph,(w,h),interpolation=cv2.INTER_AREA)
      for mask in masks:
-      score=float(cv2.minMaxLoc(cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED))[1]);best=max(best,score)
+      # 技能图形居中；不能把按钮左侧的梯形边框或邻近场景当作技能。
+      response=cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED)
+      x1=max(0,int(np.ceil(roi.shape[1]*.4-w/2)));x2=min(response.shape[1],int(np.floor(roi.shape[1]*.6-w/2))+1)
+      y1=max(0,int(np.ceil(roi.shape[0]*.3-h/2)));y2=min(response.shape[0],int(np.floor(roi.shape[0]*.7-h/2))+1)
+      if x1>=x2 or y1>=y2:continue
+      score=float(cv2.minMaxLoc(response[y1:y2,x1:x2])[1]);best=max(best,score)
     scores[hero]=max(scores.get(hero,0.),best)
   ordered=sorted(scores.items(),key=lambda value:-value[1])
   self.last_scores=ordered[:5]
   if len(ordered)<2 or ordered[0][1]<.70:return None
-  margin=.025 if ordered[0][1]>=.85 else .055
+  margin=.025 if ordered[0][1]>=.80 else .055
   if ordered[0][1]-ordered[1][1]<margin:return None
   hero,score=ordered[0]
   return {'id':hero,'name':NAMES.get(hero,hero.title()),'confidence':round(score,3),'method':'self_ability_glyph'}

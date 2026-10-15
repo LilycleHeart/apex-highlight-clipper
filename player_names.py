@@ -35,9 +35,10 @@ def close_name(left, right,minimum_length=6):
 def player_name(text):
     if not isinstance(text, str):
         return ''
-    name = strip_clan_tag(re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', text))).strip(' ()（）♫♪◀▶')
+    name = strip_clan_tag(re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', text))).strip(' ()（）♫♪◀▶□')
     key = name_key(name)
-    if not 2 <= len(name) <= 40 or not any(c.isalpha() for c in name):
+    # 固定昵称框也可能是纯数字账号；不要只保留被 OCR 错读出字母的版本。
+    if not 2 <= len(name) <= 40 or not (any(c.isalpha() for c in name) or re.fullmatch(r'\d{5,20}',name)):
         return ''
     if re.search(r'[\x00-\x1f\ufffd□<>:=+!?！？。]', name):
         return ''

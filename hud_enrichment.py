@@ -184,15 +184,36 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
     return result
 
 
-def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None):
+def recorded_match_keys(manifest,directory):
+    """旧清单从对应分析中的对局结束事件恢复分组，不把整份录像当成同一局。"""
+    try:analysis=json.loads((Path(directory)/'analysis.json').read_text('utf-8-sig'))
+    except (OSError,ValueError):return {}
+    if not isinstance(analysis,dict):return {}
+    source=manifest.get('source')
+    events=analysis.get('outcome_events');segments=analysis.get('segments')
+    if not source or analysis.get('source')!=source or not isinstance(events,list) or not isinstance(segments,list):return {}
+    if any(not isinstance(event,dict) or not isinstance(event.get('time'),(int,float)) for event in events):return {}
+    bounds=[(segment.get('start'),segment.get('end')) for segment in segments if isinstance(segment,dict)]
+    keys={}
+    for clip in manifest.get('clips',[]):
+        if clip.get('recognition',{}).get('match_key'):continue
+        bound=clip.get('segment',{});left=bound.get('requested_start',bound.get('start'));right=bound.get('requested_end',bound.get('end'))
+        if not all(isinstance(value,(int,float)) for value in [left,right,bound.get('start')]):continue
+        if not any(isinstance(start,(int,float)) and isinstance(end,(int,float)) and abs(start-left)<.001 and abs(end-right)<.001 for start,end in bounds):continue
+        round_index=sum(event['time']<=bound['start'] for event in events)
+        keys[id(clip)]=hashlib.sha256((json.dumps(source,sort_keys=True)+':'+str(round_index)).encode()).hexdigest()[:16]
+    return keys
+
+
+def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None,match_keys=None):
     """本人按原录像、队友按同一局的槽位确认；不跨局套用队友姓名。"""
-    clips=manifest.get('clips',[]);accounts=[];teams={}
+    clips=manifest.get('clips',[]);accounts=[];teams={};match_keys=match_keys or {}
     fields=set(['account','teammates'] if fields is None else fields)
     if not fields&{'account','teammates'}:return
     for clip in clips:
         info=clip.get('recognition',{}).get('hud_info',{})
         if info.get('version')!=VERSION:continue
-        key=clip.get('recognition',{}).get('match_key') or str(clip.get('output',clip.get('file','')))
+        key=clip.get('recognition',{}).get('match_key') or match_keys.get(id(clip)) or str(clip.get('output',clip.get('file','')))
         for row in info.get('name_observations',[]):
             versions=info.get('field_versions',{})
             if row.get('account') and versions.get('account',info.get('version'))==VERSION:accounts.append(row['account'])
@@ -207,7 +228,7 @@ def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None):
         if 'account' in writable:
             values=[canonical_name(row.get('account'),account,same_player=True) for row in info.get('name_observations',[])]
             info['account']=consensus_name(values) or canonical_name(info.get('account'),account,same_player=True)
-        key=clip.get('recognition',{}).get('match_key') or str(clip.get('output',clip.get('file','')))
+        key=clip.get('recognition',{}).get('match_key') or match_keys.get(id(clip)) or str(clip.get('output',clip.get('file','')))
         if 'teammates' in writable:
             raw={}
             for row in info.get('name_observations',[]):
@@ -270,7 +291,7 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
         else:activity({'message':'所选信息已确认，跳过读取','frames_done':0,'frames_total':0})
         if on_progress:on_progress(index+1,len(selected),str(file))
     # 手动重读只使用本次所选片段的姓名证据，旧片段不能把误识别带回来。
-    reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected,updates=name_updates)
+    reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected,updates=name_updates,match_keys=recorded_match_keys(manifest,directory))
     write_json(path,manifest)
     return manifest
 

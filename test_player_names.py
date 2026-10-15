@@ -1,11 +1,12 @@
 import unittest
 import tempfile
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
 from player_names import player_name,consensus_name,canonical_name
-from hud_enrichment import reconcile_manifest_names,VERSION
+from hud_enrichment import reconcile_manifest_names,recorded_match_keys,VERSION
 
 
 class PlayerNameTests(unittest.TestCase):
@@ -43,6 +44,12 @@ class PlayerNameTests(unittest.TestCase):
             self.assertEqual(player_name(value),'Liliumcordis')
         self.assertEqual(player_name('[BILI天才美少女软软'),'天才美少女软软')
 
+    def test_numeric_ids_and_edge_placeholder_do_not_hide_readable_teammates(self):
+        self.assertEqual(player_name('1234567890'),'1234567890')
+        self.assertEqual(player_name('□Player_One'),'Player_One')
+        self.assertEqual(player_name('Player□One'),'')
+        self.assertEqual(player_name('123'),'')
+
     def test_account_aliases_reconcile_with_real_repeated_name_and_teammates_stay_per_match(self):
         real={'name':'[YURI] Liliumcordis','confidence':.95}
         weak={'name':'YURI] Liiumeordis','confidence':.85}
@@ -64,3 +71,23 @@ class PlayerNameTests(unittest.TestCase):
         clips=[clip('[BILI]天才美少女软软',[.84,.97,.98]),clip('[BIL]天才美少女软软',[.96,.97,.98]),clip('[BILI]天才美少软软',[.99,.99,.99])]
         reconcile_manifest_names({'clips':clips})
         self.assertEqual([c['recognition']['hud_info']['teammates'][0]['name'] for c in clips],['天才美少女软软']*3)
+
+    def test_legacy_clips_use_verified_analysis_rounds_without_crossing_round_end(self):
+        def clip(start,name,frames):
+            value={'name':name,'slot':0,'confidence':.97}
+            return {'segment':{'start':start,'end':start+10},'recognition':{'hud_info':{'version':VERSION,
+                'teammates':[value],'name_observations':[{'teammates':[value]} for _ in range(frames)]}}}
+        clips=[clip(0,'PLAYER_ONE',6),clip(20,'PLAYER_0NE',3),clip(40,'PLAYER_ONF',3)]
+        source={'path':'original.mp4','size':100,'mtime_ns':1};manifest={'source':source,'clips':clips}
+        analysis={'source':source,'outcome_events':[{'time':35}], 'segments':[c['segment'] for c in clips]}
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'analysis.json';path.write_text(json.dumps(analysis),'utf-8')
+            keys=recorded_match_keys(manifest,temporary)
+            self.assertEqual(keys[id(clips[0])],keys[id(clips[1])])
+            self.assertNotEqual(keys[id(clips[0])],keys[id(clips[2])])
+            reconcile_manifest_names(manifest,match_keys=keys)
+            self.assertEqual([c['recognition']['hud_info']['teammates'][0]['name'] for c in clips],['PLAYER_ONE','PLAYER_ONE','PLAYER_ONF'])
+            analysis['source']={**source,'mtime_ns':2};path.write_text(json.dumps(analysis),'utf-8')
+            self.assertEqual(recorded_match_keys(manifest,temporary),{})
+            path.write_text('[]','utf-8')
+            self.assertEqual(recorded_match_keys(manifest,temporary),{})
