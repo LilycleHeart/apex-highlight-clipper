@@ -1,6 +1,7 @@
 ﻿param([switch]$NoDownload)
 $ErrorActionPreference = 'Stop'
 $ProjectDirectory = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$ApplicationDirectory = if ((Split-Path $ProjectDirectory -Leaf) -eq 'resources') { Split-Path $ProjectDirectory -Parent } else { $ProjectDirectory }
 $LocalData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 $SharedRoot = Join-Path $LocalData 'Apex Highlight Clipper\dependencies\ffmpeg'
 $ToolsDirectory = Join-Path $SharedRoot '9.0.2'
@@ -36,12 +37,13 @@ $Stage = Join-Path $SharedRoot ('.staging-' + [Guid]::NewGuid().ToString('N'))
 try {
     if (Test-Tools $ToolsDirectory) { Remember-Tools; exit 0 }
     New-Item -ItemType Directory -Path $Stage | Out-Null
-    $Candidates = @((Join-Path $ProjectDirectory 'tools'), (Join-Path $LocalData 'Programs\Apex Highlight Clipper\tools'))
+    $Candidates = @((Join-Path $ProjectDirectory 'tools'), (Join-Path $ApplicationDirectory 'tools'), (Join-Path $LocalData 'Programs\Apex Highlight Clipper\tools'), (Join-Path $LocalData 'Programs\Apex Highlight Clipper\resources\tools'))
     # Older portable releases commonly sit beside the new folder. Inspect only those direct neighbours.
-    $Parent = Split-Path $ProjectDirectory -Parent
+    $Parent = Split-Path $ApplicationDirectory -Parent
     foreach ($Folder in Get-ChildItem -LiteralPath $Parent -Directory -ErrorAction SilentlyContinue) {
         if (($Folder.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $Folder.FullName -eq $ProjectDirectory) { continue }
         if (Test-Path -LiteralPath (Join-Path $Folder.FullName 'scripts\setup-ffmpeg.ps1')) { $Candidates += Join-Path $Folder.FullName 'tools' }
+        if (Test-Path -LiteralPath (Join-Path $Folder.FullName 'resources\scripts\setup-ffmpeg.ps1')) { $Candidates += Join-Path $Folder.FullName 'resources\tools' }
     }
     $Existing = $Candidates | Select-Object -Unique | Where-Object { Test-Tools $_ } | Select-Object -First 1
     if ($Existing) {

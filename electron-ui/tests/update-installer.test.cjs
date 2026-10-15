@@ -1,7 +1,19 @@
 const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),{createHash}=require('node:crypto');
-const{installerAsset}=require('../dist-electron/electron/updates'),{downloadInstaller}=require('../dist-electron/electron/updateInstaller');
+const{installerAsset}=require('../dist-electron/electron/updates'),{downloadInstaller,installationPaths,pruneLegacyLauncher}=require('../dist-electron/electron/updateInstaller');
 const bytes=Buffer.from('verified update fixture'),sha=createHash('sha256').update(bytes).digest('hex');
 const asset={version:'1.0.2',name:'Apex-Clipper-1.0.2-Setup-x64.exe',url:'https://github.com/LilycleHeart/apex-highlight-clipper/releases/download/v1.0.2/Apex-Clipper-1.0.2-Setup-x64.exe',bytes:bytes.length,sha256:sha};
+test('新旧安装布局确定同一升级目录，兼容入口仅在与启动器相同且目录无其他文件时清理',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'apex-layout-')),app=path.join(root,'app'),legacy=path.join(app,'Apex Highlight Clipper.exe'),launcher=path.join(root,'Apex Highlight Clipper.exe');
+ try{
+  assert.equal(installationPaths(legacy).target,root);
+  const current=installationPaths(path.join(root,'resources/desktop/Apex Highlight Clipper.exe'));
+  assert.equal(current.target,root);assert.equal(current.helper,path.join(root,'resources/scripts/update-install.ps1'));
+  await fs.mkdir(app);await fs.writeFile(launcher,bytes);await fs.writeFile(legacy,'original desktop executable');
+  await pruneLegacyLauncher(root);assert.equal(await fs.readFile(legacy,'utf8'),'original desktop executable');
+  await fs.writeFile(legacy,bytes);await fs.writeFile(path.join(app,'user.txt'),'keep');await pruneLegacyLauncher(root);assert.deepEqual(await fs.readFile(legacy),bytes);
+  await fs.unlink(path.join(app,'user.txt'));await pruneLegacyLauncher(root);await assert.rejects(fs.stat(app),{code:'ENOENT'});
+ }finally{await fs.unlink(launcher);await fs.rmdir(root);}
+});
 test('仅接受本仓库已上传且有SHA256的同版本安装包',()=>{
  const release={tag_name:'v1.0.2',assets:[{name:asset.name,browser_download_url:asset.url,state:'uploaded',size:bytes.length,digest:'sha256:'+sha}]};assert.deepEqual(installerAsset(release),asset);assert.equal(installerAsset({...release,assets:[{...release.assets[0],browser_download_url:'https://evil.example/setup.exe'}]}),undefined);assert.equal(installerAsset({...release,assets:[{...release.assets[0],digest:null}]}),undefined);
 });

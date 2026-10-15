@@ -28,14 +28,14 @@ def build(args):
     archive = output / (bundle.name + '.zip')
     if report.get('status') != 'pass' or digest(archive) != report.get('sha256'):
         raise ValueError('Portable archive does not match its validation report')
-    inventory = json.loads((bundle / 'FILES.sha256.json').read_text('utf-8'))
+    inventory = json.loads((bundle / 'resources/FILES.sha256.json').read_text('utf-8'))
     sources = {}
     for name, expected in inventory.items():
         path = (bundle / name).resolve()
         if not path.is_relative_to(bundle) or digest(path) != expected:
             raise ValueError('Portable payload changed: ' + name)
         sources[name] = path
-    sources['FILES.sha256.json'] = bundle / 'FILES.sha256.json'
+    sources['resources/FILES.sha256.json'] = bundle / 'resources/FILES.sha256.json'
     ffmpeg = Path(args.ffmpeg).resolve()
     if digest(ffmpeg) != FFMPEG_SHA256:
         raise ValueError('FFmpeg distribution checksum mismatch')
@@ -46,18 +46,21 @@ def build(args):
             target_name = Path(name).name if name.startswith('bin/') else 'FFmpeg-' + name
             local = temporary / target_name
             local.write_bytes(z.read('ffmpeg-9.0.2-essentials_build/' + name))
-            sources['tools/' + target_name] = local
+            sources['resources/tools/' + target_name] = local
+    compatibility = 'app/Apex Highlight Clipper.exe'
+    sources[compatibility] = bundle / 'Apex Highlight Clipper.exe'
     combined = {name: digest(path) for name, path in sources.items()}
     manifest = temporary / 'INSTALLER-FILES.sha256.json'
     manifest.write_text(json.dumps(combined, indent=2), 'utf-8')
-    sources[manifest.name] = manifest
+    sources['resources/' + manifest.name] = manifest
     payload = temporary / 'payload.iss'
     lines = ['[Files]']
     for name, source in sorted(sources.items()):
         directory = Path(name).parent.as_posix().replace('/', '\\')
         destination = '{app}' + ('\\' + directory if directory != '.' else '')
         # An explicit allowlist prevents local logs, caches and diagnostics entering the EXE.
-        lines.append(f'Source: "{source}"; DestDir: "{destination}"; DestName: "{Path(name).name}"; Flags: ignoreversion')
+        condition = '; Check: LegacyLayout' if name == compatibility else ''
+        lines.append(f'Source: "{source}"; DestDir: "{destination}"; DestName: "{Path(name).name}"; Flags: ignoreversion'+condition)
     payload.write_text('\n'.join(lines), 'utf-8-sig')
     version = json.loads((ROOT / 'electron-ui/package.json').read_text('utf-8'))['version']
     subprocess.run([str(Path(args.iscc).resolve()), '/Qp', '/DProductVersion=' + version,

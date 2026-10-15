@@ -43,10 +43,25 @@ Name: "{group}\Apex Highlight Clipper"; Filename: "{app}\Apex Highlight Clipper.
 Name: "{autodesktop}\Apex Highlight Clipper"; Filename: "{app}\Apex Highlight Clipper.exe"; WorkingDir: "{app}"; Tasks: desktopicon; Check: not PortableMode
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\setup-ffmpeg.ps1"" -NoDownload"; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; Check: not PortableMode
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\resources\scripts\setup-ffmpeg.ps1"" -NoDownload"; WorkingDir: "{app}\resources"; Flags: runhidden waituntilterminated; Check: not PortableMode
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\resources\scripts\migrate-layout.ps1"""; WorkingDir: "{app}\resources"; Flags: runhidden waituntilterminated; Check: LegacyLayout
 Filename: "{app}\Apex Highlight Clipper.exe"; Description: "启动 Apex Highlight Clipper"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+var
+  WasLegacyLayout: Boolean;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  WasLegacyLayout := FileExists(ExpandConstant('{app}\app_worker.py')) and FileExists(ExpandConstant('{app}\app\Apex Highlight Clipper.exe'));
+  Result := '';
+end;
+
+function LegacyLayout: Boolean;
+begin
+  Result := WasLegacyLayout;
+end;
+
 function PortableMode: Boolean;
 begin
   Result := ExpandConstant('{param:portable|0}') = '1';

@@ -11,7 +11,7 @@ import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,S
 import {normalizePlayerAudio,defaultPlayerAudio,type PlayerAudioPreferences} from '../src/audioPreferences';
 import {clipStatistics,recordingTime} from '../src/clipStats';
 import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo} from './updates';
-import {downloadInstaller,pruneUpdates} from './updateInstaller';
+import {downloadInstaller,pruneUpdates,installationPaths,pruneLegacyLauncher} from './updateInstaller';
 import {VideoRegistry} from './media';
 import {ClipDeletions} from './clipDeletions';
 import {ProcessingTimes,historicProcessingSeconds} from './processingTimes';
@@ -52,7 +52,7 @@ const processingTimes=new ProcessingTimes(path.join(dataRoot,'processing-times.j
 const updateRoot=path.join(app.getPath('userData'),'updates');
 let workerExit:Promise<void>=Promise.resolve();let resolveWorkerExit:(()=>void)|null=null;let closeSaveFinished=false;
 let playerAudio:PlayerAudioPreferences={...defaultPlayerAudio};
-let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:false};let options:Options={...defaults};let output=path.join(project,'output');
+let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:false};let options:Options={...defaults};let output=app.isPackaged?path.join(app.getPath('videos'),'Apex Highlight Clipper'):path.join(project,'output');
 let updateInfo:UpdateInfo={status:'idle',currentVersion:app.getVersion(),autoCheck:true};let updateTimer:ReturnType<typeof setTimeout>|null=null;
 function publishUpdate(info:UpdateInfo){diagnostics.log(info.status==='error'?'error':'info','update',info.status,{currentVersion:info.currentVersion,latestVersion:info.latestVersion,message:info.message});updateInfo=info;if(info.status!=='checking')void save().catch(error=>diagnostics.log('error','preferences',String(error)));if(win&&!win.isDestroyed())win.webContents.send('update-status',info);}
 const updater=new UpdateChecker(app.getVersion(),(url,init)=>net.fetch(url,init),()=>updateInfo,publishUpdate);
@@ -255,8 +255,8 @@ app.whenReady().then(async()=>{
   const report=(installState:NonNullable<UpdateInfo['installState']>,installProgress?:number,installMessage?:string)=>{if(installState!==updateInfo.installState||installProgress!==undefined&&installProgress%10===0)diagnostics.log(installState==='error'?'error':'info','update-install',installState,{progress:installProgress,message:installMessage});updateInfo={...updateInfo,installState,installProgress,installMessage};if(!win.isDestroyed())win.webContents.send('update-status',updateInfo);};
   try{
    const latest=await updater.check();if(latest.status!=='available')throw new Error(latest.message||'当前没有可安装的新版本');if(!latest.installer)throw new Error('该版本没有可校验的安装包，请使用发布页安装');
-   const target=path.dirname(path.dirname(app.getPath('exe'))),helper=path.join(target,'scripts/update-install.ps1');
-   if(!existsSync(path.join(target,'app_worker.py'))||!existsSync(path.join(target,'runtime/runtime-layout.json'))||!existsSync(helper))throw new Error('无法确定程序安装位置，请使用发布页安装');
+   const {target,helper}=installationPaths(app.getPath('exe'));
+   if(!existsSync(path.join(project,'app_worker.py'))||!existsSync(path.join(project,'runtime/runtime-layout.json'))||!existsSync(helper))throw new Error('无法确定程序安装位置，请使用发布页安装');
    updateAbort=new AbortController();report('downloading',0);
    const installer=await downloadInstaller(latest.installer,updateRoot,(url,init)=>net.fetch(url,init),percent=>report('downloading',percent),updateAbort.signal);updateAbort=null;
    await flushSaves();const portable=!(await fs.readdir(target)).some(name=>/^unins\d+\.exe$/i.test(name));
@@ -291,6 +291,7 @@ app.whenReady().then(async()=>{
   handle('validation-import',imports);handle('validation-task',taskInfo);handle('validation-project',()=>project);
  }
  const renderer=path.join(__dirname,'../../dist/index.html');if(process.env.APEX_UI_DEV_URL)await win.loadURL(process.env.APEX_UI_DEV_URL);else await win.loadFile(renderer);
+ if(app.isPackaged&&path.basename(project)==='resources')setTimeout(()=>{void pruneLegacyLauncher(path.dirname(project)).catch(error=>diagnostics.log('info','layout-migration',String(error)));},2000).unref();
 }).catch(error=>{diagnostics.fatal(error instanceof Error?error:new Error(String(error)));dialog.showErrorBox('Apex 启动失败',String(error));app.quit();});
 app.on('window-all-closed',()=>app.quit());
 app.on('before-quit',()=>{updateAbort?.abort();if(maintenanceTimer)clearTimeout(maintenanceTimer);maintenance?.kill();hudWorker?.kill();thumbnails.dispose();});

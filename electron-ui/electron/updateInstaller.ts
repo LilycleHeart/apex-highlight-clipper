@@ -4,6 +4,20 @@ import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import type {InstallerAsset} from '../src/shared';
 
+export function installationPaths(executable:string){
+ const desktop=path.dirname(executable),project=path.dirname(desktop);
+ const target=path.basename(desktop)==='desktop'&&path.basename(project)==='resources'?path.dirname(project):project;
+ return{target,project,helper:path.join(project,'scripts/update-install.ps1')};
+}
+export async function pruneLegacyLauncher(target:string){
+ const folder=path.join(target,'app'),legacy=path.join(folder,'Apex Highlight Clipper.exe'),launcher=path.join(target,'Apex Highlight Clipper.exe');
+ const stat=await fs.lstat(folder).catch(()=>null);if(!stat?.isDirectory()||stat.isSymbolicLink())return;
+ const entries=await fs.readdir(folder);if(entries.length!==1||entries[0]!=='Apex Highlight Clipper.exe')return;
+ for(const file of [legacy,launcher]){const stat=await fs.lstat(file).catch(()=>null);if(!stat?.isFile()||stat.isSymbolicLink())return;}
+ if(await digest(legacy)!==await digest(launcher))return;
+ await fs.unlink(legacy);await fs.rmdir(folder);
+}
+
 const pattern=/^Apex-Clipper-\d+\.\d+\.\d+-Setup-x64\.exe(?:\.part)?$/;
 async function digest(file:string){const hash=createHash('sha256');for await(const chunk of createReadStream(file))hash.update(chunk);return hash.digest('hex');}
 export async function pruneUpdates(root:string,protectedName=''){

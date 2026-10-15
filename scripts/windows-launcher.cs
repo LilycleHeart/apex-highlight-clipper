@@ -31,18 +31,26 @@ internal static class Launcher
     {
         Application.EnableVisualStyles();
         string root = AppDomain.CurrentDomain.BaseDirectory;
-        string executable = Path.Combine(root, "app", "Apex Highlight Clipper.exe");
-        string setup = Path.Combine(root, "scripts", "setup-ffmpeg.ps1");
+        // Old updater scripts restart app\*.exe. The installer temporarily supplies this same
+        // launcher there; the desktop process removes that compatibility entry after it exits.
+        if (new DirectoryInfo(root).Name.Equals("app", StringComparison.OrdinalIgnoreCase))
+        {
+            string parent = Directory.GetParent(root.TrimEnd(Path.DirectorySeparatorChar)).FullName;
+            if (File.Exists(Path.Combine(parent, "resources", "app_worker.py"))) root = parent;
+        }
+        string content = Path.Combine(root, "resources");
+        string executable = Path.Combine(content, "desktop", "Apex Highlight Clipper.exe");
+        string setup = Path.Combine(content, "scripts", "setup-ffmpeg.ps1");
         try
         {
             if (!File.Exists(executable) || !File.Exists(setup))
-                throw new IOException("请先完整解压软件，并将启动程序与 app、runtime、scripts 文件夹一起保留。");
+                throw new IOException("请先完整解压软件，并将启动 EXE 与 resources 程序文件夹一起保留。");
             string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
                 "WindowsPowerShell", "v1.0", "powershell.exe");
             var start = new ProcessStartInfo(powershell,
                 "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File " + Quote(setup))
             {
-                WorkingDirectory = root, UseShellExecute = false, CreateNoWindow = true,
+                WorkingDirectory = content, UseShellExecute = false, CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
                 RedirectStandardOutput = true, RedirectStandardError = true,
                 StandardErrorEncoding = Encoding.Default
@@ -85,7 +93,7 @@ internal static class Launcher
             var forwarded = new StringBuilder();
             foreach (string arg in args) { if (forwarded.Length > 0) forwarded.Append(' '); forwarded.Append(Quote(arg)); }
             Process.Start(new ProcessStartInfo(executable, forwarded.ToString())
-            { WorkingDirectory = root, UseShellExecute = false });
+            { WorkingDirectory = content, UseShellExecute = false });
             return 0;
         }
         catch (Exception error)

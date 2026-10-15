@@ -34,12 +34,14 @@ def release_files(target):
     for p in target.rglob('*'):
         rel=p.relative_to(target)
         if not p.is_file() or any(part in {'__pycache__','tests','validation','output'} for part in rel.parts): continue
-        if p.suffix=='.pyc' or rel.parts[0]=='tools' or rel.as_posix() in {'FILES.sha256.json','ffmpeg.local.json'}: continue
+        if p.suffix=='.pyc' or rel.as_posix().startswith(('tools/','resources/tools/')) or p.name in {'FILES.sha256.json','ffmpeg.local.json'}: continue
         yield p
 
 def reuse_shared_runtime(source,target):
     """只复用先前独立验证过、逐文件内容未改变的共享运行库与内核。"""
     source=Path(source).resolve()
+    source_content=source/'resources' if (source/'resources/app_worker.py').is_file() else source
+    manifest=source_content/'FILES.sha256.json'
     report=json.loads((source.parent/'validation-report.json').read_text('utf-8'))
     archive=source.parent/(source.name+'.zip')
     if hashlib.sha256(archive.read_bytes()).hexdigest()!=report.get('sha256'):
@@ -47,22 +49,24 @@ def reuse_shared_runtime(source,target):
     if {item['mode'] for item in report.get('inference',[])}!={'cpu','dml'}:
         raise RuntimeError('共享候选缺少CPU/DirectML独立推理记录')
     with zipfile.ZipFile(archive) as z:
-        inventory=json.loads(z.read(source.name+'/FILES.sha256.json'))
-    if inventory!=json.loads((source/'FILES.sha256.json').read_text('utf-8')):
+        inventory=json.loads(z.read(source.name+'/'+manifest.relative_to(source).as_posix()))
+    if inventory!=json.loads(manifest.read_text('utf-8')):
         raise RuntimeError('共享候选文件清单已变化')
     kernel_changed=[]
     for name,digest in inventory.items():
-        if name.startswith('runtime/'):
-            file=(source/name).resolve()
+        file=(source/name).resolve()
+        if not file.is_relative_to(source_content):continue
+        relative=file.relative_to(source_content).as_posix()
+        if relative.startswith('runtime/'):
             if not file.is_relative_to(source) or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:
                 raise RuntimeError('已验证运行库内容已变化：'+name)
-            dest=target/name
+            dest=target/relative
             if file!=dest.resolve():
                 dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(file,dest)
-        elif name.endswith('.py') or name.startswith(('models/','templates/','assets/ranks/')) or name in {'profile-ultrawide.json','combat-outcome-profile.json','weapon-catalog.json','weapon-catalog.v1.json'}:
-            file=target/name
+        elif relative.endswith('.py') or relative.startswith(('models/','templates/','assets/ranks/')) or relative in {'profile-ultrawide.json','combat-outcome-profile.json','weapon-catalog.json','weapon-catalog.v1.json'}:
+            file=target/relative
             if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:
-                if name.endswith('.py') and file.is_file():kernel_changed.append(name)
+                if relative.endswith('.py') and file.is_file():kernel_changed.append(relative)
                 else:raise RuntimeError('识别资源已改变，需要重新验证运行库：'+name)
     for mode in ['cpu','dml']:
         if (target/'runtime'/mode/'sitecustomize.py').read_bytes()!=(ROOT/'scripts/portable_sitecustomize.py').read_bytes():
@@ -121,8 +125,9 @@ def build(args):
     if not args.stage or Path(args.stage).name!=args.stage or args.stage in {'.','..','downloads'}:
         raise ValueError('暂存目录必须是publish内的单个构建目录')
     if not out.resolve().is_relative_to(OUT.resolve()): raise ValueError('暂存目录超出publish范围')
-    target = out / f'Apex-Clipper-{version}-Windows-x64'
-    if target.exists() and not args.refresh:
+    bundle = out / f'Apex-Clipper-{version}-Windows-x64'
+    target = bundle/'resources'
+    if bundle.exists() and not args.refresh:
         raise RuntimeError('目标包目录已存在，保留已有包；请先改名备份再重新构建。')
     if args.refresh and not (target/'runtime/runtime-layout.json').is_file():
         raise RuntimeError('只允许刷新本次共享依赖候选，不可覆盖旧版双环境发布包')
@@ -141,12 +146,12 @@ def build(args):
     (target/'experimental').mkdir(exist_ok=True)
     for name in ['__init__.py','indexed_reader.py','in_memory_hud.py']:
         shutil.copy2(ROOT/'experimental'/name,target/'experimental'/name)
-    for name in ['docs/third-party.md', 'docs/assets', 'scripts/setup-ffmpeg.ps1', 'scripts/update-install.ps1', 'scripts/cleanup-validation.ps1', 'scripts/validation-task-caches.py']:
+    for name in ['docs/third-party.md', 'docs/assets', 'scripts/setup-ffmpeg.ps1', 'scripts/update-install.ps1', 'scripts/migrate-layout.ps1', 'scripts/cleanup-validation.ps1', 'scripts/validation-task-caches.py']:
         p=ROOT/name; dest=target/name
         dest.parent.mkdir(parents=True, exist_ok=True)
         if p.is_dir(): copy_tree(p,dest)
         elif p.exists(): shutil.copy2(p,dest)
-    copy_tree(ROOT/'electron-ui'/args.electron/'Apex Highlight Clipper-win32-x64', target/'app')
+    copy_tree(ROOT/'electron-ui'/args.electron/'Apex Highlight Clipper-win32-x64', target/'desktop')
     cache=OUT/'downloads';cache.mkdir(exist_ok=True)
     archive=cache/'python-3.11.9-embed-amd64.zip'
     if not archive.exists(): urllib.request.urlretrieve(PYTHON_URL,archive)
@@ -156,7 +161,7 @@ def build(args):
     runtime_reused=False;kernel_reused=False
     if args.refresh:
         # A UI-only refresh can reuse the already verified byte-identical kernel.
-        kernel_reused=reuse_shared_runtime(target,target)
+        kernel_reused=reuse_shared_runtime(bundle,target)
         runtime_reused=True
     elif args.shared_runtime_source:
         kernel_reused=reuse_shared_runtime(args.shared_runtime_source,target)
@@ -164,15 +169,16 @@ def build(args):
     elif not args.refresh:
         if args.runtime_source:
             baseline=Path(args.runtime_source).resolve()
-            inventory=json.loads((baseline/'FILES.sha256.json').read_text('utf-8'))
+            content=baseline/'resources' if (baseline/'resources/app_worker.py').is_file() else baseline
+            inventory=json.loads((content/'FILES.sha256.json').read_text('utf-8'))
             for name,digest in inventory.items():
-                if name.startswith(('runtime/cpu/','runtime/dml/')):
+                if name.startswith(tuple((content.relative_to(baseline)/f'runtime/{mode}').as_posix()+'/' for mode in ['cpu','dml'])):
                     file=(baseline/name).resolve()
                     if not file.is_relative_to(baseline) or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:
                         raise RuntimeError('输入运行库校验失败：'+name)
-            sources={mode:baseline/'runtime'/mode/'Lib/site-packages' for mode in ['cpu','dml']}
+            sources={mode:content/'runtime'/mode/'Lib/site-packages' for mode in ['cpu','dml']}
             for mode,source in sources.items():
-                prefix=f'runtime/{mode}/Lib/site-packages/'
+                prefix=(content.relative_to(baseline)/f'runtime/{mode}/Lib/site-packages').as_posix()+'/'
                 expected={name[len(prefix):]:digest for name,digest in inventory.items() if name.startswith(prefix)}
                 if dependency_files(source)!=expected:
                     raise RuntimeError(f'{mode}输入依赖与发布清单不一致')
@@ -194,16 +200,16 @@ def build(args):
             "e=create_ocr_engine(backend=sys.argv[1],model_path='models/numeric_rec_en_v4.onnx'); "
             "print('Portable core inference OK',sys.argv[1],len(e.text_rec([np.full((32,96,3),255,np.uint8)])))",mode],cwd=target,check=True)
     if not kernel_reused:validate_worker(target)
-    build_launcher(target,version)
-    (target/'Start.cmd').write_text('@echo off\r\nstart "" "%~dp0Apex Highlight Clipper.exe" %*\r\n','utf-8')
-    package_archive(target,out)
+    build_launcher(bundle,version)
+    package_archive(bundle,out)
 
 def package_archive(target,out):
+    manifest=target/'resources/FILES.sha256.json'
     inventory={str(p.relative_to(target)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(release_files(target))}
-    (target/'FILES.sha256.json').write_text(json.dumps(inventory,indent=2),'utf-8')
+    manifest.write_text(json.dumps(inventory,indent=2),'utf-8')
     archive=out/(target.name+'.zip')
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-        for p in sorted([*release_files(target),target/'FILES.sha256.json']):
+        for p in sorted([*release_files(target),manifest]):
             info=zipfile.ZipInfo((Path(target.name)/p.relative_to(target)).as_posix(),(1980,1,1,0,0,0))
             info.compress_type=zipfile.ZIP_DEFLATED
             info.external_attr=0o100644<<16

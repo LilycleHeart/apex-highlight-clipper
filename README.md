@@ -23,7 +23,7 @@
 当前正式版本为 **v1.0.13**，可在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载安装包或便携包。
 
 1. 运行 EXE 安装包，或将便携 ZIP 完整解压到可写目录。
-2. 安装版从开始菜单启动；便携版双击解压目录中的 **Apex Highlight Clipper.exe**。启动程序会自动准备共用的 FFmpeg，升级后复用已有视频工具。请将 EXE 与同目录的 app、runtime、scripts 等文件夹一起保留。包内已附 CPU / DirectML Python 运行环境和 OCR 模型，无需另装 Python 或 Node.js。
+2. 安装版从开始菜单启动；便携版双击解压目录中的 **Apex Highlight Clipper.exe**。最外层只有启动 EXE 和 **resources** 程序文件夹，依赖、模型、配置及许可证都集中在 resources 内，请一起保留。包内已附 CPU / DirectML Python 运行环境和 OCR 模型，无需另装 Python 或 Node.js。默认成片保存在系统“视频”目录下的 Apex Highlight Clipper 文件夹，已有自选输出位置继续沿用。
 3. FFmpeg 9.0.2 各版本共用，存放于 `%LOCALAPPDATA%/Apex Highlight Clipper/dependencies/ffmpeg/9.0.2`。旧版工具可迁移复用；确实没有可用副本时才下载并核对固定 SHA256。EXE 安装包附带离线工具。升级应用不会重新下载同一版本 FFmpeg。
 4. 选择录像或文件夹，设置输出位置，点击“开始整理”。停止时保存断点，下次继续原批次。
 
