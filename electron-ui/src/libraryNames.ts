@@ -12,7 +12,8 @@ function aliases(clips:Clip[],getNames:(clip:Clip)=>string[]){
  for(const keys of families.values()){
   keys.sort((a,b)=>entries.get(b)!.hits-entries.get(a)!.hits);
   const winner=entries.get(keys[0])!,others=keys.slice(1).reduce((n,key)=>n+entries.get(key)!.hits,0);
-  const merge=keys.length===1||winner.hits>=4&&winner.sources.size>=2&&winner.hits>=others*2;
+  const coexisting=keys.length>1&&clips.some(clip=>new Set(getNames(clip).map(playerNameKey).filter(key=>keys.includes(key))).size>1);
+  const merge=keys.length===1||!coexisting&&winner.hits>=4&&winner.sources.size>=2&&winner.hits>=others*2;
   for(const key of keys){const chosen=merge?winner:entries.get(key)!;resolved.set(key,{name:chosen.name,alternatives:merge?keys.map(key=>entries.get(key)!.name):[chosen.name]});}
  }
  return resolved;

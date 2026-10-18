@@ -18,16 +18,27 @@ from scripts.portable_runtime import assemble_runtime, dependency_files
 OUT = ROOT / 'publish'
 PYTHON_URL = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip'
 PRODUCT_MODULES = '''adaptive_evidence apex_clipper app_cancel app_options app_task app_ui_info app_worker clip_deletions
-    build_weapon_catalog clip_quality_filter combat_outcome_reader combat_statistics continuous_sampler
-    damage_bisection early_round_end engine_pool evidence_completion gpu_load gpu_ocr_backend hero_reader hud_layout hud_enrichment image_io indexed_coarse
-    inspect_video ocr_cache outcome_reader player_names planning_evidence rank_reader rename_exports repair_cached_statistics
+    build_weapon_catalog clip_quality_filter combat_candidate_completion combat_outcome_reader combat_statistics continuous_sampler
+    damage_bisection early_round_end engine_pool event_weapon_reader evidence_completion gpu_load gpu_ocr_backend hero_reader hero_portrait_reader hud_layout hud_enrichment image_io indexed_coarse
+    inspect_video japanese_name_reader latin_word_boundaries name_reader numeric_reader ocr_cache outcome_reader player_names planning_evidence rank_reader rename_exports repair_cached_statistics
     resume_io resume_media sample_locations sample_pipeline setup_weapon_model smart_scan sparse_pipeline
-    stat_counter_fallback ui_observer verify_export weapon_reader'''.split()
+    stat_counter_fallback target_name_reader ui_observer verify_export weapon_reader'''.split()
 
 def copy_tree(source, destination):
     shutil.copytree(source, destination, dirs_exist_ok=True,
         ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'pip', 'pip-*',
             'setuptools', 'setuptools-*', 'pkg_resources', '_distutils_hack', 'distutils-precedence.pth'))
+
+def assert_bundle_not_running(bundle):
+    if os.name!='nt' or not bundle.exists():return
+    result=subprocess.run(['powershell.exe','-NoProfile','-Command',
+        'Get-CimInstance Win32_Process | Select-Object -ExpandProperty ExecutablePath | ConvertTo-Json -Compress'],
+        capture_output=True,text=True,encoding='utf-8',timeout=30,check=True)
+    paths=json.loads(result.stdout or '[]')
+    if isinstance(paths,str):paths=[paths]
+    root=bundle.resolve()
+    if any(path and Path(path).resolve().is_relative_to(root) for path in paths):
+        raise RuntimeError('目标应用正在运行，不能刷新；请使用独立暂存目录')
 
 def release_files(target):
     # 依赖的测试目录、pip生成的pyc和运行时诊断也不进入发布包。
@@ -37,8 +48,8 @@ def release_files(target):
         if p.suffix=='.pyc' or rel.as_posix().startswith(('tools/','resources/tools/')) or p.name in {'FILES.sha256.json','ffmpeg.local.json'}: continue
         yield p
 
-def reuse_shared_runtime(source,target):
-    """只复用先前独立验证过、逐文件内容未改变的共享运行库与内核。"""
+def verified_shared_source(source):
+    """只读预检必须在标记构建或覆盖既有包之前完成。"""
     source=Path(source).resolve()
     source_content=source/'resources' if (source/'resources/app_worker.py').is_file() else source
     manifest=source_content/'FILES.sha256.json'
@@ -52,6 +63,12 @@ def reuse_shared_runtime(source,target):
         inventory=json.loads(z.read(source.name+'/'+manifest.relative_to(source).as_posix()))
     if inventory!=json.loads(manifest.read_text('utf-8')):
         raise RuntimeError('共享候选文件清单已变化')
+    return source,source_content,inventory
+
+
+def reuse_shared_runtime(source,target,verified=None):
+    """复用逐文件未变的运行库；产品代码或识别资源改变时重新验证推理与内核。"""
+    source,source_content,inventory=verified or verified_shared_source(source)
     kernel_changed=[]
     for name,digest in inventory.items():
         file=(source/name).resolve()
@@ -66,13 +83,13 @@ def reuse_shared_runtime(source,target):
         elif relative.endswith('.py') or relative.startswith(('models/','templates/','assets/ranks/')) or relative in {'profile-ultrawide.json','combat-outcome-profile.json','weapon-catalog.json','weapon-catalog.v1.json'}:
             file=target/relative
             if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:
-                if relative.endswith('.py') and file.is_file():kernel_changed.append(relative)
+                if file.is_file():kernel_changed.append(relative)
                 else:raise RuntimeError('识别资源已改变，需要重新验证运行库：'+name)
     for mode in ['cpu','dml']:
         if (target/'runtime'/mode/'sitecustomize.py').read_bytes()!=(ROOT/'scripts/portable_sitecustomize.py').read_bytes():
             raise RuntimeError('共享加载器已修改，需要重新构建并验证运行库')
     print('Reused previously validated, byte-identical CPU/DirectML runtime')
-    if kernel_changed:print('Changed product modules require worker smoke:',','.join(kernel_changed))
+    if kernel_changed:print('Changed product modules/resources require inference and worker smoke:',','.join(kernel_changed))
     return not kernel_changed
 
 def validate_worker(target):
@@ -131,6 +148,13 @@ def build(args):
         raise RuntimeError('目标包目录已存在，保留已有包；请先改名备份再重新构建。')
     if args.refresh and not (target/'runtime/runtime-layout.json').is_file():
         raise RuntimeError('只允许刷新本次共享依赖候选，不可覆盖旧版双环境发布包')
+    shared_source=verified_shared_source(bundle if args.refresh else args.shared_runtime_source) if args.refresh or args.shared_runtime_source else None
+    assert_bundle_not_running(bundle)
+    from target_name_reader import ensure_model as ensure_name_model
+    ensure_name_model()
+    ensure_name_model(latin=True)
+    from japanese_name_reader import ensure_model as ensure_japanese_name_model
+    ensure_japanese_name_model()
     target.mkdir(parents=True, exist_ok=args.refresh)
     args.managed_stage=out
     build_state(out,'building','portable')
@@ -161,10 +185,10 @@ def build(args):
     runtime_reused=False;kernel_reused=False
     if args.refresh:
         # A UI-only refresh can reuse the already verified byte-identical kernel.
-        kernel_reused=reuse_shared_runtime(bundle,target)
+        kernel_reused=reuse_shared_runtime(bundle,target,shared_source)
         runtime_reused=True
     elif args.shared_runtime_source:
-        kernel_reused=reuse_shared_runtime(args.shared_runtime_source,target)
+        kernel_reused=reuse_shared_runtime(args.shared_runtime_source,target,shared_source)
         runtime_reused=True
     elif not args.refresh:
         if args.runtime_source:
@@ -191,7 +215,7 @@ def build(args):
             sources={'cpu':cpu_source,'dml':Path(args.gpu)/'Lib/site-packages'}
         layout=assemble_runtime(target,sources,archive,ROOT/'scripts/portable_sitecustomize.py')
         print('Shared dependency bytes saved:',layout['shared_bytes_saved'])
-    for mode in ([] if runtime_reused else ['cpu','dml']):
+    for mode in ([] if runtime_reused and kernel_reused else ['cpu','dml']):
         runtime=target/'runtime'/mode
         subprocess.run([str(runtime/'python.exe'),'-c',
             "import os,numpy as np,sys,send2trash,pythoncom,av; os.environ['APEX_GPU_LOAD']='low'; "

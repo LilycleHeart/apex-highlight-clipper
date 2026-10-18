@@ -13,7 +13,6 @@ import os
 import threading
 import time
 from types import SimpleNamespace
-import weakref
 
 import onnxruntime as ort
 import rapidocr_onnxruntime
@@ -27,7 +26,12 @@ from gpu_load import get_gpu_policy,cooldown_seconds
 # outcome OCR. Serialize device work and share identical live sessions.
 _DML_DEVICE_LOCK = threading.RLock()
 _SESSION_CACHE_LOCK = threading.RLock()
-_LIVE_SESSIONS = weakref.WeakValueDictionary()
+# ORT 1.24.4/DirectML also failed on the first Run of a following clip after
+# the independent name model's final Python owner disappeared. Keep the small,
+# fixed product model set alive for the worker lifetime, including between clips.
+# Limit the set rather than evicting a live device graph in the middle of work.
+_LIVE_SESSIONS = {}
+_MAX_DML_SESSIONS = 8
 
 
 class ExplicitOrtSession(OrtInferSession):
@@ -122,6 +126,8 @@ def create_ocr_engine(*, backend='cpu', model_path=None, rec_batch_num=24,
             session = _LIVE_SESSIONS.get(key)
             reused = session is not None
             if session is None:
+                if len(_LIVE_SESSIONS)>=_MAX_DML_SESSIONS:
+                    raise RuntimeError('本识别工作进程已达到模型会话上限，请重新启动识别工作进程。')
                 session = ExplicitOrtSession(model_path, backend, device_id, profile_prefix)
                 _LIVE_SESSIONS[key] = session
     else:

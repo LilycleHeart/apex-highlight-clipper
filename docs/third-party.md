@@ -11,11 +11,12 @@
 | GenSen Rounded 源泉圆体 | [ButTaiwan/gensen-font](https://github.com/ButTaiwan/gensen-font)，SIL OFL 1.1，完整 TC Medium / Bold 字库；`electron-ui/public/fonts/GenSen-OFL.txt` |
 | Cal Sans | [Google Fonts](https://github.com/google/fonts/tree/main/ofl/calsans)，SIL OFL 1.1，`electron-ui/public/fonts/CalSans-OFL.txt` |
 | ONNX Runtime / DirectML | [Microsoft ONNX Runtime](https://github.com/microsoft/onnxruntime)，MIT；各运行环境包含版权声明，DirectML保留原分发条款 |
-| RapidOCR / OCR模型 | [RapidOCR](https://github.com/RapidAI/RapidOCR)、[PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)，Apache 2.0；武器模型为 PP-OCRv5 mobile，固定 SHA256 位于 `weapon_reader.py` |
+| RapidOCR / OCR模型 | [RapidOCR](https://github.com/RapidAI/RapidOCR)、[PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)，Apache 2.0；武器模型为 PP-OCRv5 mobile，难读姓名复核使用 PP-OCRv5 server、英文 mobile 和日文 PP-OCRv4；固定 SHA256 位于 `weapon_reader.py`、`target_name_reader.py`、`japanese_name_reader.py` |
 | PyAV / 内存索引解码 | [PyAV](https://github.com/PyAV-Org/PyAV)，BSD 3-Clause；轮子附带的 FFmpeg 库保留原许可，依赖许可随 av dist-info 保存 |
 | FFmpeg命令行工具 | 便携 ZIP 首次启动从 [Gyan 官方 9.0.2](https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2) 下载并核对固定 SHA256；EXE 安装包已包含相同供应包的 ffmpeg/ffprobe。该构建为 GPLv3，工具目录保存供应方 LICENSE / README，源码链接见供应方发布页 |
 | Apex武器、战绩、段位图形 | [Apex Wiki](https://apexlegends.fandom.com/)。社区镜像的游戏素材，权利属于 EA / Respawn 及对应权利人，并非 EA 官方 SVG 包；逐项来源与字节哈希在 `electron-ui/public/apex-icons/sources.json` 和 `assets/ranks/sources.json`。击倒使用护盾图形，击杀映射保留原有头骨轮廓 |
 | 英雄技能识别模板 | [EA 官方英雄页面](https://www.ea.com/games/apex-legends/apex-legends/characters-hub) 的战术与终极技能图形；权利属于 EA / Respawn。28 位英雄的原图地址与 SHA256 记录在 `assets/legends/sources.json`，用于本人 HUD 图形比对，不代表官方合作 |
+| 本人英雄头像比对资源 | EA / Respawn 游戏内固定头像的局部图像，已去除玩家名称和场景。标签由独立技能图形证据或固定英雄字幕核对；逐项来源说明与 SHA256 在 `assets/legends/portraits/sources.json`。这些资源不是玩家昵称答案表 |
 | Blanca两套角色、开关音效 | 用户提供的平涂/线稿 PNG 与“消失”“复原”WAV，保留原素材；轮廓SVG由alpha边缘派生，不改变原图与音频。项目不对这些第三方素材另行授予授权 |
 
 OpenCV、NumPy、Pillow、Send2Trash及其余 Python 依赖的许可证随各包元数据保存。图标、模型、字体、角色和音频不因项目公开而自动成为公有领域。

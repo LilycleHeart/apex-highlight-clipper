@@ -7,9 +7,9 @@ import {eventIcon,eventLabel,type ClipEvent} from './eventTimeline';
 export function preciseClock(seconds:number){const n=Math.round(Math.max(0,seconds)*100),s=Math.floor(n/100),m=Math.floor(s/60),h=Math.floor(m/60);return(h?String(h).padStart(2,'0')+':':'')+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0')+'.'+String(n%100).padStart(2,'0');}
 
 function EventInformation({event}:{event:ClipEvent}){
- const weapon=event.weapon?weaponFor(event.weapon):null;
+ const weapon=event.weapon?weaponFor(event.weapon):null,contextWeapon=event.weaponContext?weaponFor(event.weaponContext.weapon):null;
  return <><span className="event-hover-title"><ApexIcon file={'stats/'+eventIcon(event.kind)+'.svg'}/><b>{eventLabel(event.kind)}</b><time>{preciseClock(event.clipTime)}</time></span>
-  {(event.target||event.weapon)&&<span className="event-hover-fields">{event.target&&<span>目标 <b>{event.target}</b></span>}{event.weapon&&<span>武器 <b>{weapon&&<ApexIcon className="weapon-icon" file={weapon.file}/>} {event.weapon}</b></span>}</span>}
+  {(event.target||event.weapon||event.weaponContext)&&<span className="event-hover-fields">{event.target&&<span>目标 <b>{event.target}</b></span>}{event.weapon&&<span>武器 <b>{weapon&&<ApexIcon className="weapon-icon" file={weapon.file}/>} {event.weapon}</b></span>}{event.weaponContext&&<span><b>{contextWeapon&&<ApexIcon className="weapon-icon" file={contextWeapon.file}/>} {event.weaponContext.label}</b></span>}</span>}
   <span className="event-hover-hint">回看起点 {preciseClock(event.seekTime)}</span>
  </>;
 }

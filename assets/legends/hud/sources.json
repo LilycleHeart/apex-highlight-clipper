@@ -9,6 +9,78 @@
       "sha256": "ab285e3583d6f8bface4c0c85655cfd87279f89eb8298062279e48a35bdaadcd",
       "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/fuse",
       "note": "HUD glyph differs from website ability artwork. Evaluated using a separate recording from the reference capture."
+    },
+    {
+      "id": "pathfinder",
+      "slot": "tactical",
+      "file": "pathfinder-tactical.png",
+      "mode": "row_contrast",
+      "sha256": "7bf6a0765bb9ed9e3eba8521b766a091f02fb9228e0205405a6bb571cce987a6",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/pathfinder",
+      "note": "Native in-game ability glyph only; no player names, portrait, skin, or scene pixels. Validation uses other clips than the capture."
+    },
+    {
+      "id": "loba",
+      "slot": "tactical",
+      "file": "loba-tactical.png",
+      "mode": "row_contrast",
+      "sha256": "338bd7bc255a4f0dd578f391570ad595688486438048f8193056a4b64b90722e",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/loba",
+      "note": "Native in-game ability glyph only; no player names, portrait, skin, or scene pixels. Validation uses other clips than the capture."
+    },
+    {
+      "id": "axle",
+      "slot": "tactical",
+      "file": "axle-tactical.png",
+      "mode": "row_contrast",
+      "sha256": "a627ae29cbb9efbe5b61f4954f0e64f050b43ae388a08e0ff015944dbbc14756",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/axle",
+      "note": "Native in-game ability glyph only; no player names, portrait, skin, or scene pixels. Validation uses other clips than the capture."
+    },
+    {
+      "id": "octane",
+      "slot": "ultimate",
+      "file": "octane-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "05e46e403be6f27b55eac5054c41c78ecf6e4e5e95314a5ee6e3f82c9518f589",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/octane",
+      "note": "Native in-game ability glyph only; validation includes a separate clip from the capture."
+    },
+    {
+      "id": "pathfinder",
+      "slot": "ultimate",
+      "file": "pathfinder-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "8389c67580857e288d6a985e99bd8a24e206d26c78a44542c7039c942d13188b",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/pathfinder",
+      "note": "Native self ultimate glyph; no personal or scene context. Capture is distinct from held-out validation clips."
+    },
+    {
+      "id": "loba",
+      "slot": "ultimate",
+      "file": "loba-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "803d9fbe4b3af7249dc2dd57af76bb9389896e39288dbe6c232ed42316bb6fd2",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/loba",
+      "note": "Native self ultimate glyph; no personal or scene context. Capture is distinct from held-out validation clips."
+    },
+    {
+      "id": "axle",
+      "slot": "ultimate",
+      "file": "axle-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "d91bf288b63ee06a60b487724ee1b13ea31dffd29f4ac2287406a454f22bc323",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/axle",
+      "note": "Native self ultimate glyph; no personal or scene context. Capture is distinct from held-out validation clips."
+    },
+    {
+      "id": "ash",
+      "slot": "ultimate",
+      "file": "ash-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "b68ee9d74f11a9f4d4e0118507834495cf9123332bc9b6dec595d1063ac70a8f",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ash",
+      "note": "Native Phase Breach blade and circle, identified against the official ability artwork. Deidentified glyph mask; held-out recordings used for validation."
     }
   ]
 }

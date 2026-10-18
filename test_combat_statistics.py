@@ -1,3 +1,4 @@
+import copy
 import unittest
 from unittest.mock import patch
 from combat_statistics import unique_toasts,reconciled_counts,parse_settlement,last_team_settlement,overlay_summaries
@@ -6,6 +7,40 @@ from combat_outcome_reader import restore_english_events
 from outcome_reader import result_kind
 
 class StatisticsTests(unittest.TestCase):
+    def test_repeated_requests_for_one_decoded_pts_are_not_two_counter_frames(self):
+        from combat_statistics import stable_value
+        rows=[{'frame':'a','native_time':1.,'damage':2088},{'frame':'b','native_time':1.,'damage':2088}]
+        self.assertIsNone(stable_value(rows,'damage'))
+        rows.append({'frame':'c','native_time':1.5,'damage':2088})
+        self.assertEqual(stable_value(rows,'damage'),2088)
+
+    def test_unconfirmed_latest_counter_is_a_lower_bound_until_settlement_confirms_it(self):
+        endpoint=self.endpoint();endpoint['unconfirmed_latest']={'kills':5}
+        result=reconciled_counts(endpoint,[],self.coverage())
+        self.assertTrue(result['partial']['kills'])
+        confirmed=reconciled_counts(endpoint,[],self.coverage(),{'totals':{'kills':5,'assists':8}})
+        self.assertEqual(confirmed['counts']['kills'],2);self.assertFalse(confirmed['partial']['kills'])
+
+    def test_terminal_spectator_view_keeps_last_own_counters_as_lower_bounds(self):
+        endpoint=self.endpoint();endpoint['excluded_terminal_view']=True
+        result=reconciled_counts(endpoint,[],self.coverage())
+        self.assertEqual(result['counts']['damage'],1030)
+        self.assertTrue(all(result['partial'][key] for key in ['kills','assists','damage']))
+
+    def test_missing_terminal_digit_is_a_lower_bound_without_invalidating_other_fields(self):
+        endpoint=self.endpoint()
+        endpoint['end_frames']=[{'native_time':time,**endpoint['last_hud']} for time in [10.,10.1]]
+        endpoint['end_frames'].append({'native_time':10.2,'kills':4,'assists':8})
+        result=reconciled_counts(endpoint,[],self.coverage())
+        self.assertEqual(result['counts']['damage'],1030);self.assertTrue(result['partial']['damage'])
+        self.assertFalse(result['partial']['kills']);self.assertFalse(result['partial']['assists'])
+        self.assertTrue(any('片尾计分栏' in note for note in result['notes']))
+
+    def test_smaller_late_read_cannot_make_the_earlier_larger_value_a_lower_bound(self):
+        endpoint=self.endpoint();endpoint['baseline']['kills']=7;endpoint['last_hud']['kills']=18;endpoint['unconfirmed_latest']={'kills':8}
+        result=reconciled_counts(endpoint,[],self.coverage())
+        self.assertIsNone(result['counts']['kills']);self.assertTrue(result['partial']['kills'])
+
     def event(self,kind,target,time,frame,action=None):
         return dict(kind=kind,target_text=target,time=time,frame=frame,text=('助攻，消滅 ' if kind=='assist' else '已消滅 ' if kind=='elimination' else '擊倒 ')+target,
                     action=action or kind,confidence=.99,ownership='self')
@@ -64,12 +99,117 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(unique_toasts(events)[0]['target_text'],'PLAYER8863')
 
     def endpoint(self):return {'baseline':{'kills':3,'assists':4,'damage':1250},'last_hud':{'kills':4,'assists':8,'damage':2280},'last_hud_update':{'kills':100}}
-    def coverage(self):return {'checked_frames':10,'expected_frames':10,'ambiguous_frames':[],'calibrated_style_confirmed':True}
+    def coverage(self):return {'checked_frames':10,'expected_frames':10,'ambiguous_frames':[],'calibrated_style_confirmed':True,'reliable_absence':True}
 
     def test_second_clip_two_assists_is_exact_two(self):
         endpoint={'baseline':{'kills':2,'assists':1,'damage':417},'last_hud':{'kills':3,'assists':3,'damage':732}}
         result=reconciled_counts(endpoint,[],self.coverage())
         self.assertEqual(result['counts']['assists'],2);self.assertFalse(result['partial']['assists'])
+
+    def test_hud_assist_delta_has_priority_over_three_separate_phase_toasts(self):
+        events=[]
+        for action,target,time in [('knock','FIRST',1),('elimination','FIRST',8),('knock','SECOND',11)]:
+            event=self.event('assist',target,time,str(time),action)
+            event.update(confirmed=True,native_action_status='confirmed')
+            if target=='FIRST':event['native_action_pair']={'knock_time':1,'elimination_time':8}
+            events.append(event)
+        before=copy.deepcopy(events);endpoint=self.endpoint();endpoint['last_hud']['assists']=6
+        result=reconciled_counts(endpoint,events,self.coverage())
+        self.assertEqual(result['counts']['assists'],2);self.assertFalse(result['partial']['assists'])
+        endpoint['baseline']['assists']=None;endpoint['last_hud']['assists']=None
+        missing=reconciled_counts(endpoint,events,self.coverage())
+        self.assertEqual(missing['counts']['assists'],1);self.assertTrue(missing['partial']['assists'])
+        self.assertEqual(events,before)
+
+    def test_native_pending_assist_action_never_falls_back_to_cached_elimination(self):
+        endpoint=self.endpoint();endpoint['baseline']['assists']=None
+        event={**self.event('assist','PLAYER',1,'a','elimination'),'confirmed':True}
+        for status in [None,'','unconfirmed','unconfirmed_merged_track']:
+            with self.subTest(status=status):
+                pending={**event,'native_action_status':status}
+                for settlement in [None,{'totals':None}]:
+                    result=reconciled_counts(endpoint,[pending],self.coverage(),settlement)
+                    self.assertIsNone(result['counts']['assists']);self.assertTrue(result['partial']['assists'])
+        event.update(native_action_status='confirmed',action='knock')
+        self.assertIsNone(reconciled_counts(endpoint,[event],self.coverage())['counts']['assists'])
+        event.update(action='elimination',text='助攻，擊倒 PLAYER+100')
+        self.assertEqual(reconciled_counts(endpoint,[event],self.coverage())['counts']['assists'],1)
+
+    def test_legacy_assist_lower_bound_uses_complete_action_grammar_not_aggregate_or_nickname(self):
+        endpoint=self.endpoint();endpoint['baseline']['assists']=None
+        knock={**self.event('assist','ELIMINATED_PLAYER',1,'a','elimination'),
+               'confirmed':True,'text':'ASSIST KNOCKED DOWN ELIMINATED_PLAYER+100'}
+        unknown={**knock,'text':'助攻 PLAYER_ELIMINATED'}
+        for event in [knock,unknown,{**knock,'confirmed':False}]:
+            self.assertIsNone(reconciled_counts(endpoint,[event],self.coverage())['counts']['assists'])
+        elimination={**knock,'action':'knock','text':'ASSIST ELIMINATED PLAYER'}
+        self.assertEqual(reconciled_counts(endpoint,[elimination],self.coverage())['counts']['assists'],1)
+        self.assertIsNone(reconciled_counts(endpoint,[{**elimination,'ownership':'other'}],self.coverage())['counts']['assists'])
+
+    def test_legacy_merged_assist_cannot_use_eventual_action_when_saved_text_is_knock(self):
+        first=self.event('assist','PLAYER',1,'a','knock');first['text']='助攻，擊倒 PLAYER+100'
+        last=self.event('assist','PLAYER',8,'b','elimination');last['confidence']=.98
+        events=unique_toasts([first,last]);self.assertEqual(events[0]['action'],'elimination')
+        self.assertEqual(events[0]['text'],first['text'])
+        endpoint=self.endpoint();endpoint['baseline']['assists']=None
+        self.assertIsNone(reconciled_counts(endpoint,events,self.coverage())['counts']['assists'])
+        events[0]['native_action_status']='confirmed'
+        self.assertEqual(reconciled_counts(endpoint,events,self.coverage())['counts']['assists'],1)
+
+    def test_unconfirmed_self_knock_prevents_complete_coverage_from_inventing_zero(self):
+        pending={**self.event('knock','PLAYER',1,'a'),'confirmed':False}
+        coverage={**self.coverage(),'reliable_absence':True};before=copy.deepcopy(pending)
+        result=reconciled_counts(self.endpoint(),[pending],coverage)
+        self.assertIsNone(result['counts']['knockdowns']);self.assertTrue(result['partial']['knockdowns'])
+        confirmed={**self.event('knock','OTHER',2,'b'),'confirmed':True}
+        result=reconciled_counts(self.endpoint(),[pending,confirmed],coverage)
+        self.assertEqual(result['counts']['knockdowns'],1);self.assertTrue(result['partial']['knockdowns'])
+        absent=reconciled_counts(self.endpoint(),[],coverage)
+        self.assertEqual(absent['counts']['knockdowns'],0);self.assertFalse(absent['partial']['knockdowns'])
+        other=reconciled_counts(self.endpoint(),[{**pending,'ownership':'other'}],coverage)
+        self.assertEqual(other['counts']['knockdowns'],0);self.assertFalse(other['partial']['knockdowns'])
+        self.assertEqual(pending,before)
+
+    def test_unsettled_assist_suppression_requires_own_confirmed_elimination(self):
+        assist={**self.event('assist','PLAYER',101,'a','elimination'),'confirmed':True,'native_action_status':'confirmed'}
+        elimination={**self.event('elimination','PLAYER',102,'b'),'confirmed':True,'ownership':'other'}
+        result=reconciled_counts(self.endpoint(),[assist,elimination],self.coverage(),{'totals':None})
+        self.assertEqual(result['counts']['assists'],1);self.assertTrue(result['partial']['assists'])
+        elimination['ownership']='self'
+        self.assertIsNone(reconciled_counts(self.endpoint(),[assist,elimination],self.coverage(),{'totals':None})['counts']['assists'])
+
+    def exported_endpoint(self):
+        endpoint=self.endpoint()
+        endpoint.update(native_counter_scope='exported_visible_delta',native_view_version='self-hud-view-v3',
+                        native_numeric_method='numeric-three-model-v4',export_baseline_fields=['kills','assists','damage'])
+        endpoint['baseline_frames']=[{'native_time':time,'native_verified':True,**endpoint['baseline']} for time in [.01,.05]]
+        endpoint['end_frames']=[{'native_time':time,'native_verified':True,**endpoint['last_hud']} for time in [10.,10.04]]
+        return endpoint
+
+    def test_complete_native_export_delta_survives_missing_later_round_settlement(self):
+        endpoint=self.exported_endpoint();extra={**self.event('elimination','PLAYER',104,'a'),'confirmed':True}
+        before=copy.deepcopy(endpoint)
+        result=reconciled_counts(endpoint,[extra],self.coverage(),{'totals':None})
+        self.assertEqual(result['counts'],{'kills':1,'assists':4,'damage':1030,'knockdowns':0})
+        self.assertTrue(all(not result['partial'][key] for key in ['kills','assists','damage']))
+        self.assertEqual(endpoint,before)
+
+    def test_export_delta_exception_requires_real_distinct_pts_and_complete_terminal_field(self):
+        event={**self.event('assist','PLAYER',101,'a','elimination'),'confirmed':True,'native_action_status':'confirmed'}
+        cases={}
+        original=self.exported_endpoint();original['native_counter_scope']='original';cases['original_scope']=original
+        missing=self.exported_endpoint();missing['baseline_frames']=[];cases['version_and_values_only']=missing
+        duplicate=self.exported_endpoint();duplicate['end_frames'][1]['native_time']=10.;cases['same_decoded_pts']=duplicate
+        pending=self.exported_endpoint();pending['unconfirmed_latest']={'assists':8};cases['pending_terminal_read']=pending
+        hidden=self.exported_endpoint();hidden['end_frames'].append({'native_time':10.08,'native_verified':True,'kills':4,'damage':2280});cases['unreadable_terminal_assists']=hidden
+        excluded=self.exported_endpoint();excluded['excluded_terminal_view']=True;cases['terminal_spectator']=excluded
+        for reason,endpoint in cases.items():
+            with self.subTest(reason=reason):
+                result=reconciled_counts(endpoint,[event],self.coverage(),{'totals':None})
+                self.assertEqual(result['counts']['assists'],1);self.assertTrue(result['partial']['assists'])
+        mixed=reconciled_counts(hidden,[event],self.coverage(),{'totals':None})
+        self.assertEqual(mixed['counts']['kills'],1);self.assertFalse(mixed['partial']['kills'])
+        self.assertEqual(mixed['counts']['damage'],1030);self.assertFalse(mixed['partial']['damage'])
 
     def test_only_final_settlement_can_add_two_missed_kills(self):
         result=reconciled_counts(self.endpoint(),[],self.coverage(),{'totals':{'kills':6,'assists':7}})
@@ -82,6 +222,42 @@ class StatisticsTests(unittest.TestCase):
         result=reconciled_counts(self.endpoint(),unique_toasts(raw),self.coverage(),{'totals':None})
         self.assertEqual(result['counts']['kills'],3);self.assertTrue(result['partial']['kills'])
         self.assertIsNone(result['counts']['assists'])
+
+    def test_center_events_raise_only_partial_counter_bounds_without_adding_overlapping_evidence(self):
+        events=unique_toasts([self.event(kind,target,time,str(index)) for index,(kind,target,time) in enumerate([
+            ('elimination','FIRST',1.),('elimination','FIRST',1.5),('elimination','SECOND',4.),('elimination','SECOND',4.5),
+            ('assist','THIRD',6.),('assist','THIRD',6.5),('assist','FOURTH',8.),('assist','FOURTH',8.5)])])
+        endpoint=self.endpoint();endpoint['last_hud']['assists']=5
+        endpoint['end_frames']=[{'native_time':10.,**endpoint['last_hud']},{'native_time':11.}]
+        before=copy.deepcopy(events);result=reconciled_counts(endpoint,events,self.coverage())
+        self.assertEqual((result['counts']['kills'],result['counts']['assists']),(2,2))
+        self.assertTrue(result['partial']['kills']);self.assertTrue(result['partial']['assists'])
+        endpoint['end_frames'].pop();complete=reconciled_counts(endpoint,events,self.coverage())
+        self.assertEqual((complete['counts']['kills'],complete['counts']['assists']),(1,1))
+        self.assertEqual(events,before)
+
+    def test_missing_hud_center_fallback_is_not_added_again_for_unreadable_settlement(self):
+        events=unique_toasts([self.event('elimination',target,time,str(index)) for index,(target,time) in enumerate([
+            ('FIRST',102.),('FIRST',102.5),('SECOND',104.),('SECOND',104.5)])])
+        endpoint=self.endpoint();endpoint['baseline']['kills']=None
+        result=reconciled_counts(endpoint,events,self.coverage(),{'totals':None})
+        self.assertEqual(result['counts']['kills'],2);self.assertTrue(result['partial']['kills'])
+
+    def test_center_fallback_excludes_other_views_and_experience_does_not_become_damage(self):
+        events=[]
+        for kind in ['elimination','knock','assist']:
+            event={**self.event(kind,'PLAYER+150',1.,kind),'confirmed':True,'ownership':'other'};events.append(event)
+        endpoint={'baseline':{},'last_hud':{}}
+        result=reconciled_counts(endpoint,events,{**self.coverage(),'reliable_absence':False})
+        self.assertTrue(all(value is None for value in result['counts'].values()))
+        events[1]['ownership']='self';own=reconciled_counts(endpoint,events,{**self.coverage(),'reliable_absence':False})
+        self.assertEqual(own['counts']['knockdowns'],1);self.assertIsNone(own['counts']['damage'])
+
+    def test_no_negative_coverage_or_zero_frames_cannot_claim_complete_knockdowns(self):
+        for coverage in [{**self.coverage(),'reliable_absence':False},{**self.coverage(),'expected_frames':0,'checked_frames':0},
+                         {**self.coverage(),'stopped_after_positive':True}]:
+            result=reconciled_counts(self.endpoint(),[],coverage)
+            self.assertIsNone(result['counts']['knockdowns']);self.assertTrue(result['partial']['knockdowns'])
 
     def test_non_winning_fight_never_reads_settlement(self):
         with patch('weapon_reader.new_engine',side_effect=AssertionError('普通交战不能查结算')):

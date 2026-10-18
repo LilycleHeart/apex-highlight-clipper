@@ -1,0 +1,104 @@
+{
+  "source": "EA/Respawn in-game self HUD portraits, isolated from player names and scene pixels. Labels derive from independently checked fixed hero-class evidence; see each template.",
+  "templates": [
+    {
+      "id": "ash",
+      "file": "ash-1.png",
+      "sha256": "3d237d1c88ec4e3e2f5559f52f051e044d91736c2b32c374a61670683a98d132",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ash",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "ash",
+      "file": "ash-2.png",
+      "sha256": "d287e2dcc6ec7c77038d285d6466cee1a07cfd5545cbbd14fe22ff05b74c2845",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ash",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "fuse",
+      "file": "fuse-1.png",
+      "sha256": "ce6d2f3261e19a3ac768014fc38d3a8d30baab903ffffe62904342e9aa06db5e",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/fuse",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "fuse",
+      "file": "fuse-2.png",
+      "sha256": "787eb1df2792683113dc8764f482e761419e4be85ca32ca53d9c7e994814e81c",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/fuse",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "fuse",
+      "file": "fuse-3.png",
+      "sha256": "01f420f04defea8822cefedd6780362aa579f46a25d394e3150265f0b4f623c6",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/fuse",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "octane",
+      "file": "octane-1.png",
+      "sha256": "039c64b6b074d0167ccccf9ea7cf328fe9ade9304ea2d3d4acd93dfcd0210bd2",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/octane",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "pathfinder",
+      "file": "pathfinder-1.png",
+      "sha256": "611f4414074df39c10117f5ba02e2f895166cb0a45d7f7cb093c4b49e1b584d1",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/pathfinder",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "pathfinder",
+      "file": "pathfinder-2.png",
+      "sha256": "56bb892bd182a18d58a4743e17741080eeeb56123a59d3e151d1393d40f6e48b",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/pathfinder",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "pathfinder",
+      "file": "pathfinder-3.png",
+      "sha256": "b7dbbffd35d0eb531c49765d3d632620a7bc6fd7c494c89a40232e3016191c09",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/pathfinder",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "loba",
+      "file": "loba-1.png",
+      "sha256": "6e6a3dace412588d563eec35a6fec901c83111b28a56c447ed0d136296ba6023",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/loba",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "loba",
+      "file": "loba-2.png",
+      "sha256": "33038f043fb19be7125dd93f3579ab555162090c725a65a6d2864489a2106dd9",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/loba",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "loba",
+      "file": "loba-3.png",
+      "sha256": "0b4ceaa60014ce51507209a4f4aa86de9593200b1ba44c10b97bcff1daacdd11",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/loba",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "axle",
+      "file": "axle-1.png",
+      "sha256": "9c71340563a3f0c8d1bad43e2ba146cd986cf255d2d5d79410ea3f5c23d243a7",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/axle",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "bloodhound",
+      "file": "bloodhound-1.png",
+      "sha256": "4d44a04348db20ce17d2c684ed69db6f5256a6e34e8b8a84ae7dc3255273cdbf",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/bloodhound",
+      "label_evidence": "Two bundled OCR models independently read the localized fixed hero prefix in two native subtitle frames, with the self HUD portrait checked against the class depiction. No player-name inputs.",
+      "validation": "Holdout portrait confirmation excludes the subtitle authoring frames; only one source recording is available for this class."
+    }
+  ]
+}

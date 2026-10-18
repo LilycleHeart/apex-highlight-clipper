@@ -14,28 +14,74 @@ from image_io import read_image
 import numpy as np
 
 from apex_clipper import BASE,fingerprint,probe,write_json,inactive_view,downed_score
-from app_cancel import check_cancel
-from hud_layout import detect_images
+from app_cancel import check_cancel,TaskStopped
+from hud_layout import detect_images,VERSION as LAYOUT_VERSION
 from player_names import player_name,consensus_name,canonical_name,name_key
+from name_reader import NameReader,name_value
+from japanese_name_reader import VERSION as NAME_VERSION
 
-VERSION='optional-hud-v6'
+VERSION='optional-hud-v11'
 FIELDS=['account','weapons','teammates','hero','rank']
+
+
+@lru_cache(maxsize=8)
+def visual_field_recipe(field,reader_versions):
+    # 每个工作进程只摘要一次源码和小型运行资源，不加载模型或解码录像。
+    modules=['rank_reader.py'] if field=='rank' else ['hero_reader.py','hero_portrait_reader.py']
+    root=BASE/('assets/ranks' if field=='rank' else 'assets/legends')
+    files=[BASE/name for name in modules]+sorted(file for file in root.rglob('*') if file.is_file() and file.suffix.lower() in {'.png','.json'})
+    digest=hashlib.sha256(json.dumps(reader_versions).encode())
+    for file in files:
+        digest.update(str(file.relative_to(BASE)).replace('\\','/').encode());digest.update(b'\0')
+        digest.update(hashlib.sha256(file.read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def field_version(field):
+    if field in {'account','teammates'}:return NAME_VERSION
+    if field=='rank':
+        from rank_reader import VERSION as RANK_VERSION
+        return VERSION+':rank:'+RANK_VERSION+':'+visual_field_recipe(field,(RANK_VERSION,))
+    if field=='hero':
+        import hero_reader
+        from hero_portrait_reader import VERSION as PORTRAIT_VERSION
+        return VERSION+':hero:'+PORTRAIT_VERSION+':'+visual_field_recipe(field,(getattr(hero_reader,'VERSION',None),PORTRAIT_VERSION))
+    return VERSION
+
+
+def rank_detail_missing(rank):
+    return bool(rank and rank.get('tier') not in {'rookie','master','predator','unranked'} and not rank.get('division'))
+
+
+def field_unconfirmed(info,field):
+    return info.get('field_status',{}).get(field)!='confirmed' or field=='rank' and rank_detail_missing(info.get('rank'))
+
+
+def field_source_identity(info,field):
+    """旧清单整组绑定来源；显式分字段记录不能借用较新的全局来源。"""
+    if 'field_source_identities' in info:
+        identities=info['field_source_identities']
+        return identities.get(field) if isinstance(identities,dict) else None
+    return info.get('source_identity')
 
 
 def stable(observations,key):
     values=[row[key] for row in observations if row.get(key)]
-    result=consensus_name(values)
+    result=consensus_name(values,same_player=key in {'account','teammate'})
+    if key in {'account','teammate'}:
+        proved=[value for value in values if value.get('japanese_evidence',{}).get('glyphs')]
+        physical=consensus_name(proved,same_player=True)
+        if physical:result=physical
+        elif result and proved:
+            from japanese_name_reader import kana_family
+            if any(kana_family(value['name'])==kana_family(result['name']) and value['name']!=result['name'] for value in proved):return None
     if not result:return None
+    if key in {'account','teammate'} and any(value.get('glyph_review_pending') and name_key(value['name'])==name_key(result['name']) for value in values):return None
+    if key=='rank':
+        from collections import Counter
+        divisions=Counter(value.get('division') for value in values if value.get('tier')==result.get('tier') and value.get('division'))
+        result['division']=next(iter(divisions)) if len(divisions)==1 and next(iter(divisions.values()))>=2 else None
     result['method']='two_frame_'+key;return result
-
-
-def name_value(views):
-    choices=[]
-    for text,confidence in views:
-        name=player_name(text)
-        if confidence>=.80 and name:choices.append({'name':name,'confidence':float(confidence)})
-    for value in choices:value['view_agreement']=sum(name_key(other['name'])==name_key(value['name']) for other in choices)
-    return max(choices,key=lambda row:(row['view_agreement'],row['confidence'])) if choices else None
 
 
 def native_frames(source,start,end,moments=None):
@@ -63,10 +109,10 @@ def voice_template(sx,sy):
     return cv2.resize(template,(max(1,round(template.shape[1]*sx)),max(1,round(template.shape[0]*sy))))
 
 
-def name_patch(image,profile,bounds):
+def name_patch(image,profile,bounds,*,left_padding=8):
     # 给首尾字符留边距，再用固定语音图标确定名字右边界，避免图标被读成数字/字母。
     sx,sy=profile.get('hud_scale',[1,1]);rw,rh=profile['reference_size'];h,w=image.shape[:2]
-    bounds=[bounds[0]-round(8*sx),bounds[1]-round(2*sy),bounds[2]+round(48*sx),bounds[3]+round(2*sy)]
+    bounds=[bounds[0]-round(left_padding*sx),bounds[1]-round(2*sy),bounds[2]+round(48*sx),bounds[3]+round(2*sy)]
     patch=roi(image,profile,bounds);matches=[]
     if patch.size:
         gray=cv2.cvtColor(patch,cv2.COLOR_BGR2GRAY)
@@ -82,6 +128,69 @@ def name_patch(image,profile,bounds):
     return patch
 
 
+def name_patch_quality(patch,*,text_right=None):
+    """寻找能看到文字的画面；排除贴图边缘的大块亮色前景，不推测被盖住的字。"""
+    if patch is None or not patch.size:return {'clear':False,'score':0.,'character_components':0,'blocking':[]}
+    height,width=patch.shape[:2];hsv=cv2.cvtColor(patch,cv2.COLOR_BGR2HSV)
+    mask=((hsv[:,:,1]<85)&(hsv[:,:,2]>=max(180,float(np.percentile(hsv[:,:,2],95))*.85))).astype(np.uint8)
+    _,_,stats,_=cv2.connectedComponentsWithStats(mask);blocking=[];characters=0
+    for x,y,w,h,area in stats[1:]:
+        if (y+h>=height-1 or x+w>=width-1) and w>=h*1.2 and h>=height*.3 and area>=height*1.5:
+            if text_right is None or min(x+w,text_right)-x>=max(3,height*.15):blocking.append([int(v) for v in [x,y,w,h,area]])
+        elif height*.25<=h<=height*.9 and area>=3:characters+=1
+    penalty=sum(box[-1] for box in blocking)/(height*width)
+    return {'clear':not blocking and characters>=3,'score':characters/max(1,width)*height-penalty*100,'character_components':characters,'blocking':blocking}
+
+
+def account_search_moments(observations,frame_times,start,end):
+    visible=[row for row in observations if row.get('account')]
+    if visible:
+        seed=max(visible,key=lambda row:row['account'].get('confidence',0))['time']
+        moments=[seed+delta for delta in [-2.4,-1.8,-1.2,-.6,.6,1.2,1.8,2.4]]
+    else:moments=[start+(end-start)*fraction for fraction in [.05,.25,.35,.45,.55,.65,.75,.95]]
+    return sorted({max(start,min(end-.04,second)) for second in moments if end-start>.04 and all(abs(max(start,min(end-.04,second))-seen)>.1 for seen in frame_times)})
+
+
+def missing_visual_fields(fields,observations,weapons):
+    missing=[field for field in ['hero','rank'] if field in fields and not stable(observations,field)]
+    if 'weapons' in fields:
+        ids={value['id'] for value in weapons}
+        if not ids or any(len({value['time'] for value in weapons if value['id']==ident})<2 for ident in ids):missing.append('weapons')
+    return missing
+
+
+def adaptive_moments(observations,fields,teams,weapons,frame_times,start,end):
+    # 每个未确认字段先分到一帧，不能让一个字段独占补读预算。
+    seeds=[]
+    for key in ['account','hero','rank']:
+        if key in fields and not stable(observations,key):
+            candidates=[row for row in observations if row.get(key)]
+            if candidates:seeds.append(max(candidates,key=lambda row:(bool(key=='account' and (row[key].get('glyph_evidence') or row[key].get('japanese_evidence',{}).get('glyphs'))),row[key].get('confidence',0))))
+            elif key=='hero':
+                hints=[row for row in observations if row.get('hero_hint',0)>=.80]
+                if hints:seeds.append(max(hints,key=lambda row:row['hero_hint']))
+    if 'teammates' in fields:
+        for slot,team in enumerate(teams):
+            if stable(team,'teammate'):continue
+            candidates=[row for row in observations if any(value.get('slot')==slot for value in row.get('teammates',[]))]
+            if candidates:seeds.append(max(candidates,key=lambda row:max(((bool(value.get('glyph_evidence') or value.get('japanese_evidence',{}).get('glyphs')),value.get('confidence',0)) for value in row.get('teammates',[]) if value.get('slot')==slot),default=(False,0))))
+    if 'weapons' in fields:
+        for ident in dict.fromkeys(value['id'] for value in weapons):
+            sightings=[value for value in weapons if value['id']==ident]
+            if len({value['time'] for value in sightings})<2:
+                strongest=max(sightings,key=lambda value:value['confidence'])
+                seeds.append({'time':strongest['time']})
+    fallback=sorted(observations,key=lambda row:len(row.get('weapon_ids',[]))*3+sum((row.get(key) or {}).get('confidence',0) for key in ['account','hero','rank'])+len(row.get('teammates',[])),reverse=True)
+    seeds=seeds or fallback or [{'time':start+(end-start)*.15}]
+    unique=list({row['time']:row for row in seeds}.values());times=[]
+    for delta in [.4,-.4,.9]:
+        for seed in unique:
+            second=max(start,min(end-.04,seed['time']+delta))
+            if second>=start and all(abs(second-time)>.1 for time in frame_times+times):times.append(second)
+            if len(times)==3:return sorted(times)
+    return sorted(times)
+
+
 def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activity=None):
     fields=list(dict.fromkeys(fields or FIELDS));source=Path(source)
     def notify(message,frames_done=0,frames_total=3):
@@ -90,6 +199,7 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
     before=fingerprint(source);meta,video=probe(source);end=min(float(meta['format']['duration']),end or float(meta['format']['duration']))
     frames=list(native_frames(source,start,end))
     if not frames:raise ValueError('片段中没有可读取的HUD画面')
+    if profile and list(profile.get('reference_size',[]))!=[video['width'],video['height']]:profile=None
     if not profile:profile=detect_images([image for _,image in frames],video['width'],video['height'])
     notify('载入所选信息的识别模型',frames_total=len(frames))
     from weapon_reader import caption_views,recognize_text_views,MODEL_PATH,WeaponTextReader
@@ -105,45 +215,102 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
     from hero_reader import HeroReader
     hero_reader=HeroReader() if 'hero' in fields else None
     weapon_reader=WeaponTextReader(reader) if 'weapons' in fields else None
-    observations=[];weapons=[];teams=[[],[]];frame_times=[]
-    shield=None
-    def inspect(second,image):
+    name_reader=NameReader(reader) if set(fields)&{'account','teammates'} else None
+    observations=[];weapons=[];teams=[[],[]];frame_times=[];field_times={field:[] for field in fields}
+    shield=None;account_search=[];paired_account_times=set()
+    def qualify_account(value,patch,quality,expected=None):
+        old=[candidate['account']['name'] for candidate in observations if candidate.get('account') and candidate['account'].get('confidence',0)>=.85]
+        truncated=any(len(name_key(name))-len(name_key(value['name']))>=3 and (name_key(name).startswith(name_key(value['name'])) or name_key(name).endswith(name_key(value['name']))) for name in old)
+        proof=None
+        if quality['clear'] and .85<=value.get('confidence',0)<.92:
+            from name_reader import visible_latin_proof
+            proof=visible_latin_proof(patch,value,reader)
+        verified=bool(quality['clear'] and value.get('view_agreement',0)>=2 and (value.get('confidence',0)>=.92 or proof) and not truncated and not value.get('glyph_review_pending') and not value.get('japanese_review_pending') and (expected is None or value['name']==expected))
+        value['name_visibility']={**quality,'verified':verified,'verified_name':value['name'] if verified else None,'truncated_candidate':truncated,**({'independent_reading':proof} if proof else {})}
+    def own_view(image):
         nonlocal shield
-        frame_times.append(second)
         check_cancel()
         if inactive_view(image):
             # 同交战可能包含本人倒地后的队友观战；不能把观战对象当成本人。
             from outcome_reader import friend_view
-            if friend_view(image,True):return
+            if friend_view(image,True):return False
             if shield is None:shield=read_image(str(BASE/profile['downed_marker']),0)
-            if downed_score(image,profile,shield)<profile['downed_marker_threshold']:return
-        row={'time':second,'teammates':[]};crops=[];slots=[];gun_crops=[];gun_slots=[]
+            if downed_score(image,profile,shield)<profile['downed_marker_threshold']:return False
+        return True
+    def inspect(second,image,*,account_quality=None,expected_account=None,selected_fields=None):
+        if not start<=second<end:return
+        selected=['account'] if account_quality is not None else fields if selected_fields is None else selected_fields
+        selected=[field for field in selected if not any(abs(second-seen)<1e-6 for seen in field_times[field])]
+        if not selected:return
+        for field in selected:field_times[field].append(second)
+        if not any(abs(second-seen)<1e-6 for seen in frame_times):frame_times.append(second)
+        if not own_view(image):return
+        row=next((row for row in observations if abs(row['time']-second)<1e-6),None)
+        if row is None:
+            row={'time':second,'teammates':[]};observations.append(row)
+        crops=[];slots=[];gun_crops=[];gun_slots=[]
         regions=[]
-        if 'account' in fields:regions.append(('account',profile['account_roi']))
-        if 'teammates' in fields:regions.extend((f'team_{i}',box) for i,box in enumerate(profile['teammate_rois']))
-        if 'weapons' in fields:regions.extend((f'weapon_{i}',box) for i,box in enumerate(profile['weapon_name_boxes']))
+        if 'account' in selected:regions.append(('account',profile['account_roi']))
+        if 'teammates' in selected:regions.extend((f'team_{i}',box) for i,box in enumerate(profile['teammate_rois']))
+        if 'weapons' in selected:regions.extend((f'weapon_{i}',box) for i,box in enumerate(profile['weapon_name_boxes']))
         for key,box in regions:
-            patch=roi(image,profile,box) if key.startswith('weapon_') else name_patch(image,profile,box)
+            patch=roi(image,profile,box) if key.startswith('weapon_') else name_patch(image,profile,box,left_padding=4 if key.startswith('team_') else 8)
             if patch.size:
                 target=gun_crops if key.startswith('weapon_') else crops
                 (gun_slots if key.startswith('weapon_') else slots).append((key,len(target)))
-                target.extend(caption_views(patch))
-        texts=reader(crops)[0] if crops else []
+                if key.startswith('weapon_'):target.extend(caption_views(patch))
+                else:target.append(patch)
+        names=name_reader(crops) if crops else []
         for key,index in slots:
-            value=name_value(texts[index:index+2])
+            value=names[index]
             if value:
-                if key=='account':row['account']=value
+                if key=='account':
+                    if account_quality is not None:
+                        qualify_account(value,crops[index],account_quality,expected_account)
+                    row['account']=value
                 else:
                     value['slot']=int(key[-1]);teams[value['slot']].append({'teammate':value});row['teammates'].append(value)
         gun_texts=weapon_reader(gun_crops)[0] if gun_crops else []
-        row['weapon_ids']=[]
+        if 'weapons' in selected:row['weapon_ids']=[]
         for key,index in gun_slots:
             label,match=recognize_text_views(gun_texts[index:index+2])
             if match:
                 weapons.append({**match,'confidence':label['confidence'],'time':second});row['weapon_ids'].append(match['id'])
-        if rank_reader:row['rank']=rank_reader.inspect(image,profile)
-        if hero_reader:row['hero']=hero_reader.inspect(image,profile)
-        observations.append(row)
+        if rank_reader and 'rank' in selected:row['rank']=rank_reader.inspect(image,profile)
+        if hero_reader and 'hero' in selected:
+            row['hero']=hero_reader.inspect(image,profile)
+            scores=getattr(hero_reader,'last_scores',[])
+            if isinstance(scores,list) and scores:row['hero_hint']=float(scores[0][1])
+    def confirm_account_pair():
+        seeds=[row for row in observations if row['time'] not in paired_account_times and row.get('account') and not row['account'].get('glyph_review_pending') and not row['account'].get('japanese_review_pending') and row['account'].get('view_agreement',0)>=2 and (row['account'].get('confidence',0)>=.92 or row['account'].get('name_visibility',{}).get('verified'))]
+        if not seeds or profile.get('layout_status')!='confirmed':return
+        seed=max(seeds,key=lambda row:(bool(row['account'].get('name_visibility',{}).get('verified')),row['account']['confidence']));expected=seed['account']['name']
+        paired_account_times.add(seed['time'])
+        for second,image in native_frames(source,start,end,[seed['time']]):
+            if not own_view(image):return
+            patch=name_patch(image,profile,profile['account_roi']);quality=name_patch_quality(patch)
+            if not quality['clear'] and all(hasattr(reader,key) for key in ['session','resize_norm_img','rec_image_shape','postprocess_op']):
+                from target_name_reader import ctc_tokens
+                tokens=ctc_tokens(patch,reader)
+                if tokens and player_name(''.join(token[0] for token in tokens))==expected:
+                    quality=name_patch_quality(patch,text_right=min(patch.shape[1],tokens[-1][2]+patch.shape[0]*.15))
+            if not quality['clear']:return
+            qualify_account(seed['account'],patch,quality,expected)
+        if not seed['account'].get('name_visibility',{}).get('verified'):return
+        moments=[seed['time']+delta for delta in [-.04,.04] if start<=seed['time']+delta<end-.001]
+        notify('相邻原生帧确认账号',len(frame_times),len(frame_times)+len(moments))
+        for second,image in native_frames(source,start,end,moments):
+            if not start<=second<end or not own_view(image):continue
+            patch=name_patch(image,profile,profile['account_roi']);quality=name_patch_quality(patch)
+            if not quality['clear'] and all(hasattr(reader,key) for key in ['session','resize_norm_img','rec_image_shape','postprocess_op']):
+                from target_name_reader import ctc_tokens
+                tokens=ctc_tokens(patch,reader)
+                if tokens and player_name(''.join(token[0] for token in tokens))==expected:quality=name_patch_quality(patch,text_right=min(patch.shape[1],tokens[-1][2]+patch.shape[0]*.15))
+            if not quality['clear']:continue
+            account_search.append({'time':second,**quality,'selected':True,'sample_type':'adjacent_confirmation'})
+            inspect(second,image,account_quality=quality,expected_account=expected)
+            visible=[row for row in observations if row.get('account',{}).get('name_visibility',{}).get('verified')]
+            if stable(visible,'account'):break
     for second,image in frames:
         inspect(second,image);notify('识别所选 HUD 信息',len(frame_times),len(frames))
     # 未确认才在已有清晰 HUD 附近补最多三帧，避免三个固定时刻都落在遮挡/换枪动画。
@@ -152,23 +319,81 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
     ids={w['id'] for w in weapons}
     uncertain=uncertain or ('weapons' in fields and (not ids or any(len({w['time'] for w in weapons if w['id']==ident})<2 for ident in ids)))
     if uncertain:
-        seeds=sorted(observations,key=lambda r:len(r.get('weapon_ids',[]))*3+sum((r.get(k) or {}).get('confidence',0) for k in ['account','hero','rank'])+len(r.get('teammates',[])),reverse=True)
-        times=[]
-        for seed in seeds or [{'time':start+(end-start)*.15}]:
-            for delta in [.4,-.4,.9]:
-                second=max(start,min(end-.04,seed['time']+delta))
-                if second>=start and all(abs(second-t)>.1 for t in frame_times+times):times.append(second)
-                if len(times)==3:break
-            if len(times)==3:break
+        times=adaptive_moments(observations,fields,teams,weapons,frame_times,start,end)
         planned=len(frame_times)+len(times);notify('复核未确认的信息',len(frame_times),planned)
         for second,image in native_frames(source,start,end,sorted(times)):
             inspect(second,image);notify('复核未确认的信息',len(frame_times),planned)
+    # 原有时刻全落在倒地/切枪时，向未覆盖的时间段寻找实际图形；
+    # 仅补读仍未确认的所选字段，遇到有效读数后用相邻原生帧确认。
+    visual_search=[]
+    if missing_visual_fields(fields,observations,weapons) and end-start>.08:
+        moments=[start+(end-start)*fraction for fraction in [.05,.25,.35,.65,.75,.95]]
+        moments=[second for second in moments if all(abs(second-seen)>.1 for seen in frame_times)]
+        for second,image in native_frames(source,start,end,moments):
+            pending=missing_visual_fields(fields,observations,weapons)
+            if not pending:break
+            notify('寻找未确认的技能、武器或段位',len(visual_search),len(moments))
+            inspect(second,image,selected_fields=pending)
+            visual_search.append({'time':second,'fields':pending})
+            current=next((row for row in observations if abs(row['time']-second)<1e-6),{})
+            visible=[field for field in pending if current.get(field) or field=='weapons' and current.get('weapon_ids')]
+            if not visible:continue
+            pair=[second+delta for delta in [-.04,.04] if start<=second+delta<end-.001]
+            for adjacent,frame in native_frames(source,start,end,pair):
+                pending=[field for field in visible if field in missing_visual_fields(fields,observations,weapons)]
+                if not pending:break
+                inspect(adjacent,frame,selected_fields=pending)
+                visual_search.append({'time':adjacent,'fields':pending,'sample_type':'adjacent_confirmation'})
+    if 'account' in fields and not stable(observations,'account'):
+        confirm_account_pair()
+    if 'account' in fields and not stable(observations,'account'):
+        moments=account_search_moments(observations,field_times['account'],start,end);candidates=[]
+        notify('寻找清晰账号画面',0,len(moments))
+        for index,(second,image) in enumerate(native_frames(source,start,end,moments)):
+            if own_view(image):
+                quality=name_patch_quality(name_patch(image,profile,profile['account_roi']))
+                account_search.append({'time':second,**quality,'selected':False})
+                if quality['clear']:candidates.append((quality['score'],second,image,quality,account_search[-1]))
+            notify('寻找清晰账号画面',index+1,len(moments))
+        selected=0
+        for _,second,image,quality,record in sorted(candidates,key=lambda item:(-item[0],item[1])):
+            candidate_profile=detect_images([image],video['width'],video['height'])
+            if candidate_profile.get('layout_status')!='confirmed':continue
+            if any(abs(a-b)>8 for a,b in zip(candidate_profile['account_roi'],profile['account_roi'])):continue
+            record['selected']=True;inspect(second,image,account_quality=quality);selected+=1
+            notify('复核清晰账号画面',len(frame_times),len(frame_times)+3-selected)
+            visible=[row for row in observations if row.get('account',{}).get('name_visibility',{}).get('verified')]
+            if stable(visible,'account') or selected>=3:break
+        notify('账号清晰度检查完成',len(frame_times),len(frame_times))
+        visible=[row for row in observations if row.get('account',{}).get('name_visibility',{}).get('verified')]
+        if not stable(visible,'account'):confirm_account_pair()
     names=[{k:v for k,v in row.items() if k in ['time','account','teammates']} for row in observations]
-    result={'version':VERSION,'source_identity':before,'requested_fields':fields,'profile':profile,
+    result={'version':VERSION,'field_versions':{field:field_version(field) for field in fields},'source_identity':before,
+        'field_source_identities':{field:dict(before) for field in fields},'profile_source_identity':dict(before),'requested_fields':fields,'profile':profile,
         'checked_frames':len(frame_times),'frame_times':frame_times,'account':None,'teammates':[],'name_observations':names,
         'hero':None,'weapons':[],'rank':None,'field_status':{}}
+    if 'hero' in fields:result['hero_observations']=[{key:row[key] for key in ['time','hero','hero_hint'] if key in row} for row in observations]
+    if account_search:result['account_visibility_search']=account_search
+    if visual_search:result['visual_field_search']=visual_search
     for field in ['account','hero','rank']:
         if field in fields:result[field]=stable(observations,field)
+    def detail_activity(details):notify(details['message'],details.get('frames_done',0),details.get('frames_total',0))
+    if 'hero' in fields and not result['hero']:
+        from hero_portrait_reader import confirm_video_portrait
+        portrait=confirm_video_portrait(source,profile,start,end,on_activity=detail_activity)
+        candidate=portrait['hero'];conflicts=[]
+        if candidate:
+            for ident in {row['hero']['id'] for row in observations if row.get('hero')}:
+                times={row['time'] for row in observations if (row.get('hero') or {}).get('id')==ident}
+                if ident!=candidate['id'] and len(times)>=2:conflicts.append(ident)
+            if not conflicts:result['hero']=candidate
+        result['hero_portrait_observations']=portrait['observations']
+        if conflicts:result['hero_review_conflicts']=conflicts
+        result['frame_times']=sorted(set(result['frame_times'])|{row['time'] for row in portrait['observations']});result['checked_frames']=len(result['frame_times'])
+    if 'rank' in fields and rank_detail_missing(result['rank']):
+        result['rank']=rank_reader.confirm_division(source,profile,result['rank'],observations,start,end,on_activity=detail_activity)
+        result['frame_times']=sorted(set(result['frame_times'])|{row['time'] for row in result['rank'].get('division_evidence',[])});result['checked_frames']=len(result['frame_times'])
+    if 'rank' in fields:result['rank_observations']=[{'time':row['time'],'rank':row['rank']} for row in observations if 'rank' in row]
     if 'teammates' in fields:
         seen=set()
         for team in teams:
@@ -210,35 +435,46 @@ def reconcile_manifest_names(manifest,fields=None,targets=None,*,updates=None,ma
     clips=manifest.get('clips',[]);accounts=[];teams={};match_keys=match_keys or {}
     fields=set(['account','teammates'] if fields is None else fields)
     if not fields&{'account','teammates'}:return
+    identities={}
+    def valid_source(clip,info,field):
+        if info.get('field_status',{}).get(field)=='stale':return False
+        if id(clip) not in identities:
+            file=clip.get('output',clip.get('file'))
+            try:identities[id(clip)]=fingerprint(Path(file)) if file else info.get('source_identity')
+            except OSError:identities[id(clip)]=None
+        actual=identities[id(clip)]
+        return (actual is not None or not clip.get('output',clip.get('file'))) and field_source_identity(info,field)==actual
     for clip in clips:
         info=clip.get('recognition',{}).get('hud_info',{})
         if info.get('version')!=VERSION:continue
         key=clip.get('recognition',{}).get('match_key') or match_keys.get(id(clip)) or str(clip.get('output',clip.get('file','')))
         for row in info.get('name_observations',[]):
             versions=info.get('field_versions',{})
-            if row.get('account') and versions.get('account',info.get('version'))==VERSION:accounts.append(row['account'])
-            if versions.get('teammates',info.get('version'))==VERSION:
+            if row.get('account') and valid_source(clip,info,'account') and versions.get('account',info.get('version'))==field_version('account'):accounts.append(row['account'])
+            if valid_source(clip,info,'teammates') and versions.get('teammates',info.get('version'))==field_version('teammates'):
                 for value in row.get('teammates',[]):teams.setdefault((key,value['slot']),[]).append(value)
-    account=consensus_name(accounts,minimum=3)
-    references={key:consensus_name(values,minimum=3) for key,values in teams.items()}
+    account=consensus_name(accounts,minimum=3,same_player=True)
+    references={key:consensus_name(values,minimum=3,same_player=True) for key,values in teams.items()}
     for clip in clips if targets is None else targets:
         info=clip.get('recognition',{}).get('hud_info',{})
         if info.get('version')!=VERSION:continue
         writable=fields if updates is None else fields&updates.get(id(clip),set())
-        if 'account' in writable:
+        if 'account' in writable and valid_source(clip,info,'account'):
             values=[canonical_name(row.get('account'),account,same_player=True) for row in info.get('name_observations',[])]
-            info['account']=consensus_name(values) or canonical_name(info.get('account'),account,same_player=True)
+            info['account']=consensus_name(values,same_player=True) or canonical_name(info.get('account'),account,same_player=True)
+            info.setdefault('field_status',{})['account']='confirmed' if info['account'] else 'unknown'
         key=clip.get('recognition',{}).get('match_key') or match_keys.get(id(clip)) or str(clip.get('output',clip.get('file','')))
-        if 'teammates' in writable:
+        if 'teammates' in writable and valid_source(clip,info,'teammates'):
             raw={}
             for row in info.get('name_observations',[]):
                 for value in row.get('teammates',[]):raw.setdefault(value['slot'],[]).append(value)
             known={v.get('slot'):v for v in info.get('teammates',[])};resolved=[]
             for slot in dict.fromkeys([*known,*raw]):
                 reference=references.get((key,slot))
-                value=consensus_name([canonical_name(v,reference,same_player=True) for v in raw.get(slot,[])]) or canonical_name(known.get(slot),reference,same_player=True)
+                value=consensus_name([canonical_name(v,reference,same_player=True) for v in raw.get(slot,[])],same_player=True) or canonical_name(known.get(slot),reference,same_player=True)
                 if value:resolved.append(value)
             info['teammates']=resolved
+            info.setdefault('field_status',{})['teammates']='confirmed' if resolved else 'unknown'
 
 
 def merge_name_observations(previous,current,fields):
@@ -250,6 +486,27 @@ def merge_name_observations(previous,current,fields):
                 if row.get(key) and (key in fields)==fresh}
             if names:rows.append({'time':row.get('time'),**names})
     return rows
+
+
+def invalidate_changed_fields(previous,identity):
+    """媒体变化只使旧证据失效；不能让部分重读为未选字段换绑来源。"""
+    known=set(previous.get('requested_fields',[]))|set(previous.get('field_status',{}))|set(previous.get('field_versions',{}))
+    known.update(field for field in FIELDS if previous.get(field))
+    stale=[field for field in FIELDS if field in known and field_source_identity(previous,field)!=identity]
+    if not stale:return previous,[]
+    info={**previous,'field_status':dict(previous.get('field_status',{})),
+        'field_source_identities':{field:field_source_identity(previous,field) for field in FIELDS if field in known}}
+    for field in stale:
+        info[field]=[] if field in {'weapons','teammates'} else None
+        info['field_status'][field]='stale'
+    info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+stale))
+    info['name_observations']=merge_name_observations(previous.get('name_observations',[]),[],stale)
+    if 'account' in stale:info.pop('account_visibility_search',None)
+    if 'hero' in stale:
+        for key in ['hero_observations','hero_portrait_observations','hero_review_conflicts']:info.pop(key,None)
+    if 'rank' in stale:info.pop('rank_observations',None)
+    if set(stale)&{'hero','weapons','rank'}:info.pop('visual_field_search',None)
+    return info,stale
 
 
 def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=False,on_activity=None):
@@ -274,18 +531,51 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
         activity({'message':'检查已有识别结果','frames_done':0,'frames_total':0})
         identity=fingerprint(file)
         recognition=clip.setdefault('recognition',{});previous=recognition.get('hud_info',{})
+        previous,stale=invalidate_changed_fields(previous,identity)
+        if stale:
+            recognition['hud_info']=previous
+            # 即使新读取失败，也不能继续展示已确认属于旧视频的字段。
+            write_json(path,manifest)
         versions=previous.get('field_versions') or {field:previous.get('version') for field in previous.get('requested_fields',[])}
-        pending=[field for field in fields if force or versions.get(field)!=VERSION or previous.get('source_identity')!=identity or field not in previous.get('requested_fields',[]) or previous.get('field_status',{}).get(field)!='confirmed']
+        pending=[field for field in fields if force or versions.get(field)!=field_version(field) or field_source_identity(previous,field)!=identity or field not in previous.get('requested_fields',[]) or field_unconfirmed(previous,field)]
         if pending:
-            current=recognize_video(file,pending,**({'on_activity':activity} if on_activity else {}))
+            options={'on_activity':activity} if on_activity else {}
+            frozen=previous.get('profile',{})
+            if previous.get('profile_source_identity',previous.get('source_identity'))==identity and frozen.get('layout_version')==LAYOUT_VERSION and frozen.get('layout_status')=='confirmed':options['profile']=frozen
+            detail_only=not force and 'rank' in pending and field_source_identity(previous,'rank')==identity and versions.get('rank')==field_version('rank') and previous.get('field_status',{}).get('rank')=='confirmed' and rank_detail_missing(previous.get('rank'))
+            current=recognize_video(file,pending,**options)
+            if fingerprint(file)!=identity or current.get('source_identity',identity)!=identity:raise ValueError('补充识别期间录像发生变化')
+            if detail_only:
+                fresh=current.get('rank');saved=previous['rank']
+                current['rank']={**saved,'division':fresh['division'],**({'division_evidence':fresh['division_evidence']} if fresh.get('division_evidence') else {})} if fresh and fresh['tier']==saved['tier'] and fresh.get('division') else saved
+                current['field_status']['rank']='confirmed'
             info={**previous,**{field:current[field] for field in pending}}
             names=merge_name_observations(previous.get('name_observations',[]),current['name_observations'],pending)
             info.update(version=VERSION,source_identity=identity,profile=current['profile'],checked_frames=current['checked_frames'],
+                profile_source_identity=dict(identity),
                 name_observations=names,frame_times=current['frame_times'],
                 requested_fields=list(dict.fromkeys(previous.get('requested_fields',[])+pending)),
                 field_status={**previous.get('field_status',{}),**current['field_status']})
-            info['field_versions']={**versions,**{field:VERSION for field in pending}}
-            if force:info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+pending))
+            info['field_versions']={**versions,**{field:field_version(field) for field in pending}}
+            known=set(previous.get('requested_fields',[]))|set(versions)
+            info['field_source_identities']={**{field:field_source_identity(previous,field) for field in FIELDS if field in known},
+                **{field:dict(identity) for field in pending}}
+            info.pop('name_calibration_signatures',None)
+            if 'account' in pending:
+                if current.get('account_visibility_search'):info['account_visibility_search']=current['account_visibility_search']
+                else:info.pop('account_visibility_search',None)
+            if set(pending)&{'hero','weapons','rank'}:
+                if current.get('visual_field_search'):info['visual_field_search']=current['visual_field_search']
+                else:info.pop('visual_field_search',None)
+            if 'hero' in pending:
+                info['hero_observations']=current.get('hero_observations',[])
+                for key in ['hero_portrait_observations','hero_review_conflicts']:
+                    if key in current:info[key]=current[key]
+                    else:info.pop(key,None)
+            if 'rank' in pending:info['rank_observations']=current.get('rank_observations',[])
+            # 新算法的未知结果也须覆盖旧段位回退；当前版本的普通补缺仍保留原语义。
+            authoritative=[field for field in pending if force or field in {'hero','rank'} and versions.get(field)!=field_version(field)]
+            if authoritative:info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+authoritative))
             name_updates[id(clip)]=set(pending)
             recognition['hud_info']=info;write_json(path,manifest)
         else:activity({'message':'所选信息已确认，跳过读取','frames_done':0,'frames_total':0})
@@ -304,9 +594,24 @@ def _child_python(backend):
     return str(executable)
 
 
-def _run_hud_child(request,on_progress=None,on_activity=None):
+def _finish_hud_child(process,*,cooperative=False):
+    if cooperative and process.poll() is None:
+        try:process.wait(timeout=15)
+        except subprocess.TimeoutExpired:pass
+    if process.poll() is None:
+        # Windows venv 的 python.exe 可能只是转发启动器；必须同时收尾其真实子进程。
+        if os.name=='nt':
+            subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+                           timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
+        else:process.kill()
+    process.wait(timeout=10)
+
+
+def _run_hud_child(request,on_progress=None,on_activity=None,*,allow_partial=False):
     """原生访问冲突无法用 try/except 捕获；子进程只读取成片并更新软件元数据。"""
-    process=subprocess.Popen([_child_python(request['backend']),'-X','faulthandler',str(BASE/'hud_enrichment.py'),'--stdin','--direct'],
+    flags=['-B','-X','utf8','-X','faulthandler']
+    if sys.pycache_prefix:flags.extend(['-X','pycache_prefix='+sys.pycache_prefix])
+    process=subprocess.Popen([_child_python(request['backend']),*flags,str(BASE/'hud_enrichment.py'),'--stdin','--direct'],
         cwd=BASE,env={**os.environ,'PYTHONUTF8':'1','PYTHONFAULTHANDLER':'1'},
         stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace',
         creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
@@ -331,14 +636,18 @@ def _run_hud_child(request,on_progress=None,on_activity=None):
             elif event.get('type')=='hud-info-activity' and on_activity:on_activity(event)
             elif event.get('type')=='hud-info-done':done=event
         code=process.wait()
+        if code==75:
+            raise TaskStopped()
         if code!=0:
             raise RuntimeError(f'补充识别子进程退出（{code} / 0x{code & 0xffffffff:08X}）：'+'\n'.join(tail)[-1500:])
         if done is None:raise RuntimeError('补充识别没有返回完成记录')
-        if done.get('errors'):raise RuntimeError('; '.join(e['message'] for e in done['errors']))
+        if done.get('errors') and not allow_partial:raise RuntimeError('; '.join(e['message'] for e in done['errors']))
         return done
+    except TaskStopped:
+        _finish_hud_child(process,cooperative=True)
+        raise
     finally:
-        if process.poll() is None:process.kill()
-        process.wait()
+        _finish_hud_child(process)
         reader.join(timeout=2)
         for stream in [process.stdin,process.stdout]:stream.close()
 
@@ -368,22 +677,73 @@ def run_jobs(request,direct=False,emit=None):
     emit=emit or (lambda event:print(json.dumps(event,ensure_ascii=False),flush=True))
     os.environ['APEX_OCR_BACKEND']=request.get('backend','cpu')
     os.environ['APEX_GPU_LOAD']=request.get('gpu_load','low')
-    errors=[];done=0;offset=0;total=sum(len(job['files']) for job in request['jobs'])
+    if request.get('stop_file'):os.environ['APEX_TASK_STOP_FILE']=str(request['stop_file'])
+    check_cancel()
+    fields=list(dict.fromkeys(request.get('fields') or FIELDS))
+    if any(field not in FIELDS+['statistics','opponents','event_weapons'] for field in fields):raise ValueError('识别字段无效')
+    core=[field for field in fields if field in FIELDS];extra=[field for field in fields if field not in FIELDS]
+    errors=[];updated=set();unconfirmed=set();offset=0;phases=bool(core)+bool(extra);total=sum(len(job['files']) for job in request['jobs'])*phases
+    emit({'type':'hud-info-start','index':0,'total':total,'message':'准备读取所选信息'})
     for job in request['jobs']:
-        try:
-            enrich=enrich_manifest if direct else enrich_manifest_isolated
-            enrich(job['directory'],job['files'],request.get('fields'),
-                lambda index,local_total,file:emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file}),
-                force=request.get('force',False),on_activity=lambda event:emit({**event,'index':offset+event['index'],'total':total}))
-            done+=len(job['files'])
-        except Exception as error:
-            errors.append({'directory':job['directory'],'message':str(error)})
-            emit({'type':'hud-info-error','index':offset,'total':total,'message':'本组片段尚未完成，继续下一组','failures':len(errors)})
-        offset+=len(job['files'])
-    result={'type':'hud-info-done','updated':done,'errors':errors,'total':total}
+        check_cancel()
+        count=len(job['files'])
+        if core:
+            try:
+                enrich=enrich_manifest if direct else enrich_manifest_isolated
+                result=enrich(job['directory'],job['files'],core,
+                    lambda index,local_total,file:emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file}),
+                    force=request.get('force',False),on_activity=lambda event:emit({**event,'index':offset+event['index'],'total':total}))
+                updated.update(job['files']);wanted={str(Path(file).resolve()).casefold() for file in job['files']}
+                for clip in result['clips']:
+                    file=clip.get('output',clip.get('file',''))
+                    if str(Path(file).resolve()).casefold() in wanted and any(field_unconfirmed(clip.get('recognition',{}).get('hud_info',{}),field) for field in core):unconfirmed.add(file)
+            except Exception as error:
+                errors.append({'directory':job['directory'],'message':str(error)})
+                emit({'type':'hud-info-error','index':offset,'total':total,'message':'HUD 信息尚未完成，继续下一项','failures':len(errors)})
+            offset+=count
+        if extra:
+            errors_before=len(errors)
+            try:
+                if direct:
+                    from repair_cached_statistics import repair,exported_clips,opponent_needs_review,needs_fields
+                    directory=Path(job['directory']);statistics=directory/'statistics.json'
+                    if not statistics.is_file():raise ValueError('此记录缺少战果统计，无法复核战绩或敌人姓名')
+                    original=json.loads(statistics.read_text('utf-8-sig'));clips=exported_clips(directory,original)
+                    for index,file in enumerate(job['files'],1):
+                        check_cancel()
+                        def activity(event):emit({'type':'hud-info-activity','index':offset+index,'total':total,'file':file,'fields':extra,'backend':request.get('backend','cpu'),**event})
+                        activity({'message':'读取成片原生画面，复核战果信息','frames_done':0,'frames_total':0})
+                        try:
+                            result=repair({'directory':str(directory),'files':[file],'fields':extra,'native':True,'force':request.get('force',False),'recheck_existing':request.get('force',False),'recheck_names':'opponents' in extra},on_activity=activity)
+                            updated.add(file)
+                            if result:
+                                selected=next((clip for clip,identity in clips if identity['path'].casefold()==str(Path(file).resolve()).casefold()),None)
+                                bound=selected.get('segment',{}) if selected else {}
+                                fixed=next((segment for segment in result['segments'] if all(abs(segment[key]-bound.get(key,-1))<.001 for key in ['start','end'])),None)
+                                if fixed and (needs_fields(fixed,set(extra)) or 'statistics' in extra and request.get('force',False) and set(fixed.get('native_repaired_fields',[]))!={'kills','assists','damage'}):unconfirmed.add(file)
+                        except Exception as error:errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
+                        emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file})
+                else:
+                    payload={**request,'jobs':[job],'fields':extra}
+                    progress=lambda index,local_total,file:emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file})
+                    activity=lambda event:emit({**event,'index':offset+event['index'],'total':total})
+                    try:result=_run_hud_child(payload,progress,activity,allow_partial=True)
+                    except Exception:
+                        if request.get('backend','cpu')=='cpu':raise
+                        activity({'type':'hud-info-activity','index':0,'file':'','message':'GPU 复核中断，改用 CPU 继续','backend':'cpu'})
+                        result=_run_hud_child({**payload,'backend':'cpu'},progress,activity,allow_partial=True)
+                    updated.update(result.get('files_updated',[]));unconfirmed.update(result.get('unconfirmed_files',[]));errors.extend(result.get('errors',[]))
+            except Exception as error:errors.append({'directory':job['directory'],'message':str(error)})
+            if len(errors)>errors_before:emit({'type':'hud-info-error','index':offset,'total':total,'message':'部分战果信息需要重试','failures':len(errors)})
+            offset+=count
+    result={'type':'hud-info-done','updated':len(updated),'errors':errors,'unconfirmed':len(unconfirmed),'files_updated':sorted(updated),'unconfirmed_files':sorted(unconfirmed),'total':total}
     emit(result);return result
 
 
 if __name__=='__main__':
     request=json.loads(sys.stdin.read() if '--stdin' in sys.argv else Path(sys.argv[1]).read_text('utf-8-sig'))
-    run_jobs(request,direct='--direct' in sys.argv)
+    from app_cancel import TaskStopped
+    try:run_jobs(request,direct='--direct' in sys.argv)
+    except TaskStopped:
+        print(json.dumps({'type':'hud-info-stopped','message':'识别已停止，已读取的信息已保存'},ensure_ascii=False),flush=True)
+        raise SystemExit(75)

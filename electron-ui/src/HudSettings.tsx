@@ -1,10 +1,11 @@
-import type {HudField,Options} from './shared';
+import type {HudField,HudEnrichmentField,Options} from './shared';
 import {useState,useEffect,useId} from 'react';
 import SettingsToggle from './SettingsToggle';
 import MotionDisclosure from './MotionDisclosure';
-export const hudFields:{key:HudField;label:string}[]=[{key:'account',label:'本人账号'},{key:'weapons',label:'武器'},{key:'teammates',label:'队友'},{key:'hero',label:'英雄'},{key:'rank',label:'段位'}];
-export function HudFieldPicker({value,onChange,disabled=false}:{value:HudField[];onChange:(value:HudField[])=>void;disabled?:boolean}){
- return <div className="hud-field-picker">{hudFields.map(field=><label key={field.key}><input type="checkbox" disabled={disabled} checked={value.includes(field.key)} onChange={e=>onChange(e.target.checked?[...value,field.key]:value.filter(key=>key!==field.key))}/>{field.label}</label>)}</div>;
+export const hudFields:{key:HudField;label:string}[]=[{key:'account',label:'本人账号'},{key:'weapons',label:'武器'},{key:'teammates',label:'队友'},{key:'hero',label:'英雄'},{key:'rank',label:'模式/段位'}];
+export const enrichmentFields:{key:HudEnrichmentField;label:string}[]=[...hudFields,{key:'statistics',label:'战绩数字'},{key:'opponents',label:'敌人姓名'},{key:'event_weapons',label:'战果相关武器'}];
+export function HudFieldPicker<T extends string=HudField>({value,onChange,disabled=false,items=hudFields as unknown as {key:T;label:string}[]}:{value:T[];onChange:(value:T[])=>void;disabled?:boolean;items?:{key:T;label:string}[]}){
+ return <div className="hud-field-picker">{items.map(field=><label key={field.key}><input type="checkbox" disabled={disabled} checked={value.includes(field.key)} onChange={e=>onChange(e.target.checked?[...value,field.key]:value.filter(key=>key!==field.key))}/>{field.label}</label>)}</div>;
 }
 export default function HudSettings({options,update}:{options:Options;update:(key:keyof Options,value:unknown)=>void}){
  const [expanded,setExpanded]=useState(false),detailsId=useId();

@@ -31,7 +31,7 @@ class ExactTextCache:
                 result[key]=value
                 # 不跨批次复用接近解析门槛的结果，避免舍入差异越过阈值。
                 confidence=float(value[1])
-                if all(abs(confidence-threshold)>.002 for threshold in [.67,.75,.80,.86,.88]):
+                if all(abs(confidence-threshold)>.002 for threshold in [.67,.75,.80,.86,.88,.90,.95]):
                     self.cache[key]=value; self.cache.move_to_end(key)
             while len(self.cache)>self.capacity: self.cache.popitem(last=False)
         return [result[key] for key in keys],time.perf_counter()-started

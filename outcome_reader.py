@@ -8,6 +8,8 @@ from image_io import read_image
 import numpy as np
 from weapon_reader import new_engine,MODEL_SHA
 
+SELF_VIEW_VERSION='self-hud-view-v3'
+
 def compact(text):
     text=unicodedata.normalize('NFKC',text).upper()
     return ''.join(c for c in text if c.isalnum())
@@ -26,6 +28,23 @@ def friend_view(image,inactive):
     green=(hsv[:,:,0]>=24)&(hsv[:,:,0]<=95)&(hsv[:,:,1]>100)&(hsv[:,:,2]>100)
     _,xx=np.nonzero(green)
     return bool(len(xx)>=80 and xx.max()-xx.min()>=banner.shape[1]*.40)
+
+
+def spectator_view(image,inactive):
+    """本人 HUD 复核排除队友和敌人观战；不改变旧的对局结束判定。"""
+    if not inactive:return False
+    if friend_view(image,True):return True
+    h,w=image.shape[:2]
+    banner=image[round(h*.93):round(h*.98),round(w*.36):round(w*.64)]
+    hsv=cv2.cvtColor(banner,cv2.COLOR_BGR2HSV)
+    red=((hsv[:,:,0]<=15)|(hsv[:,:,0]>=170))&(hsv[:,:,1]>120)&(hsv[:,:,2]>100)
+    _,xx=np.nonzero(red)
+    if len(xx)<80 or xx.max()-xx.min()<banner.shape[1]*.25:return False
+    # 观战同时具有顶部蓝/红色导航栏和底部姓名条；普通彩色场景不能仅凭颜色排除。
+    top=image[:max(1,round(h*.055)),round(w*.1):round(w*.9)]
+    hsv=cv2.cvtColor(top,cv2.COLOR_BGR2HSV)
+    navigation=((hsv[:,:,0]<=15)|(hsv[:,:,0]>=170)|((hsv[:,:,0]>=100)&(hsv[:,:,0]<=135)))&(hsv[:,:,1]>120)&(hsv[:,:,2]>30)&(hsv[:,:,2]<200)
+    return float(np.mean(navigation))>.35
 
 def enrich_outcomes(cache,samples,checkpoint=None):
     signature=hashlib.sha256(('outcome-v3-'+MODEL_SHA).encode()).hexdigest()

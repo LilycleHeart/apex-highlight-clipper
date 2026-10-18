@@ -1,0 +1,29 @@
+{
+  "source": "EA/Respawn Apex Legends in-game score HUD; isolated symbols without names or adjacent numeric values",
+  "templates": [
+    {
+      "file": "kills-gray.png",
+      "sha256": "ea21731f987afac723aad9f5f830c1c2e9e45ce88bb00f7c2e9cfab5efaeb215",
+      "kind": "deidentified full HUD symbol",
+      "reference_scale": 0.5
+    },
+    {
+      "file": "kills-crown-gray.png",
+      "sha256": "e1b0d79746f561e6a134f135b55d4c6b7874e919f7d1b79c80c72faa0e73ab76",
+      "kind": "deidentified full HUD symbol",
+      "reference_scale": 0.5
+    },
+    {
+      "file": "assists-gray.png",
+      "sha256": "cbee223ec50bad4bc80b9d627095b512263ada14e132c34e0b0ad0ee9f63c87d",
+      "kind": "deidentified full HUD symbol",
+      "reference_scale": 0.5
+    },
+    {
+      "file": "participation-gray.png",
+      "sha256": "0982bcc3ecfe9a0e44efa629d93f6d2404cda914f0ffc0b916ca61ccfacfeb73",
+      "kind": "deidentified full HUD symbol",
+      "reference_scale": 0.5
+    }
+  ]
+}

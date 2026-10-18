@@ -20,7 +20,7 @@
 
 ## 下载即用
 
-当前正式版本为 **v1.0.13**，可在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载安装包或便携包。
+当前正式版本为 **v1.0.21**，可在 [Releases](https://github.com/LilycleHeart/apex-highlight-clipper/releases/latest) 下载安装包或便携包。
 
 1. 运行 EXE 安装包，或将便携 ZIP 完整解压到可写目录。
 2. 安装版从开始菜单启动；便携版双击解压目录中的 **Apex Highlight Clipper.exe**。最外层只有启动 EXE 和 **resources** 程序文件夹，依赖、模型、配置及许可证都集中在 resources 内，请一起保留。包内已附 CPU / DirectML Python 运行环境和 OCR 模型，无需另装 Python 或 Node.js。默认成片保存在系统“视频”目录下的 Apex Highlight Clipper 文件夹，已有自选输出位置继续沿用。

@@ -4,15 +4,47 @@ import hashlib
 import cv2
 from image_io import read_image
 import numpy as np
+from functools import lru_cache
 
 BASE=Path(__file__).resolve().parent
+@lru_cache(maxsize=1)
 def counter_recipe():
     digest=hashlib.sha256(Path(__file__).read_bytes())
+    for name in ['combat_statistics.py','hud_enrichment.py','repair_cached_statistics.py','outcome_reader.py','numeric_reader.py','gpu_ocr_backend.py','ocr_cache.py']:digest.update((BASE/name).read_bytes())
+    import rapidocr_onnxruntime
+    digest.update((Path(rapidocr_onnxruntime.__file__).parent/'models/ch_PP-OCRv4_rec_infer.onnx').read_bytes())
+    for model in ['weapon_rec_v5.onnx','numeric_rec_en_v4.onnx']:digest.update((BASE/'models'/model).read_bytes())
     for file in sorted((BASE/'templates/statistics').glob('*.png')):digest.update(file.read_bytes())
     return digest.hexdigest()
 
+
+def counter_box(profile,key):
+    box=list(profile[key])
+    if key=='damage':
+        sx=profile.get('hud_scale',[1,1])[0]
+        # 四位伤害不能沿用仅够三位数字的旧裁剪宽度；保留与段位徽章的间隔。
+        box[2]=max(box[2],min(box[2]+round(24*sx),profile.get('rank_roi',[profile['reference_size'][0]])[0]-round(8*sx)))
+    return box
+
+def without_counter_divider(image):
+    """只移除贯穿裁片高度的右侧斜分隔线，保留较矮的数字笔画。"""
+    if image is None or not image.size:return None
+    height,width=image.shape[:2]
+    edges=cv2.Canny(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY),80,180)
+    lines=cv2.HoughLinesP(edges,1,np.pi/180,threshold=max(8,round(height*.3)),minLineLength=round(height*.75),maxLineGap=round(height*.08))
+    candidates=[]
+    for x1,y1,x2,y2 in [] if lines is None else lines.reshape(-1,4):
+        dy=abs(int(y2)-int(y1));dx=abs(int(x2)-int(x1))
+        # 斜线可能从裁片右侧上四分之一处进入，不一定触碰顶边。
+        if dy>=height*.75 and .2*dy<=dx<=.8*dy and min(y1,y2)<=height*.25 and max(y1,y2)>=height*.85 and min(x1,x2)>width*.35:candidates.append(int(min(x1,x2)))
+    return image[:,:max(1,min(candidates)-2)].copy() if candidates else None
+
+
 def digit_view(patch):
     if patch is None or not patch.size:return None
+    # 长分隔线在前景分离后会留下逗号状残片，使真实“1”读成“1,”。
+    clean=without_counter_divider(patch)
+    if clean is not None:patch=clean
     gray=cv2.cvtColor(patch,cv2.COLOR_BGR2GRAY)
     count,labels,stats,_=cv2.connectedComponentsWithStats((gray>180).astype(np.uint8))
     mask=np.zeros(gray.shape,np.uint8)
@@ -26,9 +58,68 @@ def digit_view(patch):
     glyph=cv2.copyMakeBorder(glyph,8,8,8,8,cv2.BORDER_CONSTANT,value=255)
     return cv2.cvtColor(glyph,cv2.COLOR_GRAY2BGR)
 
+
+def separated_digit_views(image):
+    """较亮前景可断开纹理造成的字间粘连；保留原有笔画，不补画字符。"""
+    if image is None or not image.size:return []
+    clean=without_counter_divider(image)
+    if clean is None:clean=image
+    gray=cv2.cvtColor(clean,cv2.COLOR_BGR2GRAY);height,width=gray.shape;result=[]
+    for level in [200,220,240]:
+        mask=(gray>level).astype(np.uint8);_,labels,stats,_=cv2.connectedComponentsWithStats(mask)
+        parts=[(i,box) for i,box in enumerate(stats[1:],1) if height*.3<=box[3]<=height*.85 and 1<=box[2]<=box[3]*1.5 and box[4]>=max(4,box[3]*.5)]
+        if not parts:continue
+        tallest=max(box[3] for _,box in parts);parts=[(i,box) for i,box in parts if box[3]>=tallest*.65]
+        bottom=float(np.median([box[1]+box[3] for _,box in parts]));parts=[(i,box) for i,box in parts if abs(box[1]+box[3]-bottom)<=tallest*.2]
+        groups=[]
+        for index,box in sorted(parts,key=lambda item:item[1][0]):
+            x,y,w,h,_=map(int,box)
+            if groups and x<groups[-1][2]:
+                old=groups[-1];old[1]=min(old[1],y);old[2]=max(old[2],x+w);old[3]=max(old[3],y+h);old[4].append(index)
+            else:groups.append([x,y,x+w,y+h,[index]])
+        foreground=np.isin(labels,[i for group in groups for i in group[4]])
+        # 重复数字的顶部横笔可能相连；宽连通块不能当成一个字来证明短读数。
+        # 只在两个完整笔画之间存在薄连接时切开，并仅移动已有前景像素。
+        separated=[];split=False;unresolved=False
+        for x,y,right,bottom,indices in groups:
+            glyph=foreground[y:bottom,x:right];h,w=glyph.shape
+            if w>h*.95:
+                projection=glyph.sum(axis=0);left=round(w*.35);right_cut=round(w*.65)
+                cut=min(range(left,right_cut+1),key=lambda i:(projection[i],abs(i-w/2)))
+                pieces=[]
+                for start,end in [(0,cut),(cut,w)]:
+                    yy,xx=np.where(glyph[:,start:end])
+                    if not len(xx):break
+                    box=[x+start+int(xx.min()),y+int(yy.min()),x+start+int(xx.max())+1,y+int(yy.max())+1,indices]
+                    if not h*.2<=box[2]-box[0]<=h*.85 or box[3]-box[1]<h*.65:break
+                    pieces.append(box)
+                if len(pieces)==2 and projection[cut]<=h*.35:
+                    separated.extend(pieces);split=True;continue
+                unresolved=True
+            separated.append([x,y,right,bottom,indices])
+        groups=separated
+        if unresolved:continue
+        if not 2<=len(groups)<=5:continue
+        ys,xs=np.where(foreground)
+        if not len(xs):continue
+        if split:
+            top=min(group[1] for group in groups);bottom=max(group[3] for group in groups)
+            gap=max(2,round(tallest*.2));cursor=0
+            view=np.full((bottom-top,sum(group[2]-group[0] for group in groups)+gap*(len(groups)-1)),255,np.uint8)
+            for x,y,right,lower,_ in groups:
+                view[y-top:lower-top,cursor:cursor+right-x]=np.where(foreground[y:lower,x:right],0,255)
+                cursor+=right-x+gap
+        else:view=np.where(foreground[ys.min():ys.max()+1,xs.min():xs.max()+1],0,255).astype(np.uint8)
+        view=cv2.copyMakeBorder(view,10,10,10,10,cv2.BORDER_CONSTANT,value=255)
+        result.append({'image':cv2.cvtColor(view,cv2.COLOR_GRAY2BGR),'glyph_count':len(groups),'threshold':level,'boxes':[group[:4] for group in groups],**({'touching_glyphs_separated':True} if split else {})})
+    return result
+
+
 class CounterFallback:
     def __init__(self):
         self.templates={key:read_image(str(BASE/'templates/statistics'/f'{key}-gray.png'),0) for key in ['kills','assists','participation']}
+        crown=read_image(str(BASE/'templates/statistics/kills-crown-gray.png'),0)
+        self.extra_templates={'kills':[crown]} if crown is not None else {}
         self.digits={key:read_image(str(BASE/'templates/statistics'/f'digit-{key}.png'),0) for key in ['0','6','8']}
     def decode_numeric_alias(self,text,view):
         self.last_match_score=0.
@@ -56,27 +147,39 @@ class CounterFallback:
             output.append(scores[0][1]);matched_scores.append(scores[0][0])
         self.last_match_score=min(matched_scores) if matched_scores else 0.
         return ''.join(output)
-    def patches(self,image,profile,delta):
+    def regions(self,image,profile,delta):
         from hud_layout import template_for
         rw,rh=profile['reference_size'];fx=image.shape[1]/rw;fy=image.shape[0]/rh
-        gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY);dx,dy=delta;anchors={}
+        gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY);dx,dy=delta;anchors={};anchor_scores={}
+        sx,sy=profile.get('hud_scale',[1,1]);origin=profile['counter_marker_origin']
+        marker_x=round((origin[0]+dx)*fx)
         for key,reference in [('kills',profile['kills']),('assists',profile.get('assists',[2202,94,2228,124])),('participation',profile.get('participation',[2260,94,2300,124]))]:
-            template=self.templates[key]
-            if template is None:continue
-            template=template_for(profile,template)
-            if abs(fx-.5)>.001 or abs(fy-.5)>.001:template=cv2.resize(template,None,fx=fx*2,fy=fy*2)
-            x1=max(0,round((reference[0]+dx)*fx)-40);x2=min(image.shape[1],round((reference[2]+dx)*fx)+25)
+            # 不同游戏 HUD 可能只有击杀/助攻，没有参与数；各字段必须跟随图标，不能固定平移。
+            x1=max(0,marker_x-round(300*sx*fx));x2=min(image.shape[1],marker_x)
             y1=max(0,round((reference[1]+dy)*fy)-8);y2=min(image.shape[0],round((reference[3]+dy)*fy)+8)
             region=gray[y1:y2,x1:x2]
-            if region.shape[0]<template.shape[0] or region.shape[1]<template.shape[1]:continue
-            _,score,_,point=cv2.minMaxLoc(cv2.matchTemplate(region,template,cv2.TM_CCOEFF_NORMED))
-            if score>=.84:anchors[key]=(x1+point[0],y1+point[1],x1+point[0]+template.shape[1],y1+point[1]+template.shape[0])
+            for template in [self.templates[key],*self.extra_templates.get(key,[])]:
+                if template is None:continue
+                template=template_for(profile,template)
+                for factor in [.75,1.,1.25]:
+                    scaled=cv2.resize(template,None,fx=fx*2*factor,fy=fy*2*factor)
+                    if region.shape[0]<scaled.shape[0] or region.shape[1]<scaled.shape[1]:continue
+                    _,score,_,point=cv2.minMaxLoc(cv2.matchTemplate(region,scaled,cv2.TM_CCOEFF_NORMED))
+                    if score>=.84 and score>anchor_scores.get(key,0):
+                        anchor_scores[key]=score;anchors[key]=(x1+point[0],y1+point[1],x1+point[0]+scaled.shape[1],y1+point[1]+scaled.shape[0])
         result={}
-        for key,next_key in [('kills','assists'),('assists','participation')]:
-            if key in anchors and next_key in anchors:
-                a,b=anchors[key],anchors[next_key];left,right=a[2],b[0]-2
-                if 3<=right-left<=32:
-                    result[key]=digit_view(image[a[1]:a[3],left:right])
-        box=profile['damage'];x1,y1,x2,y2=[round((v+(dx if i%2==0 else dy))*(fx if i%2==0 else fy)) for i,v in enumerate(box)]
-        result['damage']=digit_view(image[y1:y2,x1:x2])
+        for key in ['kills','assists']:
+            if key in anchors:
+                a=anchors[key]
+                next_x=min([point[0] for name,point in anchors.items() if name!=key and point[0]>a[2]]+[marker_x])
+                # 完整图标模板已经含边缘留白，不再使用包含相邻数字的旧模板边界。
+                padding=max(1,round(sx*fx));left=a[2];right=min(next_x-padding,left+round(40*sx*fx))
+                if right-left>=3:
+                    top=max(0,a[1]-round(2*sy*fy));bottom=min(image.shape[0],a[3]+round(2*sy*fy))
+                    result[key]=image[top:bottom,left:right].copy()
+        box=counter_box(profile,'damage');x1,y1,x2,y2=[round((v+(dx if i%2==0 else dy))*(fx if i%2==0 else fy)) for i,v in enumerate(box)]
+        result['damage']=image[y1:y2,x1:x2].copy()
         return result
+
+    def patches(self,image,profile,delta):
+        return {key:digit_view(region) for key,region in self.regions(image,profile,delta).items()}

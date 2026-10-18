@@ -32,7 +32,7 @@ def close_name(left, right,minimum_length=6):
     return previous[-1]<=limit
 
 
-def player_name(text):
+def player_name(text,*,allow_rendered_square=False):
     if not isinstance(text, str):
         return ''
     name = strip_clan_tag(re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', text))).strip(' ()（）♫♪◀▶□')
@@ -40,7 +40,7 @@ def player_name(text):
     # 固定昵称框也可能是纯数字账号；不要只保留被 OCR 错读出字母的版本。
     if not 2 <= len(name) <= 40 or not (any(c.isalpha() for c in name) or re.fullmatch(r'\d{5,20}',name)):
         return ''
-    if re.search(r'[\x00-\x1f\ufffd□<>:=+!?！？。]', name):
+    if re.search(r'[\x00-\x1f\ufffd<>:=+!?！？。]', name) or '□' in name and not allow_rendered_square:
         return ''
     if key.upper() in {'MAXLEVEL', 'DEATHBOXRECOVERY', 'RECOVERBANNER', 'SPECTATING', 'DAMAGEINFLICTED', 'KNOCKEDDOWN', 'ELIMINATED', 'ASSIST'}:
         return ''
@@ -49,9 +49,17 @@ def player_name(text):
     return name
 
 
-def consensus_name(values, minimum=2):
+def consensus_name(values, minimum=2,*,same_player=False):
     # 调用者按不同画面传入；同一画面的两个预处理视图不能算两票。
-    values = [{**v,'name':strip_clan_tag(v['name'])} for v in values if v and name_key(v.get('name')) and v.get('confidence', 0) >= .80]
+    values = [{**v,'name':strip_clan_tag(v['name'])} for v in values if v and not v.get('japanese_review_pending') and v.get('name_visibility',{}).get('verified',True) and name_key(v.get('name')) and v.get('confidence', 0) >= .80]
+    if same_player:
+        clear=[value for value in values if value.get('name_visibility',{}).get('verified')]
+        visible_counts=Counter(name_key(value['name']) for value in clear)
+        if any(count>=minimum for count in visible_counts.values()):values=clear
+        complete=Counter(name_key(value['name']) for value in values if value['confidence']>=.85)
+        # 已知同一人的不同画面中，双帧完整读数不能与缺尾字读数打成平手。
+        truncated={name_key(value['name']) for value in values if any(count>=minimum and 0<len(other)-len(name_key(value['name']))<=2 and other.startswith(name_key(value['name'])) for other,count in complete.items())}
+        values=[value for value in values if name_key(value['name']) not in truncated]
     counts = Counter(name_key(v['name']) for v in values)
     reliable = [key for key, n in counts.items() if n >= minimum]
     if not reliable:
@@ -69,6 +77,13 @@ def canonical_name(value, reference,*,same_player=False):
     value={**value,'name':strip_clan_tag(value['name'])} if value else None
     reference={**reference,'name':strip_clan_tag(reference['name'])} if reference else None
     if not value or not reference or not close_name(value['name'], reference['name'],2 if same_player else 6):
+        return value
+    if value.get('name_visibility',{}).get('verified') and value['name_visibility'].get('verified_name')==value['name'] and value['name']!=reference['name']:return value
+    if name_key(value['name'])!=name_key(reference['name']) and value.get('japanese_evidence',{}).get('glyphs'):
+        from japanese_name_reader import kana_family
+        if kana_family(value['name'])==kana_family(reference['name']):return value
+    # 批量多数票不能覆盖双视图清晰读到的不同拼写；保留实际图像证据。
+    if name_key(value['name'])!=name_key(reference['name']) and value.get('view_agreement',0)>=2 and value.get('confidence',0)>=.92:
         return value
     if same_player and reference.get('consensus_confidence',reference.get('confidence',0))>=.86 and reference.get('votes',0)>=max(4,2*value.get('votes',1)):
         return {**value,'name':reference['name'],'method':'same_player_frame_consensus'}

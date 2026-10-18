@@ -8,8 +8,53 @@ import tempfile
 import json
 
 class CounterTests(unittest.TestCase):
+    def test_digit_separation_rejects_blank_background_and_keeps_a_text_line(self):
+        from stat_counter_fallback import separated_digit_views
+        self.assertEqual(separated_digit_views(np.zeros((40,90,3),np.uint8)),[])
+        self.assertEqual(separated_digit_views(np.full((40,90,3),255,np.uint8)),[])
+        image=np.zeros((40,90,3),np.uint8)
+        for x,width in [(10,12),(30,5),(45,12)]:image[8:30,x:x+width]=255
+        views=separated_digit_views(image)
+        self.assertTrue(views);self.assertTrue(all(view['glyph_count']==3 for view in views))
+
+    def test_small_regions_do_not_keep_entire_decoded_video_frames_alive(self):
+        profile=json.loads((BASE/'profile-ultrawide.json').read_text('utf-8'))
+        image=np.zeros((1080,2560,3),np.uint8)
+        regions=CounterFallback().regions(image,profile,(0,0))
+        self.assertIn('damage',regions)
+        self.assertFalse(np.shares_memory(regions['damage'],image))
+        self.assertLess(regions['damage'].nbytes,20000)
+
+    def test_touching_glyphs_are_spaced_using_a_thin_projection_bridge(self):
+        from stat_counter_fallback import separated_digit_views
+        image=np.zeros((50,100,3),np.uint8)
+        image[10:40,10:24]=255
+        for x in [35,53]:
+            cv2.line(image,(x,10),(x+18,10),(255,255,255),3)
+            cv2.line(image,(x+18,10),(x+3,38),(255,255,255),3)
+        views=separated_digit_views(image)
+        self.assertTrue(views)
+        self.assertTrue(all(view['glyph_count']==3 for view in views))
+        self.assertTrue(all(view.get('touching_glyphs_separated') for view in views))
+        # 分隔只移动现有笔画，不增加或抹掉数字前景。
+        self.assertTrue(all(np.count_nonzero(view['image'][:,:,0]==0)==np.count_nonzero(image[:,:,0]) for view in views))
+
+    def test_wide_solid_component_cannot_prove_one_short_glyph(self):
+        from stat_counter_fallback import separated_digit_views
+        image=np.zeros((50,100,3),np.uint8)
+        image[10:40,10:24]=255;image[10:40,35:75]=255
+        self.assertEqual(separated_digit_views(image),[])
+
     def test_empty_patch_does_not_invent_zero(self):
         self.assertIsNone(digit_view(np.zeros((15,12,3),np.uint8)))
+
+    def test_right_divider_entering_below_top_does_not_become_a_numeric_suffix(self):
+        image=np.zeros((28,30,3),np.uint8)
+        image[5:22,7:11]=255
+        expected=digit_view(image)
+        cv2.line(image,(28,5),(16,27),(255,255,255),2)
+        np.testing.assert_array_equal(digit_view(image),expected)
+
     def test_numeric_alias_requires_exact_glyph_and_rejects_eight_as_six(self):
         reader=CounterFallback()
         zero=cv2.imread(str(BASE/'templates/statistics/digit-0.png'),0)

@@ -3,6 +3,7 @@ from collections import Counter
 from difflib import SequenceMatcher
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import unicodedata
@@ -14,7 +15,7 @@ from apex_clipper import BASE,crop,counter_offset,numeric,write_json,fingerprint
 from combat_outcome_reader import inspect_combat_outcomes,parse_result_line,clean_target_name,PARSER_VERSION
 from player_names import consensus_name
 
-VERSION='combat-statistics-v8'
+VERSION='combat-statistics-v15'
 ASSIST_BOX=[2202,94,2228,124]
 FIELDS=('kills','assists','damage')
 
@@ -70,17 +71,44 @@ def unique_toasts(events):
 
 def stable_value(rows,key):
     """端点必须由至少两张不同画面的高置信数值确认。"""
-    votes=Counter(r[key] for r in rows if r.get(key) is not None)
+    unique={r.get('native_time',r.get('frame',index)):r for index,r in enumerate(rows)}
+    votes=Counter(r[key] for r in unique.values() if r.get(key) is not None)
     reliable={v for v,n in votes.items() if n>=2}
     return next((r[key] for r in reversed(rows) if r.get(key) in reliable),None)
 
+
+def final_counter_reader():
+    import os
+    from engine_pool import pooled_engine
+    from numeric_reader import NumericReader
+    from ocr_cache import ExactTextCache
+    backend=os.environ.get('APEX_OCR_BACKEND','cpu')
+    engine=pooled_engine(('final-counters-v2',backend),lambda:NumericReader(backend))
+    return ExactTextCache(engine)
+
 def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps=None,initial_samples=None):
-    from experimental.in_memory_hud import numeric_recognizer
     from sample_locations import SampleResolver
     resolver=SampleResolver(cache,samples)
+    source=Path(cache['source']['path']);native=source.is_file()
+    if native and fingerprint(source)!=cache['source']:raise ValueError('原录像发生变化，不能复核战绩端点')
+    if cache.get('profile',{}).get('layout_version'):profile=cache['profile']
+    if native:
+        from hud_enrichment import native_frames
+    def frame_image(row):
+        if native:
+            frame=next(native_frames(source,0,row['time']+1,[row['time']]),None)
+            if frame is not None and 0<=frame[0]-row['time']<.15:
+                second,image=frame
+                from apex_clipper import inactive_view
+                from outcome_reader import spectator_view
+                if spectator_view(image,inactive_view(image)):return None,{'native_verified':False,'excluded_view':True}
+                return image,{'native_verified':True,'native_time':second,'image_size':[image.shape[1],image.shape[0]]}
+            return None,{'native_verified':False,'native_read_missing':True}
+        image=read_image(str(resolver.path(row['frame'])))
+        return image,{'native_verified':False}
     rows=cache['rows'];chosen={};probes=[]
     eligible=[r for r in rows if not r.get('inactive_view') and not r.get('friend_spectate') and
-              r.get('counter_marker_score',0)>=.78 and resolver.path(r['frame']).is_file()]
+              r.get('counter_marker_score',0)>=.78 and (native or resolver.path(r['frame']).is_file())]
     for segment in segments:
         start,end=segment['start'],segment['end']
         before=[r for r in eligible if max(0,start-120)<=r['time']<=start]
@@ -90,30 +118,33 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
         pair=(before[-5:],after[-5:],initial);probes.append(pair)
         for group in pair:
             for row in group: chosen[row['frame']]=row
+    from stat_counter_fallback import CounterFallback,counter_box,digit_view
+    fallback=CounterFallback();fallback_views={}
     marker=read_image(str(BASE/profile['counter_marker']),0);images=[];positions=[];recognized={}
-    boxes={'kills':profile['kills'],'assists':profile.get('assists',ASSIST_BOX),'damage':profile['damage']}
+    boxes={'kills':profile['kills'],'assists':profile.get('assists',ASSIST_BOX),'damage':counter_box(profile,'damage')}
     for row in chosen.values():
-        image=read_image(str(resolver.path(row['frame'])));delta,score=counter_offset(image,profile,marker)
-        result={'frame':row['frame'],'time':row['time'],'marker_score':float(score)};recognized[row['frame']]=result
+        image,provenance=frame_image(row)
+        result={'frame':row['frame'],'time':row['time'],**provenance};recognized[row['frame']]=result
+        if image is None:continue
+        delta,score=counter_offset(image,profile,marker);result['marker_score']=float(score)
         if delta is None: continue
-        dx,dy=delta
+        regions=fallback.regions(image,profile,delta)
+        fallback_views[row['frame']]={key:digit_view(region) for key,region in regions.items()}
         for key,box in boxes.items():
-            images.append(crop(image,[box[0]+dx,box[1]+dy,box[2]+dx,box[3]+dy],profile['reference_size']))
+            if key not in regions:continue
+            images.append(cv2.resize(regions[key],None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC))
             positions.append((row['frame'],key))
-    recognizer=numeric_recognizer();values=[]
+    recognizer=final_counter_reader();values=[]
     for i in range(0,len(images),24):
         from app_cancel import check_cancel
         check_cancel();batch,_=recognizer(images[i:i+24]);values.extend(batch)
     for (frame,key),(text,confidence) in zip(positions,values):
         recognized[frame][key]=numeric(text,float(confidence),20000 if key=='damage' else 99,.88)
-    from stat_counter_fallback import CounterFallback
-    fallback=CounterFallback();extra_views=[];extra_positions=[]
+    extra_views=[];extra_positions=[]
     for frame,result in recognized.items():
         missing=[key for key in FIELDS if result.get(key) is None]
         if not missing:continue
-        image=read_image(str(resolver.path(frame)));delta,_=counter_offset(image,profile,marker)
-        if delta is None:continue
-        patches=fallback.patches(image,profile,delta)
+        patches=fallback_views.get(frame,{})
         for key in missing:
             patch=patches.get(key)
             if patch is not None:extra_views.append(patch);extra_positions.append((frame,key))
@@ -126,6 +157,46 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
             alias=fallback.decode_numeric_alias(text,view)
             if alias is not None:value=numeric(alias,fallback.last_match_score,20000 if key=='damage' else 99,.90)
         if value is not None:recognized[frame][key]=value;recognized[frame].setdefault('recovered_fields',[]).append(key)
+    # 尾端刚增加的伤害可能只有一张固定采样；在其附近补最多两帧，不能退回较早的多数值冒充最终数。
+    if native:
+        for segment,(_,after,_) in zip(segments,probes):
+            if not after:continue
+            last=after[-1];latest=recognized[last['frame']]
+            pending=[key for key in FIELDS if latest.get(key) is not None and latest[key]!=stable_value([recognized[row['frame']] for row in after],key)]
+            extra_times=[last['time']+min(.08,(segment['end']-last['time'])/2),last['time']-.06]
+            for second in extra_times if pending else []:
+                if second<segment['start'] or any(abs(row['time']-second)<.04 for row in after):continue
+                row={'frame':f'native:counter:{second:.5f}','time':second}
+                image,provenance=frame_image(row)
+                if image is None:continue
+                if provenance['native_time']>=segment['end']:continue
+                delta,score=counter_offset(image,profile,marker)
+                if delta is None:continue
+                result={**row,**provenance,'marker_score':float(score)}
+                regions=fallback.regions(image,profile,delta);keys=[key for key in boxes if key in regions]
+                for key,(text,confidence) in zip(keys,recognizer([cv2.resize(regions[key],None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC) for key in keys])[0]):result[key]=numeric(text,float(confidence),20000 if key=='damage' else 99,.88)
+                recognized[row['frame']]=result;after.append(row);after.sort(key=lambda value:value['time'])
+                if all(latest.get(key)==stable_value([recognized[value['frame']] for value in after],key) for key in pending):break
+    if native:
+        from stat_counter_fallback import without_counter_divider
+        # 仅在伤害端点尚未确认时复读现有原生帧，不能改变已有双帧确认值。
+        for before,after,_ in probes:
+            for group in [before,after]:
+                if stable_value([recognized[row['frame']] for row in group],'damage') is not None:continue
+                missing=[row for row in group if recognized[row['frame']].get('native_verified') is True and recognized[row['frame']].get('damage') is None and recognized[row['frame']].get('marker_score',0)>=.78]
+                for row in missing[:3]:
+                    image,_=frame_image(row)
+                    if image is None:continue
+                    delta,_=counter_offset(image,profile,marker)
+                    if delta is None:continue
+                    region=fallback.regions(image,profile,delta).get('damage')
+                    clean=without_counter_divider(cv2.resize(region,None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC)) if region is not None else None
+                    if clean is None:continue
+                    (text,confidence)=recognizer([clean])[0][0]
+                    value=numeric(text,float(confidence),20000,.88)
+                    if value is not None:
+                        recognized[row['frame']]['damage']=value
+                        recognized[row['frame']].setdefault('recovered_fields',[]).append('damage_divider')
     endpoints=[]
     for segment_index,(segment,(before,after,initial)) in enumerate(zip(segments,probes)):
         base_rows=[recognized[r['frame']] for r in before];end_rows=[recognized[r['frame']] for r in after]
@@ -155,6 +226,8 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
         if initial_zero:
             baseline={key:0 if value is None else value for key,value in baseline.items()}
         last_values={key:stable_value(end_rows,key) for key in FIELDS}
+        unconfirmed_latest={key:next((row[key] for row in reversed(end_rows) if row.get(key) is not None),None) for key in FIELDS}
+        unconfirmed_latest={key:value for key,value in unconfirmed_latest.items() if value is not None and value!=last_values[key]}
         updates={}
         for key,value in last_values.items():
             last_change=None;last_seen_value=None
@@ -164,7 +237,13 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
                 if row[key]!=last_seen_value:last_change=row['time'];last_seen_value=row[key]
             updates[key]=last_change if last_seen_value==value else None
         endpoints.append({'baseline':baseline,'last_hud':last_values,'last_hud_update':updates,
-                          'baseline_frames':base_rows,'end_frames':end_rows,'initial_hidden_zero':initial_zero,'new_round_reset':bool(reset_evidence)})
+                          'baseline_frames':base_rows,'end_frames':end_rows,'unconfirmed_latest':unconfirmed_latest,'initial_hidden_zero':initial_zero,'new_round_reset':bool(reset_evidence)})
+        if native:
+            from outcome_reader import SELF_VIEW_VERSION
+            from numeric_reader import METHOD
+            endpoints[-1]['native_view_version']=SELF_VIEW_VERSION
+            endpoints[-1]['native_numeric_method']=METHOD
+    if native and fingerprint(source)!=cache['source']:raise ValueError('核对战绩端点期间原录像发生变化')
     return endpoints
 
 def parse_settlement(detections):
@@ -230,35 +309,94 @@ def terminal_toast_burst(cache,segment,settlement,checkpoint):
     events=[{**e,'frame':'terminal-8hz/'+e['frame']} for e in result['decisions'][0]['events']]
     return {'events':events,'bounds':bounds,'fps':8,'stats':result['stats']}
 
+def terminal_unreadable_fields(endpoint):
+    """末帧没有读到的字段不能沿用较早数值充当完整片尾。兼容已有原生证据。"""
+    rows=[row for row in endpoint.get('end_frames',[]) if isinstance(row.get('native_time',row.get('time')),(int,float)) and not isinstance(row.get('native_time',row.get('time')),bool) and math.isfinite(row.get('native_time',row.get('time')))]
+    if not rows:return []
+    latest=max(rows,key=lambda row:row.get('native_time',row.get('time')))
+    return [key for key in FIELDS if endpoint.get('last_hud',{}).get(key) is not None and latest.get(key) is None]
+
+
+def confirmed_assist_eliminations(events):
+    """助攻下限只接受完整消灭阶段；原生待确认动作不能沿用旧聚合分类。"""
+    completed=[]
+    for event in events:
+        if not event.get('confirmed') or event.get('ownership')!='self' or event.get('kind')!='assist':continue
+        if 'native_action_status' in event:
+            accepted=event['native_action_status']=='confirmed' and event.get('action')=='elimination'
+        else:
+            parsed=parse_result_line(event.get('text') or '') or {}
+            accepted=parsed.get('kind')=='assist' and parsed.get('action')=='elimination'
+        if accepted:completed.append(event)
+    return completed
+
+
+def complete_exported_counter_delta(endpoint,key):
+    """现有成片的完整可见增量不受未录到的局后归因推测覆盖。"""
+    if endpoint.get('native_counter_scope')!='exported_visible_delta' or endpoint.get('native_view_version')!='self-hud-view-v3':return False
+    if endpoint.get('native_numeric_method') not in ['numeric-three-model-v3','numeric-three-model-v4']:return False
+    if key not in endpoint.get('export_baseline_fields',[]) or key in endpoint.get('unconfirmed_latest',{}) or endpoint.get('excluded_terminal_view'):return False
+    baseline=endpoint.get('baseline',{}).get(key);last=endpoint.get('last_hud',{}).get(key)
+    if any(not isinstance(value,int) or isinstance(value,bool) or value<0 for value in [baseline,last]) or last<baseline:return False
+    for group,value in [('baseline_frames',baseline),('end_frames',last)]:
+        times={row['native_time'] for row in endpoint.get(group,[]) if row.get('native_verified') is True and not row.get('excluded_view') and isinstance(row.get('native_time'),(int,float)) and not isinstance(row['native_time'],bool) and math.isfinite(row['native_time']) and row.get(key)==value}
+        if len(times)<2:return False
+    rows=endpoint.get('end_frames',[])
+    if any(row.get('excluded_view') for row in rows):return False
+    timed=[row for row in rows if isinstance(row.get('native_time',row.get('time')),(int,float)) and not isinstance(row.get('native_time',row.get('time')),bool) and math.isfinite(row.get('native_time',row.get('time')))]
+    if len(timed)!=len(rows):return False
+    latest=max(timed,key=lambda row:row.get('native_time',row.get('time')))
+    time=latest.get('native_time')
+    return latest.get('native_verified') is True and isinstance(time,(int,float)) and not isinstance(time,bool) and math.isfinite(time) and latest.get(key)==last
+
+
 def reconciled_counts(endpoint,events,coverage,settlement=None):
     baseline=endpoint['baseline'];end=dict(endpoint['last_hud']);settled=settlement and settlement.get('totals')
     if settled:end.update(settled)
-    confirmed=[e for e in events if e['confirmed']];counts={};partial={};notes=[]
+    confirmed=[e for e in events if e.get('confirmed') is True and e.get('ownership')=='self'];assist_eliminations=confirmed_assist_eliminations(events);counts={};partial={};notes=[];hud_deltas={}
+    visible_complete={key:complete_exported_counter_delta(endpoint,key) for key in FIELDS} if not settled else {}
     for key,kind in [('kills','elimination'),('assists','assist'),('damage',None)]:
         b,v=baseline.get(key),end.get(key)
+        latest=endpoint.get('unconfirmed_latest',{}).get(key)
+        if not settled and latest is not None and v is not None and latest<v:
+            v=None;notes.append(key+'末端读数互相矛盾，不能作为计数下限')
         if b is not None and v is not None and v>=b:
-            counts[key]=v-b;partial[key]=bool(settlement and not settled) or bool(settlement and key=='damage')
+            hud_deltas[key]=v-b
+            counts[key]=v-b;partial[key]=bool(settlement and not settled) or bool(settlement and key=='damage') or not settled and (key in endpoint.get('unconfirmed_latest',{}) or key in terminal_unreadable_fields(endpoint) or bool(endpoint.get('excluded_terminal_view')))
+            if visible_complete.get(key):partial[key]=False
         else:
-            n=sum(e['kind']==kind for e in confirmed) if kind else 0
+            n=len(assist_eliminations) if key=='assists' else sum(e['kind']==kind for e in confirmed) if kind else 0
             counts[key]=n or None;partial[key]=True
             if b is not None and v is not None and v<b:notes.append(key+'计数发生回退，无法可靠分段归因')
-    complete=(coverage['checked_frames']==coverage['expected_frames'] and not coverage['ambiguous_frames'] and
-              coverage.get('calibrated_style_confirmed',False))
+        # 两种证据可能覆盖同一次战果；只提升下限，不能直接相加或覆盖完整 HUD。
+        if kind and partial[key] and not settlement:
+            center=len(assist_eliminations) if key=='assists' else sum(e['kind']==kind for e in confirmed)
+            if center and (counts[key] is None or center>counts[key]):
+                counts[key]=center;notes.append(('击杀' if key=='kills' else '助攻')+'由已确认本人中心提示补齐下限')
+    complete=(coverage.get('expected_frames',0)>0 and coverage['checked_frames']==coverage['expected_frames'] and not coverage['ambiguous_frames'] and
+              coverage.get('calibrated_style_confirmed',False) and coverage.get('reliable_absence',False) and not coverage.get('stopped_after_positive',False))
     knocks=sum(e['kind']=='knock' for e in confirmed)
-    counts['knockdowns']=knocks if complete else knocks or None
-    partial['knockdowns']=not complete or any(not e['confirmed'] for e in events if e['kind']=='knock')
+    pending_knocks=any(not e['confirmed'] for e in events if e['kind']=='knock' and e.get('ownership')=='self')
+    counts['knockdowns']=knocks if complete and not pending_knocks else knocks or None
+    partial['knockdowns']=not complete or pending_knocks
     if settlement and not settled:
-        last_update=endpoint.get('last_hud_update',{}).get('kills')
-        extra=[e for e in confirmed if e['kind']=='elimination' and last_update is not None and e['time']>last_update+1]
-        if counts['kills'] is not None:counts['kills']+=len(extra)
-        else:counts['kills']=sum(e['kind']=='elimination' for e in confirmed) or None
+        if not visible_complete.get('kills'):
+            last_update=endpoint.get('last_hud_update',{}).get('kills')
+            extra=[e for e in confirmed if e['kind']=='elimination' and last_update is not None and e['time']>last_update+1]
+            if 'kills' in hud_deltas:counts['kills']+=len(extra)
+            else:counts['kills']=sum(e['kind']=='elimination' for e in confirmed) or None
+            partial['kills']=True
         # 胜利后助攻击倒可能转为本人击杀；只统计已确认消灭的助攻，避免把上限冒充下限。
-        assists=[e for e in confirmed if e['kind']=='assist' and e.get('action')=='elimination' and
-                 not any(k['kind']=='elimination' and same_target(k.get('target_text'),e.get('target_text')) for k in confirmed)]
-        counts['assists']=len(assists) or None
-        partial['kills']=partial['assists']=True
+        if not visible_complete.get('assists'):
+            assists=[e for e in assist_eliminations if
+                     not any(k['kind']=='elimination' and k.get('ownership')=='self' and same_target(k.get('target_text'),e.get('target_text')) for k in confirmed)]
+            counts['assists']=len(assists) or None
+            partial['assists']=True
     if settled:notes.append('末队本人胜利结算核对：击杀与助攻使用结算累计减本段基线')
-    elif settlement:notes.append('末队 HUD 消失；结算未可靠确认，仅保留已读到的计数下限')
+    elif settlement:notes.append('末队结算未可靠确认；完整复核的成片字段使用首尾可见增量，其余仅保留已确认下限')
+    if endpoint.get('unconfirmed_latest') and not settled:notes.append('末端变化未获得双帧确认，相关计数仅为已确认下限')
+    if terminal_unreadable_fields(endpoint) and not settled:notes.append('片尾计分栏未完整读取，较早已确认数值仅为下限')
+    if endpoint.get('excluded_terminal_view') and not settled:notes.append('片尾包含观战画面；仅使用此前本人 HUD，计数保留为已确认下限')
     return {'counts':counts,'partial':partial,'notes':notes,'endpoint':endpoint,'settlement_totals':settled}
 
 def collect_statistics(cache,samples,segments,profile,checkpoint):
@@ -292,6 +430,10 @@ def collect_statistics(cache,samples,segments,profile,checkpoint):
         raw=list(decision['events'])
         if terminal and i==len(segments)-1:raw.extend(terminal['events'])
         events=unique_toasts(raw)
+        if events:
+            from combat_outcome_reader import native_target_names
+            print(f'原生战果姓名复核: {i+1}/{len(segments)} 段，{len(events)} 个结果',flush=True)
+            events=native_target_names(Path(cache['source']['path']),events,hud_profile=profile)
         correction=settlement if i==len(segments)-1 else None
         counts=reconciled_counts(endpoint,events,decision['coverage'],correction)
         results.append({'start':segment['start'],'end':segment['end'],**counts,'events':events,'coverage':decision['coverage']})

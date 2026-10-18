@@ -1,6 +1,12 @@
 const{test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs/promises');const os=require('node:os');const path=require('node:path');
 const{discoverTasks,mergeLibrary,LibraryStore}=require('../dist-electron/electron/library');
 
+test('两个同形昵称同时出现时保留两个人',()=>{
+ const clips=Array.from({length:8},(_,i)=>({path:path.resolve(`distinct-${i}.mp4`),source:`source-${i}`,accountName:'Liliumcordis',teammates:[{name:'Liliumcordis',confidence:.95}]}));
+ clips[0].teammates.push({name:'Liiumcordis',confidence:.95});
+ assert.deepEqual(mergeLibrary([{source:'fixture',clips}])[0].clips[0].teammates.map(value=>value.name),['Liliumcordis','Liiumcordis']);
+});
+
 test('名称按实际优势拼写归一，保留不同账号和不同中文队友',()=>{
  const accountNames=['[YURI] Liliumcordis','[YURI]Liliumcordis','[YURI] Liliumcordis','[YURI] Liliumcordis','[YURI] Liiumcordis','[YURI] Liliumcordis','[YURI] LilycleHeart','Katahane'];
  const clips=accountNames.map((accountName,i)=>({path:path.resolve(`name-${i}.mp4`),source:`source-${i}`,accountName,teammates:[{name:i%2?'[BAD]neko':'[BA]NEKO',confidence:.95},{name:i%2?'落生烟':'落生烬',confidence:.95}]}));

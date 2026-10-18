@@ -1,7 +1,7 @@
 import type {Clip} from './shared';
 import MotionDetails from './MotionDetails';
 import {clock} from './state';
-import {cleanTargetName,recordingTime,recordingTimeLabel} from './clipStats';
+import {recordingTime,recordingTimeLabel} from './clipStats';
 import weapons from './weaponIcons.json';
 
 const asset=(file:string)=>new URL(`${import.meta.env.BASE_URL}apex-icons/${file}`,location.href).href;
@@ -24,10 +24,10 @@ export default function ClipDetails({clip,compact=false}:{clip:Clip;compact?:boo
   <div className="clip-weapons" aria-label="识别枪械">{(clip.weapons.length?clip.weapons:['未知枪']).map(name=>{const w=weaponFor(name);return <span className="weapon-chip" key={name}>{w&&<ApexIcon className="weapon-icon" file={w.file}/>}<span>{name==='未知枪'?'—枪':name}</span></span>;})}</div>
   {!compact&&<>{clip.source&&<div className="clip-source"><span>原录像</span><b title={clip.source}>{clip.source.split(/[\\/]/).pop()}</b></div>}<div className="clip-range"><span>原片时间</span><b>{clock(clip.start)} — {clock(clip.end)}</b></div>
   <div className="clip-identity"><span>本人账号</span><b>{clip.accountName||'—'}</b></div><div className="clip-identity"><span>英雄</span><b>{clip.hero?.name||'—'}</b></div><div className="clip-identity"><span>队友</span><b>{clip.teammates?.map(player=>player.name).join('、')||'—'}</b></div>
-  <div className="clip-rank" aria-label="本人当前段位">{clip.rank?<><img src={asset(`ranks/${clip.rank.tier}.png`)} alt=""/><span>本人段位</span><b>{clip.rank.name}{clip.rank.division?` ${clip.rank.division}`:''}</b></>:<><span>本人段位</span><b>未识别</b></>}</div>
+  <div className="clip-rank" aria-label="当前对局模式或段位">{clip.rank?<><img src={asset(`ranks/${clip.rank.tier}.png`)} alt=""/><span>{clip.rank.tier==='unranked'?'对局模式':'本人段位'}</span><b>{clip.rank.name}{clip.rank.division?` ${clip.rank.division}`:''}</b></>:<><span>模式/段位</span><b>未识别</b></>}</div>
   {partial&&<p className="stats-basis">“≥”表示已确认下限；“—”表示暂无可靠计数。</p>}
   {clip.settlementTotals&&<p className="stats-basis">末队结算累计 {clip.settlementTotals.kills} 杀 / {clip.settlementTotals.assists} 助攻，已按本段基线扣除。</p>}
-  {!!clip.evidence?.length&&<MotionDetails className="outcome-evidence" label="查看已确认战果">{clip.evidence.map((e,i)=><div key={`${e.time}-${i}`}><time>{clock(e.time)}</time><b>{e.kind==='knock'?'本人击倒':e.kind==='assist'?'本人助攻':'本人消灭'}</b><span>{cleanTargetName(e.target)||'—'}</span></div>)}</MotionDetails>}
+  {!!clip.evidence?.length&&<MotionDetails className="outcome-evidence" label="查看已确认战果">{clip.evidence.map((e,i)=><div key={`${e.time}-${i}`}><time>{clock(e.time)}</time><b>{e.kind==='knock'?'本人击倒':e.kind==='assist'?'本人助攻':'本人消灭'}</b><span>{e.target||'—'}</span>{e.weaponContext&&<span>{e.weaponContext.label}</span>}</div>)}</MotionDetails>}
  </>}
  </div>;
 }
