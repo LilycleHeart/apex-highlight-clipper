@@ -197,6 +197,14 @@ class HudEnrichmentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);files,manifest=self.fixture(root)
             segment={'start':0,'end':10,'counts':{'kills':0,'assists':0,'damage':196},'partial':{'kills':False,'assists':False,'damage':False},'native_repaired_fields':['kills','assists','damage'],'events':[]}
+            from outcome_reader import SELF_VIEW_VERSION
+            from numeric_reader import METHOD
+            baseline={'kills':0,'assists':0,'damage':0}
+            segment['endpoint']={'native_view_version':SELF_VIEW_VERSION,'native_numeric_method':METHOD,
+                'native_counter_scope':'exported_visible_delta','export_baseline_fields':['kills','assists','damage'],
+                'baseline':baseline,'last_hud':dict(segment['counts']),
+                'baseline_frames':[{'native_time':time,'native_verified':True,**baseline} for time in [.02,.06]],
+                'end_frames':[{'native_time':time,'native_verified':True,**segment['counts']} for time in [9.9,9.94]]}
             (root/'statistics.json').write_text(json.dumps({'segments':[segment]}),'utf-8')
             events=[]
             with patch('hud_enrichment.enrich_manifest',side_effect=AssertionError('must not reread HUD')),patch('repair_cached_statistics.repair',return_value={'segments':[segment]}) as repair:

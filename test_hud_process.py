@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +19,7 @@ class Input(io.StringIO):
 class Child:
     def __init__(self,code,output):self.code=code;self.stdin=Input();self.stdout=io.StringIO(output)
     def poll(self):return self.code
-    def wait(self):return self.code
+    def wait(self,timeout=None):return self.code
 
 
 class HudProcessTests(unittest.TestCase):
@@ -58,14 +59,22 @@ class HudProcessTests(unittest.TestCase):
 
     def test_stop_terminates_child_without_retrying_or_losing_stop_signal(self):
         class Process:
-            def __init__(self):self.stdin=io.StringIO();self.stdout=io.StringIO('');self.killed=False
+            pid=123
+            def __init__(self):self.stdin=io.StringIO();self.stdout=io.StringIO('');self.killed=False;self.wait_timeouts=[]
             def poll(self):return 0 if self.killed else None
             def kill(self):self.killed=True
-            def wait(self):return 0
+            def wait(self,timeout=None):
+                self.wait_timeouts.append(timeout)
+                if not self.killed:raise subprocess.TimeoutExpired('fixture',timeout)
+                return 0
         proc=Process()
-        with patch('hud_enrichment.subprocess.Popen',return_value=proc),patch('hud_enrichment.check_cancel',side_effect=TaskStopped()):
+        def terminate_tree(command,**kwargs):
+            self.assertEqual(command,['taskkill','/PID','123','/T','/F'])
+            proc.kill()
+        with patch('hud_enrichment.subprocess.Popen',return_value=proc),patch('hud_enrichment.subprocess.run',side_effect=terminate_tree),patch('hud_enrichment.check_cancel',side_effect=TaskStopped()):
             with self.assertRaises(TaskStopped):_run_hud_child({'backend':'cpu','jobs':[]})
         self.assertTrue(proc.killed)
+        self.assertEqual(proc.wait_timeouts,[15,10,10])
 
 
 if __name__=='__main__':unittest.main()

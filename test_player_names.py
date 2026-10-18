@@ -79,12 +79,14 @@ class PlayerNameTests(unittest.TestCase):
         def empty(crops):return [('',0.) for _ in crops],0.
         with tempfile.TemporaryDirectory() as tmp:
             source=Path(tmp)/'clip.mp4';source.write_bytes(b'fixture')
-            with patch('hud_enrichment.native_frames',side_effect=frames),patch('hud_enrichment.probe',return_value=({'format':{'duration':10}},{})),patch('hud_enrichment.inactive_view',return_value=False),patch('engine_pool.pooled_engine',return_value=SimpleNamespace(text_rec=empty)),patch('weapon_reader.WeaponTextReader',return_value=empty),patch('hero_reader.HeroReader') as hero,patch('rank_reader.RankReader') as rank:
+            with patch('hud_enrichment.native_frames',side_effect=frames),patch('hud_enrichment.probe',return_value=({'format':{'duration':10}},{'width':1920,'height':1080})),patch('hud_enrichment.inactive_view',return_value=False),patch('engine_pool.pooled_engine',return_value=SimpleNamespace(text_rec=empty)),patch('weapon_reader.WeaponTextReader',return_value=empty),patch('hero_reader.HeroReader') as hero,patch('rank_reader.RankReader') as rank,patch('hero_portrait_reader.confirm_video_portrait',return_value={'hero':None,'observations':[]}):
                 hero.return_value.inspect.return_value=None;rank.return_value.inspect.return_value=None
                 activity=[];result=recognize_video(source,FIELDS,profile=profile,on_activity=activity.append)
-        self.assertEqual(result['checked_frames'],6)
+        self.assertEqual(result['checked_frames'],12)
         self.assertTrue(all(v=='unknown' for v in result['field_status'].values()))
-        self.assertEqual(activity[-1]['frames_done'],6)
+        self.assertEqual(len(result['visual_field_search']),6)
+        self.assertLessEqual(len(result['account_visibility_search']),8)
+        self.assertEqual(activity[-1]['frames_done'],12)
 
     def test_same_player_evidence_can_correct_confident_ocr_without_merging_other_players(self):
         weak={'name':'[YURI] Liiumeordis','confidence':.96}
