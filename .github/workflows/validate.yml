@@ -6,6 +6,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   desktop:
     runs-on: windows-latest
@@ -14,6 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          registry-url: https://registry.npmjs.org
           cache: npm
           cache-dependency-path: electron-ui/package-lock.json
       - uses: actions/setup-python@v5
@@ -23,7 +27,9 @@ jobs:
       - run: ./scripts/setup-ffmpeg.ps1
       - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-windows-scripts.ps1
       - run: python -m unittest discover -p "test_*.py"
-      - run: npm ci
+      - name: Install UI dependencies
+        run: npm ci --no-audit --no-fund --foreground-scripts
+        timeout-minutes: 10
         working-directory: electron-ui
       - run: npm run validate
         working-directory: electron-ui
