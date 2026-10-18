@@ -112,25 +112,40 @@ test('完整统计显示真实2助攻、3击杀，字段的不确定性互不传
  const value=clipStatistics({segment:{start:0,end:10},summary:{statistics_version:'v4',kills:3,assists:2,knockdowns:null,statistics_partial:{kills:false,assists:false,knockdowns:true,damage:true}},recognition:{outcome_evidence:[]}});
  assert.equal(value.assists,2);assert.equal(value.kills,3);assert.equal(value.knockdowns,null);assert.equal(value.statisticsPartial.assists,false);
 });
-test('战果回看从连续交战起点开始，长TTK及同目标延迟击杀不落在结果提示上',()=>{
+test('战果回看贴近实际射击，不重复扣预留时间，同目标延迟击杀保留开火证据',()=>{
  const evidence=[{kind:'knock',time:150,target_text:'LOBA9578',ownership:'self'},{kind:'assist',time:189,target_text:'OTHER',ownership:'self'},{kind:'elimination',time:190,target_text:'LOBA9578',ownership:'self'}];
  const clip={segment:{start:100,end:200},summary:{statistics_version:'fixture',kills:1,damage:1000},recognition:{outcome_evidence:evidence}};
  const data=clipStatistics(clip,[],{parameters:{pre:6},events:[105,110,119,128,139,149,181,185,188].map(time=>({time,kind:'shoot'}))});
- assert.deepEqual(data.evidence.map(e=>e.processStart),[100,175,100]);
+ assert.deepEqual(data.evidence.map(e=>e.processStart),[149,185,149]);
  assert.deepEqual(data.evidence.map(e=>e.time),[150,189,190]);assert.equal(data.kills,1);assert.equal(data.damage,1000);
  const old={...clip,recognition:{outcome_evidence:[evidence[0]]}};
- assert.equal(clipStatistics(old,[{start:136,end:155,first_signal:142}]).evidence[0].processStart,136);
- assert.equal(clipStatistics(old).evidence[0].processStart,144);
- assert.equal(clipStatistics({...old,segment:{start:148,end:200}}).evidence[0].processStart,148);
+ assert.equal(clipStatistics(old,[{start:136,end:155,first_signal:149}]).evidence[0].processStart,149);
+ assert.equal(clipStatistics(old).evidence[0].processStart,149);
+ assert.equal(clipStatistics({...old,segment:{start:148,end:200}}).evidence[0].processStart,149);
 });
 
 test('多个目标的连续交战各自回看过程，不全部跳到整段起点',()=>{
  const evidence=[125,145,165].map((time,i)=>({kind:'elimination',time,target:['ALPHA','BRAVO','CHARLIE'][i],ownership:'self'}));
  const clip={segment:{start:100,end:180},summary:{statistics_version:'fixture'},recognition:{outcome_evidence:evidence}};
- const data=clipStatistics(clip,[],{events:Array.from({length:12},(_,i)=>({time:110+i*5,kind:'shoot'}))});
+ const data=clipStatistics(clip,[],{parameters:{pre:12},events:[110,111,120,121,123,130,131,133,140,141,143,150,151,153,160,161,163].map(time=>({time,kind:'shoot'}))});
  const {clipEvents}=require('../dist-electron/src/eventTimeline');
- assert.deepEqual(data.evidence.map(e=>e.processStart),[104,124,144]);
- assert.deepEqual(clipEvents({start:100,duration:80,evidence:data.evidence}).map(e=>e.seekTime),[4,24,44]);
+ assert.deepEqual(data.evidence.map(e=>e.processStart),[120,140,160]);
+ assert.deepEqual(clipEvents({start:100,duration:80,evidence:data.evidence}).map(e=>e.seekTime),[18,38,58]);
+ const {withProcessStarts}=require('../dist-electron/src/combatPlayback');
+ const delayed=withProcessStarts([{kind:'elimination',time:145,target:'B'},{kind:'knock',time:115,target:'B'},{kind:'elimination',time:125,target:'A'}],{start:100,end:180},[],{events:[114,122,140,142].map(time=>({time,kind:'shoot'}))});
+ assert.equal(delayed[2].processStart,140);assert.ok(delayed[2].processStart>delayed[1].time);
+ assert.equal(delayed[2].processStartBasis,'shoot');
+ const missing=withProcessStarts([{kind:'elimination',time:125},{kind:'elimination',time:125.2}],{start:100,end:180});
+ assert.ok(missing[1].processStart>missing[0].time);assert.equal(missing[1].processStartBasis,'near_result');
+ const late=withProcessStarts([{kind:'elimination',time:125},{kind:'elimination',time:149.5}],{start:100,end:180},[],{events:[{kind:'shoot',time:141.5},{kind:'hit',time:149,before:100,after:150}]});
+ assert.equal(late[1].processStart,141.5);assert.equal(late[1].processStartBasis,'shoot');
+ assert.equal(clipEvents({start:100,duration:80,evidence:late}).at(-1).seekTime,39.5);
+ const close=clipEvents({start:100,duration:30,evidence:[{kind:'elimination',time:101,processStart:100.5,processStartBasis:'shoot'},{kind:'elimination',time:104,processStart:102,processStartBasis:'shoot'}]});
+ assert.equal(close[0].seekTime,0);assert.equal(close[1].seekTime,1.001);assert.equal(close[1].processStartBasis,'shoot');
+ // Missing firing evidence retains its existing result-near estimate, rather
+ // than receiving another two seconds each time the timeline is derived.
+ const fallback=clipEvents({start:100,duration:80,evidence:missing});
+ assert.equal(fallback[0].seekTime,24);assert.ok(fallback[1].seekTime>fallback[0].clipTime);
 });
 
 const completionVersion='native-event-completion-v1';

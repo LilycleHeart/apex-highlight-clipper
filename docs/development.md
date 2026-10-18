@@ -20,7 +20,7 @@ EXE 安装包由 `scripts/build-installer.py --bundle publish/<构建目录>/Ape
 
 安装包默认安装到当前用户的 LocalAppData/Programs，不要求管理员权限；开始菜单入口直接运行应用，桌面快捷方式可选。`/PORTABLE=1 /DIR=<隔离目录> /VERYSILENT /NORESTART` 可用于一次最小解包与启动检查，不写卸载登记或快捷方式。安装包已附视频工具，可离线运行。只检查安装文件完整性及启动，复用内核已有验证；测试目录在检查后清除。
 
-v1.0.1 保持安装器 AppId `{AF948615-855F-4699-8640-11A9E2F08854}` 与用户数据路径兼容。更新器仅接受本仓库同版本的 EXE、有效大小和 GitHub SHA256；流式校验后通过 Electron relaunch 交接到隐藏的 PowerShell helper，等待旧进程退出，再在当前目录安装并重新启动。便携版使用 /PORTABLE=1，安装版沿用卸载登记；不强杀窗口或后台任务。下载在用户数据 updates 目录，有跨进程锁与清理机制。旧版 0.2.0/本地 1.0.0 不具备安装逻辑，第一次通过原更新入口打开 Release 下载 EXE，之后使用应用内“下载并安装”。
+v1.0.1 保持安装器 AppId `{AF948615-855F-4699-8640-11A9E2F08854}` 与用户数据路径兼容。更新器仅接受本仓库同版本的 EXE、有效大小和 GitHub SHA256；流式校验后通过 Electron relaunch 交接到隐藏的 PowerShell helper，等待旧进程退出，再在当前目录安装并重新启动。便携版使用 /PORTABLE=1，安装版沿用卸载登记；不强杀窗口或后台任务。下载在用户数据 updates 目录，有跨进程锁与清理机制。旧版本（如 0.2.0，仓库中最早且唯一的旧 tag）不具备安装逻辑，第一次通过原更新入口打开 Release 下载 EXE，之后使用应用内“下载并安装”。
 
 两个runtime/*/python.exe入口保留。python311._pth只包含当前模式、包内源码与runtime/shared/Lib/site-packages，不读取PYTHONPATH或系统Python包。sitecustomize检查必需资源、保留AddDllDirectory句柄，并处理共享pywin32.pth；不会将另一模式的ONNX Runtime加入DLL搜索目录。Windows对多个新增DLL目录不保证顺序，因此构建时拒绝当前模式内不同内容的同名DLL。依据：[Python嵌入式路径](https://docs.python.org/3.11/using/windows.html#finding-modules)、[add_dll_directory](https://docs.python.org/3.11/library/os.html#os.add_dll_directory)、[Windows DLL搜索规则](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order)。
 
@@ -94,3 +94,15 @@ DirectML 模型会话在识别工作进程的整个生命期保留，包括两�
 片尾最后一张画面有字段未读到时，该字段较早已确认的数值只能表示下限；完整读取的其他字段不受影响。Python 核对和界面适配均从原始 end_frames 推导，旧记录没有新标记也会检查。播放器不把被遮挡前的数值当作当前本局精确总数。末值低于基线时，即使首尾各有双帧，也不能认证为可靠增量。
 
 数字 OCR 额外检查高亮前景的字符分离，排除右侧界面斜线及不在同一文字行的碎片。只有图像中出现比原读数更多的独立字形，才复核漏字；另一阈值下仍粘连的文字可提供模型读数，但须有同帧独立字形数量支持。新拼写必须保留原有数字顺序，并由两模型高置信一致或三模型一致且至少一方高置信支持；不同候选冲突则保留未确认，不选择较大的数。多种图像阈值不增加画面票数，最终仍需不同原生 PTS 确认。
+
+## 从 README 下沉的实现规格
+
+以下原写在一份面向用户的说明里，随该文档改为用户视角而移到这里；都是设计与实现口径，不面向用户。
+
+**界面与主题。** 标题栏 36px，底边连接导航与凹角由 surfaceGeometry.ts 保留，慢速斜向手柄图案周期 32s、尺寸 160×160（v3.css:6,19-20）。视图切换通过浏览器卡片快照过渡位置与外框，实际列表布局保持稳定；尺寸不变的纯重排只过渡位置，快速反向切换取消上一轮（libraryViewReveal.ts:13-35）。明暗主题固定使用官方 MCU 0.4.0 的 SchemeVibrant、contrast0、spec2021、platformphone（theme.ts:1,11）；任意 seed 经 HCT 与调色板生成语义色，同帧合并、缓存 64 种组合。标题换肤用圆形遮罩从按钮实际点击位置扩散（themeReveal.ts:18-41），开启减少动效时直接到终态。角色形象默认关闭，两套样式 flat / sketch（shared.ts:9）；开关沿人物 → 虚线轮廓 → 消失往返，并播放消失 / 复原音效（blancaState.ts:5,28-29、mascotAudio.ts:6、Mascot.tsx:34,67）。
+
+**识别内部机制。** 索引加速为唯一扫描方式，新任务的 scan_mode 在 electron-ui/electron/protocol.ts:35 被强制写为 indexed，仅旧任务保留冻结值；索引粗查要求起始 PTS 为零的 H.264 MP4/MOV（indexed_coarse.py:37-42）。可选信息首轮取三帧，未确认时首轮补读最多三帧（hud_enrichment.py:92,186-191），之后仍会在清晰 HUD 附近继续补读最多六个时刻及相邻原生帧（:328-346）；账号搜索另有最多八个时刻（:347-357）。枪名走独立窄行批次并比对已知武器词表，导出前补回枪名识别（weapon_reader.py:165,273、app_worker.py:265）。HUD 布局适配最多直接检查 8 个分散时间点（4 个，时长 ≥600 秒再加 4 个），确认即停（hud_layout.py:94-112）；布局未确认且有活动时报识别失败（:115-118）。
+
+**日志、更新与计时。** 诊断日志单文件上限 1 MB、总量约 20 MB、保留 7 天（electron/diagnostics.ts:8,51）；诊断包含最近日志、运行环境、剪辑参数、任务状态、近期错误摘要与 GPU 基本信息，隐去本机路径，不含录像、封面、完整任务文件或 HUD 账号识别结果（main.ts:215,245）。自动更新检查间隔 24 小时（updates.ts:6），安装包只接受同仓库、版本号三段式、大小 ≤1 GiB 且 sha256 为 64 位十六进制的资产（updateInstaller.ts:30）；更新下载缓存的清理规则见 updateInstaller.ts:27。队列计时每录像每秒刷新，完成或停止后冻结，等待与暂停不计时，续接累计（electron/processingTimes.ts:14-36），历史已完成录像用阶段统计补显示（:5-12）。
+
+**数据与发布。** 输出目录只放成片；任务记录、JSON/CSV 分析、导出清单与断点统一在 `<dataRoot>/tasks/<taskId>/`（app_task.py:117-135）。桌面端 dataRoot 默认取 Electron userData，检测到旧版 `%APPDATA%/Apex交战剪辑/preferences.json` 时沿用旧目录（main.ts:26,33）；直接跑 Python 时默认 `%LOCALAPPDATA%/Apex Highlight Clipper`。旧任务按原目录读取与续接，不静默搬动已有成片。FILES.sha256.json 位于 resources/，清单路径仍相对整个便携目录；SHA256SUMS.txt 由 build-portable.py 在打包时生成（:241），不在源码树中。

@@ -10,3 +10,56 @@
 .browse-filter-panel .library-filter-field>span{display:block;min-height:17px}.browse-filter-panel .library-filter-field>input:not([type=checkbox]){height:36px;min-height:36px;margin:0}.browse-filter-panel .library-filter-field>.styled-select{margin:0}
 .browse-filter-panel .library-filter-check{display:flex;align-items:center;gap:6px;margin:0;grid-column:1/-1;font-size:11px}.library-filter-check>input{margin:0;accent-color:var(--card-accent)}
 .settings-fields .styled-select{height:45px;margin-top:8px;background:var(--surfaceContainerHighest);color:var(--onSurface);border:0;border-radius:13px}
+.styled-select-group{padding:9px 10px 5px;font-size:11px;color:var(--card-muted);font-weight:600}
+.library-controls{flex:1 1 auto;min-width:0;flex-wrap:wrap}
+.library-sort{display:flex;align-items:center;gap:6px;min-width:0}
+.sort-direction{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:10px;background:var(--surfaceContainerHighest);color:var(--onSurface)}
+.sort-direction:hover{background:var(--surfaceContainerHigh)}
+.library-date-filter{display:flex;align-items:center;gap:6px;min-width:0}
+.library-date-filter>input[type=date]{min-width:0;flex:1;margin:0}
+.library-date-filter>.icon-button{flex:none;width:28px;height:28px;color:var(--card-ink)}
+.library-date-filter>.icon-button:disabled{opacity:.35}
+.date-unknown{align-self:flex-start;font-size:11px;color:var(--card-muted);padding:2px 0}
+.date-unknown[aria-pressed=true]{color:var(--card-accent);text-decoration:underline}
+:root[data-theme=dark] .library-date-filter>input{color-scheme:dark}
+.styled-select-value,.styled-select-option-content{display:flex;align-items:center;gap:10px;min-width:0}
+.styled-select-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.styled-select-value{flex:1}
+.styled-select-meta{flex:none;margin-left:auto;font-size:11px;color:var(--card-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.styled-select-choice-icon{display:flex;align-items:center;justify-content:center;flex:none;width:54px;height:24px;color:var(--card-accent)}
+.styled-select-value>.styled-select-choice-icon{width:38px;height:20px}
+.weapon-option-icon{width:100%;height:22px}
+.weapon-select-menu{padding:6px}
+.weapon-select-menu>.styled-select-group{position:sticky;top:-6px;z-index:1;margin:7px -1px 4px;padding:0;background:var(--card-paper)}
+.ammo-group-heading{display:flex;align-items:center;gap:9px;min-height:35px;padding:7px 10px;border-left:3px solid var(--ammo-accent);border-radius:3px 7px 7px 3px;background:color-mix(in srgb,var(--ammo-accent) 12%,var(--card-paper));color:var(--card-ink)}
+.ammo-group-heading>b{font-size:12px;font-weight:600;letter-spacing:.06em}
+.ammo-family-icons{display:flex;align-items:center;gap:3px;flex:none;color:var(--ammo-accent)}
+.ammo-family-icons>img{display:block;width:19px;height:19px;object-fit:contain}
+.ammo-group-count{margin-left:auto;font-size:10px;color:var(--card-muted);font-variant-numeric:tabular-nums}
+.hero-picker-value{display:flex;align-items:center;gap:8px;min-width:0}
+.hero-picker-value>img{width:25px;height:25px;object-fit:cover;border-radius:5px}
+.hero-picker-value>svg{flex:none;color:var(--card-accent)}
+.hero-picker-panel{position:fixed;z-index:210;display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--card-line);border-radius:16px;background:var(--card-paper);color:var(--card-ink);box-shadow:0 8px 28px #0005;overflow:hidden}
+.hero-picker-heading{display:flex;align-items:center;gap:10px;flex:none;min-height:30px}
+.hero-picker-heading>div{display:flex;align-items:baseline;gap:12px;min-width:0;margin-right:auto}
+.hero-picker-heading b{font-size:14px;font-weight:600}
+.hero-picker-heading>div>span{font-size:11px;color:var(--card-muted)}
+.hero-picker-heading>button:not(.icon-button),.hero-picker-other>button{display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:5px 9px;border:1px solid var(--card-line);border-radius:8px;font-size:11px}
+.hero-picker-heading>[aria-pressed=true],.hero-picker-other>[aria-pressed=true]{border-color:var(--card-accent);color:var(--card-accent);background:var(--card-tint)}
+.hero-picker-heading>.icon-button{width:28px;height:28px;flex:none;color:var(--card-ink)}
+.hero-picker-roster{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;min-height:0;padding:0 2px 3px}
+.legend-class{min-width:0}
+.legend-class>h3{display:flex;align-items:center;gap:7px;min-height:30px;margin:0 0 9px;padding:0 0 8px;border-bottom:2px solid var(--legend-role-color);font-size:12px;font-weight:600;letter-spacing:.08em}
+.legend-role-icon{width:18px;height:18px;color:var(--legend-role-color)}
+.legend-class-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.legend-option{display:flex;flex-direction:column;min-width:0;padding:0;border:1px solid var(--card-line);border-radius:8px;background:var(--card-tint);overflow:hidden;color:var(--card-ink)}
+.legend-option:hover:not(:disabled),.legend-option:focus-visible{border-color:var(--legend-role-color);outline:2px solid var(--legend-role-color);outline-offset:1px;filter:none}
+.legend-option[aria-pressed=true]{border-color:var(--card-accent);box-shadow:0 0 0 1px var(--card-accent);background:var(--card-accent);color:var(--accent-on)}
+.legend-option:disabled{opacity:.38;filter:grayscale(1)}
+.legend-portrait{position:relative;display:block;width:100%;height:54px;overflow:hidden;background:color-mix(in srgb,var(--legend-role-color) 15%,var(--card-tint))}
+.legend-portrait>img{display:block;width:100%;height:100%;object-fit:cover;object-position:center 34%}
+.legend-clip-count{position:absolute;bottom:3px;right:3px;min-width:16px;padding:2px 4px;border-radius:5px;background:#10141dd9;color:#fff;font-size:9px;line-height:1.2;font-variant-numeric:tabular-nums}
+.legend-selected-check{position:absolute;top:3px;right:3px;border-radius:50%;background:var(--card-accent);color:var(--accent-on);padding:1px}
+.legend-option-name{display:block;width:100%;padding:4px 2px;font-size:10px;line-height:14px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-picker-other{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;padding-top:9px;border-top:1px solid var(--card-line)}
+.hero-picker-other>button>span{font-variant-numeric:tabular-nums;color:var(--card-muted)}

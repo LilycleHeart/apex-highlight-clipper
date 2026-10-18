@@ -1,0 +1,16 @@
+.filter-control{display:grid;grid-template-columns:minmax(0,1fr) 0px;column-gap:0;align-items:center;min-width:0;width:100%;transition:grid-template-columns 320ms cubic-bezier(.22,1,.36,1),column-gap 320ms cubic-bezier(.22,1,.36,1)}
+.filter-control[data-active="true"]{grid-template-columns:minmax(0,1fr) 32px;column-gap:6px}
+.filter-control-value{min-width:0}
+.filter-control-value>.styled-select,.filter-control-value>input,.filter-control-value>button{width:100%;margin:0}
+.browse-filter-panel .filter-control-value>input{height:36px;min-width:0;margin:0}
+.filter-clear-slot{min-width:0;overflow:hidden;opacity:0;transition:opacity 180ms ease}
+.filter-control[data-active="true"]>.filter-clear-slot{opacity:1}
+.filter-clear{display:grid;place-items:center;width:32px;height:36px;min-width:32px;padding:0;border:1px solid var(--card-line);border-radius:10px;background:var(--card-tint);color:var(--card-muted);cursor:pointer}
+.filter-clear:hover{background:var(--card-line);color:var(--card-ink)}
+.filter-control input[type="search"]::-webkit-search-cancel-button{display:none}
+.loading-spinner{animation:library-loading-spin 1s linear infinite;flex-shrink:0}
+.player-loading{display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:none}
+@keyframes library-loading-spin{to{transform:rotate(360deg)}}
+html[data-reduced="true"] .filter-control,html[data-reduced="true"] .filter-clear-slot{transition:none}
+html[data-reduced="true"] .loading-spinner{animation:none}
+@media(prefers-reduced-motion:reduce){.filter-control,.filter-clear-slot{transition:none}.loading-spinner{animation:none}}

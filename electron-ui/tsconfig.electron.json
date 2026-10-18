@@ -18,6 +18,7 @@
     "src/eventTimeline.ts",
     "src/librarySort.ts",
     "src/clipTimeline.ts",
+    "src/libraryFilters.ts",
     "src/blancaState.ts"
   ]
 }

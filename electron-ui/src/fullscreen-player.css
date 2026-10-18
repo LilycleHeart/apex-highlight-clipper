@@ -21,6 +21,8 @@
 .clip-cover .player-controls,.player-round-totals{opacity:1;visibility:visible;transition:opacity .2s ease,visibility 0s}
 .clip-cover .player-controls[data-visible=false],.player-round-totals[data-visible=false]{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s .2s}
 .clip-cover:fullscreen[data-controls-visible=false]{cursor:none}
+.clip-expanded .clip-cover .player-control-row .player-wide-button[aria-pressed=true]{background:var(--card-tint);box-shadow:inset 0 0 0 1px var(--card-accent)}
+.clip-cover:fullscreen .player-wide-button{display:none}
 .player-round-totals{position:absolute;top:22px;right:28px;z-index:10;display:flex;gap:18px;align-items:center;padding:10px 14px;color:var(--card-accent);font-size:13px;background:var(--player-glass);border-radius:20px;backdrop-filter:blur(8px);box-shadow:0 2px 12px #0003;pointer-events:none}
 .player-round-totals>span{display:flex;align-items:center;gap:8px}
 .player-round-totals>span:first-child{font-size:12px}

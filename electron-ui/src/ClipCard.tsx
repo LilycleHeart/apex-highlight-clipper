@@ -1,63 +1,34 @@
-import {memo,useCallback,useEffect,useLayoutEffect,useRef,useState,type CSSProperties} from 'react';
+import {memo,useContext,useId,useRef,useState,type CSSProperties} from 'react';
 import type {ClipView} from './ClipLibrary';
-import {ExternalLink,Film,Minimize2,Play} from 'lucide-react';
+import {Film,FolderOpen,LoaderCircle,PanelBottomOpen,Play} from 'lucide-react';
 import type {Clip} from './shared';
+import type {ClipDetailFilter} from './libraryFilters';
 import {clock} from './state';
+import {ClipActionsContext,ClipSelection,ClipActionButtons} from './ClipActions';
 import ClipDetails from './ClipDetails';
-import PlayerControls from './PlayerControls';
-import {displayRatio,fitPlayerSize} from './mediaGeometry';
+import {displayRatio} from './mediaGeometry';
 import useThumbnail from './useThumbnail';
-import MotionDetails from './MotionDetails';
-import {applyPlayerAudio} from './playerAudio';
+import MotionDisclosure from './MotionDisclosure';
 import ClipDeleteButton from './ClipDeleteButton';
 
-function ClipCard({clip,index,identity,view,playback,selected,disabled,deleting,deleteDisabled,reduced,onSelect,onOpen,onDelete,onGeometryChange,position,total,layoutRow,layoutColumn}:{clip:Clip;index:number;identity:string;view:ClipView;playback:Map<string,number>;selected:boolean;disabled:boolean;deleting:boolean;deleteDisabled:boolean;reduced:boolean;onDelete:(file:string)=>void;onSelect:(id:string|null)=>void;onOpen:(file:string,folder:boolean)=>void;onGeometryChange:()=>void;position?:number;total?:number;layoutRow?:number;layoutColumn?:number}){
- const [detailsOpen,setDetailsOpen]=useState(false);
- const[ratio,setRatio]=useState(displayRatio(clip.media)||16/9);const ratioRef=useRef(ratio);
- const[media,setMedia]=useState<string|null>(null);const[error,setError]=useState('');const[playing,setPlaying]=useState(false);const[needsPlay,setNeedsPlay]=useState(false);
- const video=useRef<HTMLVideoElement|null>(null);const cover=useRef<HTMLDivElement|null>(null);const scrolled=useRef(false);
- const attachVideo=useCallback((element:HTMLVideoElement|null)=>{video.current=element;if(element)applyPlayerAudio(element);},[]);
- const thumbnail=useThumbnail(clip.path,clip.thumbnail,cover);
- const collapse=()=>{if(document.fullscreenElement===cover.current)void document.exitFullscreen().catch(()=>{}).finally(()=>onSelect(null));else onSelect(null);};
- useLayoutEffect(()=>{if(selected)onGeometryChange();},[media,selected,detailsOpen,onGeometryChange]);
- useLayoutEffect(()=>{if(selected){scrolled.current=false;onGeometryChange();}},[view,selected,onGeometryChange]);
- useLayoutEffect(()=>{
-  const element=cover.current,root=element?.closest<HTMLElement>('.library-scroll');if(!selected||!element||!root)return;
-  let previous='',raf=0;
-  const fit=()=>{const box=fitPlayerSize(Math.min(root.clientWidth,element.parentElement?.clientWidth||root.clientWidth),root.clientHeight,ratio),key=box.width.toFixed(2)+':'+box.height.toFixed(2);if(key===previous)return;previous=key;element.style.setProperty('--player-fitted-width',box.width+'px');element.style.setProperty('--player-fitted-height',box.height+'px');onGeometryChange();cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{if(document.fullscreenElement===element)return;const r=element.getBoundingClientRect(),v=root.getBoundingClientRect();if(r.bottom>v.top&&r.top<v.bottom)element.scrollIntoView({block:'nearest',behavior:'instant'});});};
-  const observer=new ResizeObserver(fit);observer.observe(root);if(element.parentElement)observer.observe(element.parentElement);fit();
-  return()=>{observer.disconnect();cancelAnimationFrame(raf);element.style.removeProperty('--player-fitted-width');element.style.removeProperty('--player-fitted-height');};
- },[selected,view,ratio,onGeometryChange]);
+function ClipCard({clip,source,onFilter,index,identity,view,current=false,disabled,deleting,deleteDisabled,onSelect,onOpen,onDelete,onGeometryChange,position,total,layoutRow,layoutColumn}:{clip:Clip;source?:string;onFilter:(filter:ClipDetailFilter)=>void;index:number;identity:string;view:ClipView;current?:boolean;disabled:boolean;deleting:boolean;deleteDisabled:boolean;onDelete:(file:string)=>void;onSelect:(id:string|null)=>void;onOpen:(file:string,folder:boolean)=>void;onGeometryChange:()=>void;position?:number;total?:number;layoutRow?:number;layoutColumn?:number}){
+ const actions=useContext(ClipActionsContext),[metadataOpen,setMetadataOpen]=useState(false),metadataId=useId(),cover=useRef<HTMLDivElement>(null);
+ const [ratio,setRatio]=useState(displayRatio(clip.media)||16/9),thumbnail=useThumbnail(clip.path,clip.thumbnail,cover);
  const displayName=clip.name.replace('未知杀',clip.kills===null?'—杀':`${clip.kills}杀`).replace('未知伤',clip.damage===null?'—伤':`${clip.damage}伤`).replaceAll('未知枪','—枪');
- useEffect(()=>{
-  let live=true;setError('');setPlaying(false);setNeedsPlay(false);scrolled.current=false;setDetailsOpen(false);
-  if(!selected){setMedia(null);return;}
-  void window.apex.videoURL(clip.path).then(url=>{if(live)setMedia(url);}).catch(()=>{if(live)setError('无法读取此片段，请检查文件是否仍在输出目录');});
-  return()=>{live=false;};
- },[selected,clip.path]);
- useEffect(()=>{
-  const element=video.current;if(!media||!element)return;
-  let live=true;void element.play().catch(()=>{if(live)setNeedsPlay(true);});
-  return()=>{live=false;element.pause();element.removeAttribute('src');element.load();};
- },[media]);
- useEffect(()=>{const el=cover.current?.parentElement;if(!el)return;el.addEventListener('surface-settled',expanded);return()=>el.removeEventListener('surface-settled',expanded);},[selected,reduced]);
- function updateRatio(value:number){if(Number.isFinite(value)&&value>0&&Math.abs(value-ratioRef.current)>.001){ratioRef.current=value;setRatio(value);onGeometryChange();}}
- function expanded(){if(selected&&!scrolled.current){scrolled.current=true;cover.current?.scrollIntoView({block:'nearest',behavior:reduced?'instant':'smooth'});}}
- return <article role="listitem" aria-posinset={position} aria-setsize={total} style={layoutRow!==undefined?{gridRow:layoutRow+1,gridColumn:selected?'1/-1':(layoutColumn||0)+1}:undefined} className={`clip-card ${selected?'clip-expanded':''} ${selected&&!detailsOpen?'player-info-hidden':''}`} data-layout-row={layoutRow} data-identity={identity} data-path={clip.path} data-selected={selected}>
-  <svg className="card-surface" aria-hidden="true" preserveAspectRatio="none"><path/></svg>
-  <div ref={cover} className="clip-cover" data-player-active={selected&&!!media}><div className="media-frame" style={{aspectRatio:ratio,'--media-ratio':ratio} as CSSProperties}>
-   {selected&&media?<video ref={attachVideo} src={media} poster={thumbnail.url} playsInline preload="metadata" aria-label={`播放交战 ${index}`} onLoadedMetadata={e=>{const v=e.currentTarget;updateRatio(clip.media&&(clip.media.rotation!==0||clip.media.sampleAspectRatio!==1)?displayRatio(clip.media)!:v.videoWidth/v.videoHeight);const explicit=v.dataset.seekRequested,t=explicit!==undefined?Number(explicit):playback.get(identity);if(t!==undefined&&t<v.duration)v.currentTime=t;}} onTimeUpdate={e=>playback.set(identity,e.currentTarget.currentTime)} onPlay={()=>{setPlaying(true);setNeedsPlay(false);}} onPause={()=>setPlaying(false)} onError={()=>setError('此片段暂时无法在应用内播放，可使用系统播放器打开')}/>:thumbnail.url?<img src={thumbnail.url} alt="交战片段代表画面" loading="lazy" decoding="async" onLoad={e=>updateRatio(displayRatio(clip.media)||e.currentTarget.naturalWidth/e.currentTarget.naturalHeight)} onError={thumbnail.retry}/>:<div className="cover-placeholder" title={thumbnail.error||undefined}><Film size={32}/>{thumbnail.error?'封面暂不可用':'正在载入画面'}</div>}
-   {!selected&&<><span className="duration">{clock(clip.duration)}</span><button aria-label={`播放第${index}段`} className="play-button" disabled={disabled} onClick={()=>onSelect(clip.path)}><Play size={18} fill="currentColor"/></button></>}
-   {selected&&!media&&!error&&<div className="player-loading" role="status">正在打开视频…</div>}
-   {selected&&needsPlay&&!error&&<button className="player-resume" aria-label="开始播放" onClick={()=>void video.current?.play().catch(()=>setError('无法开始播放，请重试或用系统播放器打开'))}><Play size={22}/>开始播放</button>}
-   {selected&&error&&<div className="player-error" role="alert"><p>{error}</p><button className="secondary" onClick={()=>onOpen(clip.path,false)}>系统播放器打开<ExternalLink size={14}/></button></div>}
-  </div>{selected&&media&&<PlayerControls onDelete={()=>onDelete(clip.path)} deleteDisabled={deleteDisabled} clip={clip} video={video} stage={cover} roundTotals={clip.roundTotals} onError={setError} onCollapse={collapse} onDetails={()=>{setDetailsOpen(!detailsOpen);onGeometryChange();}}/>}</div>
+ return <article role="listitem" aria-posinset={position} aria-setsize={total} style={layoutRow!==undefined?{gridRow:layoutRow+1,gridColumn:(layoutColumn||0)+1}:undefined} className={`clip-card ${current?'clip-current':''}`} data-layout-row={layoutRow} data-identity={identity} data-path={clip.path} data-selected="false" data-checked={actions?.checked.has(clip.path)||false}>
+  <ClipSelection file={clip.path} name={displayName}/><svg className="card-surface" aria-hidden="true" preserveAspectRatio="none"><path/></svg>
+  <div ref={cover} className="clip-cover"><div className="media-frame" style={{aspectRatio:ratio,'--media-ratio':ratio} as CSSProperties}>
+   {thumbnail.url?<img src={thumbnail.url} alt="交战片段代表画面" loading="lazy" decoding="async" onLoad={event=>{const next=displayRatio(clip.media)||event.currentTarget.naturalWidth/event.currentTarget.naturalHeight;if(Number.isFinite(next)&&next>0)setRatio(next);}} onError={thumbnail.retry}/>:<div className="cover-placeholder" title={thumbnail.error||undefined}>{thumbnail.error?<Film size={32}/>:<LoaderCircle size={32} className="loading-spinner"/>}{thumbnail.error?'封面暂不可用':'正在载入画面'}</div>}
+   {current&&<span className="clip-current-label">当前片段</span>}<span className="duration">{clock(clip.duration)}</span><button aria-label={`播放第${index}段`} className="play-button" disabled={disabled} onClick={()=>onSelect(clip.path)}><Play size={18} fill="currentColor"/></button>
+  </div></div>
   <div className="clip-info">
-   <div className="clip-number">交战 {String(index).padStart(2,'0')}{selected&&<button className="player-collapse" aria-label={`收起第${index}段`} onClick={collapse}><Minimize2 size={14}/>收起播放</button>}</div>
-   {selected&&<div className="player-caption"><span>{playing?'正在播放':'已暂停'} · {clock(clip.duration)}</span></div>}
-   <h3 title={clip.name}>{displayName}</h3><ClipDetails clip={clip} compact={view!=='detail'&&!selected}/>
-   <div className="clip-tail">{view!=='detail'&&!selected&&<MotionDetails className="compact-details" label="详情 →" onGeometryChange={onGeometryChange}><ClipDetails clip={clip}/></MotionDetails>}
-   <div className="clip-file-actions"><button className="text-button" disabled={disabled} onClick={()=>onOpen(clip.path,true)}>查看文件<ExternalLink size={13}/></button><ClipDeleteButton label={`删除片段 ${displayName}`} resetKey={clip.path+':'+view+':'+selected} deleting={deleting} disabled={deleteDisabled} onDelete={()=>onDelete(clip.path)}/></div></div>
+   <div className="clip-number">交战 {String(index).padStart(2,'0')}</div>
+   <h3 title={clip.name}>{displayName}</h3><ClipDetails clip={clip} source={source} onFilter={onFilter} compact={view!=='detail'}/>
+   <div className="clip-tail"><div className={`clip-file-actions clip-action-toolbar ${view!=='detail'?'clip-actions-compact':''}`} role="group" aria-label="片段操作">
+    {view!=='detail'&&<button type="button" className={`clip-action ${view==='list'?'clip-primary-action':''}`} aria-label="片段详情" aria-expanded={metadataOpen} aria-controls={metadataId} title={metadataOpen?'收起片段详情':'展开片段详情'} onClick={()=>{setMetadataOpen(value=>!value);onGeometryChange();}}><PanelBottomOpen size={16}/>{view==='list'&&<span>详情</span>}</button>}
+    <button type="button" className="clip-action" disabled={disabled} aria-label="查看文件" title="在文件夹中查看视频" onClick={()=>onOpen(clip.path,true)}><FolderOpen size={16}/>{view==='detail'&&<span>查看文件</span>}</button>
+    <ClipActionButtons file={clip.path} name={displayName} labels={view==='detail'?'all':'none'}/><ClipDeleteButton className="clip-action clip-delete" text={view==='detail'?'删除':undefined} label={`删除片段 ${displayName}`} resetKey={clip.path+':'+view} deleting={deleting} disabled={deleteDisabled} onDelete={()=>onDelete(clip.path)}/>
+   </div>{view!=='detail'&&<MotionDisclosure open={metadataOpen} id={metadataId} onComplete={onGeometryChange}><div className="compact-details"><ClipDetails clip={clip} source={source} onFilter={onFilter} summary={false}/></div></MotionDisclosure>}</div>
   </div>
  </article>;
 }

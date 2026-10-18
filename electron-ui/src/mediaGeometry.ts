@@ -9,8 +9,11 @@ export function mediaGeometry(metadata:any):MediaGeometry|undefined{
  return{width,height,displayWidth,displayHeight,rotation,sampleAspectRatio:sar};
 }
 export function displayRatio(media:MediaGeometry|undefined){if(!media)return;const r=media.displayWidth/media.displayHeight;return Number.isFinite(r)&&r>0?r:undefined;}
-export function fitPlayerSize(width:number,viewportHeight:number,ratio:number){
+export function fitPlayerSize(width:number,viewportHeight:number,ratio:number,wide=false){
  const r=Number.isFinite(ratio)&&ratio>0?ratio:16/9;
- const fittedWidth=Math.min(Math.max(1,width),Math.max(1,viewportHeight-36)*r);
+ // Inline viewing shares the workspace with the library and metadata. Only
+ // native fullscreen should consume the entire available picture area.
+ const heightLimit=Math.max(1,Math.min(wide?1100:900,viewportHeight*(wide ? .84 : .7),viewportHeight-36));
+ const fittedWidth=Math.min(Math.max(1,width),wide?2400:1920,heightLimit*r);
  return {width:fittedWidth,height:fittedWidth/r};
 }

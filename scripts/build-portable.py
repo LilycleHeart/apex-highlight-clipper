@@ -170,7 +170,7 @@ def build(args):
     (target/'experimental').mkdir(exist_ok=True)
     for name in ['__init__.py','indexed_reader.py','in_memory_hud.py']:
         shutil.copy2(ROOT/'experimental'/name,target/'experimental'/name)
-    for name in ['docs/third-party.md', 'docs/assets', 'scripts/setup-ffmpeg.ps1', 'scripts/update-install.ps1', 'scripts/migrate-layout.ps1', 'scripts/cleanup-validation.ps1', 'scripts/validation-task-caches.py']:
+    for name in ['docs/third-party.md', 'docs/user-guide.md', 'docs/assets', 'scripts/setup-ffmpeg.ps1', 'scripts/update-install.ps1', 'scripts/migrate-layout.ps1', 'scripts/cleanup-validation.ps1', 'scripts/validation-task-caches.py']:
         p=ROOT/name; dest=target/name
         dest.parent.mkdir(parents=True, exist_ok=True)
         if p.is_dir(): copy_tree(p,dest)

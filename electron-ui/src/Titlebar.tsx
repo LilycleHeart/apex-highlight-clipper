@@ -7,8 +7,8 @@ export type MenuKind='theme'|'settings';
 const tabs=[{id:'start',label:'开始'},{id:'clips',label:'整理片段'},{id:'statistics',label:'统计数据'}] as const;
 function Tab({id,label,selected,onSelect,reduced}:{id:Page;label:string;selected:boolean;onSelect:()=>void;reduced:boolean}){
  const q=clamp(useSurfaceValue(selected?1:0,reduced));
- return <button className="nav-tab" role="tab" id={'tab-'+id} aria-controls={'page-'+id} aria-selected={selected} data-fixed-ink onClick={onSelect} style={{color:q>.75?'var(--page-on)':'var(--chrome-on)'}} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const buttons=[...e.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')];const i=buttons.indexOf(e.currentTarget),n=buttons[(i+(e.key==='ArrowRight'?1:buttons.length-1))%buttons.length];n.focus();n.click();}}}>
-  <svg className="nav-surface" width="148" height="38" aria-hidden="true"><path d={connectedTabPath(q)} fill="var(--page-blue)" opacity={q}/></svg><span>{label}</span>
+ return <button className="nav-tab" role="tab" id={'tab-'+id} aria-controls={'page-'+id} aria-selected={selected} onClick={onSelect} style={{color:q>.75?'var(--page-on)':'var(--chrome-on)'}} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const buttons=[...e.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]')];const i=buttons.indexOf(e.currentTarget),n=buttons[(i+(e.key==='ArrowRight'?1:buttons.length-1))%buttons.length];n.focus();n.click();}}}>
+  <svg className="nav-surface" width="148" height="38" aria-hidden="true"><path d={connectedTabPath(q)} fill="var(--page-blue)" opacity={q}/></svg><span className="nav-label">{label}</span>
  </button>;
 }
 export default function Titlebar({page,onPage,reduced,ready,hasUpdate,onPanel,menuOpen=false}:{page:Page;onPage:(page:Page)=>void;reduced:boolean;ready:boolean;hasUpdate:boolean;onPanel:(panel:MenuKind)=>void;menuOpen?:boolean}){

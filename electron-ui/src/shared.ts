@@ -11,7 +11,7 @@ export interface FileItem {id:string;path:string;name:string;bytes?:number;durat
 export type MascotStyle='flat'|'sketch';
 export interface ThemePreferences {mode:'system'|'light'|'dark';seed:string|null;reduceMotion:boolean;mascotStyle:MascotStyle;mascotEnabled:boolean}
 export interface SystemTheme {dark:boolean;accent:string;reduceMotion:boolean}
-export interface OutcomeEvidence {kind:'knock'|'assist'|'elimination';time:number;processStart?:number;text?:string;confidence?:number;target?:string;weapon?:string;weaponContext?:{scope:'nearby_firing'|'held_at_event';weapon:string;label:string}}
+export interface OutcomeEvidence {kind:'knock'|'assist'|'elimination';time:number;processStart?:number;processStartBasis?:'shoot'|'hit'|'candidate'|'near_result';text?:string;confidence?:number;target?:string;weapon?:string;weaponContext?:{scope:'nearby_firing'|'held_at_event';weapon:string;label:string}}
 export interface Rank {tier:string;name:string;division:string|null;confidence:number;method:string;scope?:string}
 export interface HudName {name:string;confidence:number;method?:string;raw_name?:string}
 export interface Hero extends HudName {id:string}
@@ -23,7 +23,7 @@ export interface TaskInfo {path:string;directory:string;output:string;finished:b
 export interface WorkerEvent {type:string;file?:string;fields?:HudEnrichmentField[];frames_done?:number;frames_total?:number;backend?:string;updated?:number;errors?:{directory:string;message:string}[];processing_seconds?:number;skipped?:boolean;stage?:Stage;progress?:number;message?:string;index?:number;total?:number;source?:string;directory?:string;task_path?:string;timestamp_seconds?:number;sample_path?:string;imageUrl?:string;cached?:boolean;failures?:number;clips?:number;result?:Result;elapsed_seconds?:number;hidden?:boolean;legacy_rule?:string|null;result_filter_rule?:string;result_filter_version?:string|null;rejected_count?:number;review_count?:number;result_filter_summary?:FilterSummary;sampling_warning?:string|null;results?:Result[]}
 export interface InstallerAsset {version:string;name:string;url:string;bytes:number;sha256:string}
 export interface UpdateInfo {status:'idle'|'checking'|'available'|'up_to_date'|'no_release'|'error';currentVersion:string;latestVersion?:string;releaseTag?:string;releaseName?:string;releaseNotes?:string;publishedAt?:string;checkedAt?:string;message?:string;autoCheck:boolean;installer?:InstallerAsset;installState?:'downloading'|'installing'|'error';installProgress?:number;installMessage?:string}
-export interface Bootstrap {playerAudio:PlayerAudioPreferences;output:string;options:Options;preferences:ThemePreferences;theme:SystemTheme;development:boolean;lastTask:TaskInfo|null;backendAvailable:boolean;update:UpdateInfo}
+export interface Bootstrap {excludedTeammates:string[];playerAudio:PlayerAudioPreferences;output:string;options:Options;preferences:ThemePreferences;theme:SystemTheme;development:boolean;lastTask:TaskInfo|null;backendAvailable:boolean;update:UpdateInfo}
 export interface ImportResult {files:FileItem[];rejected:string[]}
 export interface LibrarySnapshot {results:Result[];tasks:number;errors:number}
 export type WindowCommand='minimize'|'maximize'|'close';
@@ -37,7 +37,9 @@ export interface DesktopAPI {
  windowState():Promise<WindowState>;
  windowCommand(value:WindowCommand):Promise<void>;
  onWindowState(cb:(state:WindowState)=>void):()=>void;
+ setTeammateExcluded(name:string,excluded:boolean):Promise<string[]>;
  savePlayerAudio(value:PlayerAudioPreferences):Promise<void>;
+ shareClips(files:string[]):Promise<{status:'opened';count:number}>;
  enrichHud(files:string[],fields:HudEnrichmentField[],mode?:HudEnrichmentMode):Promise<HudEnrichmentResult>;
  library():Promise<LibrarySnapshot>;
  deleteClip(file:string):Promise<void>;

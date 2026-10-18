@@ -1,0 +1,319 @@
+{
+  "description": "Original EA/Respawn game artwork mirrored by the community Apex Wiki. Not an official SVG asset distribution. Files preserved unchanged.",
+  "classification_source": "https://www.ea.com/games/apex-legends/apex-legends/game-objects/characters-hub",
+  "selection_layout_reference": "https://www.4gamer.net/games/449/G044914/20260501051/",
+  "assets": [
+    {
+      "id": "bangalore",
+      "file": "legends/bangalore.png",
+      "title": "File:Portrait Bangalore square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/3/37/Portrait_Bangalore_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Bangalore_square.png",
+      "sha256": "8078b5f6aab0ebbf7eade567fe2e62418f7dc10b868f705b2149609f031956b2"
+    },
+    {
+      "id": "revenant",
+      "file": "legends/revenant.png",
+      "title": "File:Portrait Revenant square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/d/d1/Portrait_Revenant_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Revenant_square.png",
+      "sha256": "6058e154041b3543e53b0ec41ee05d4463c22aaef7d01564bbb25b9d9021f114"
+    },
+    {
+      "id": "fuse",
+      "file": "legends/fuse.png",
+      "title": "File:Portrait Fuse square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/b/be/Portrait_Fuse_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Fuse_square.png",
+      "sha256": "cebee9532ea91c0720bab711bcf1c00501d7f33fb614d1053f19d5f280712401"
+    },
+    {
+      "id": "mad-maggie",
+      "file": "legends/mad-maggie.png",
+      "title": "File:Portrait Mad Maggie square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f7/Portrait_Mad_Maggie_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Mad_Maggie_square.png",
+      "sha256": "04431e2a9e1422644d9ca35d4356ad9b5348514ea65902e2b5584cc45a583ebd"
+    },
+    {
+      "id": "ballistic",
+      "file": "legends/ballistic.png",
+      "title": "File:Portrait Ballistic square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/3/32/Portrait_Ballistic_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Ballistic_square.png",
+      "sha256": "64eab4a22f927dcd7f30947690fd024ca802274c254f6004d14b38b357bddbcc"
+    },
+    {
+      "id": "pathfinder",
+      "file": "legends/pathfinder.png",
+      "title": "File:Portrait Pathfinder square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f5/Portrait_Pathfinder_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Pathfinder_square.png",
+      "sha256": "b84376336fe2524cb3fb2123169515f75e6b0d5479def5b4c4ba272bc30d6633"
+    },
+    {
+      "id": "wraith",
+      "file": "legends/wraith.png",
+      "title": "File:Portrait Wraith square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/6/67/Portrait_Wraith_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Wraith_square.png",
+      "sha256": "c1363e5d22fe4486a89f1136e3379a94cfcdc3f24b3979f5ed4a3d4c02c26b0a"
+    },
+    {
+      "id": "octane",
+      "file": "legends/octane.png",
+      "title": "File:Portrait Octane square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/9/9a/Portrait_Octane_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Octane_square.png",
+      "sha256": "cbc75526cca883130430c324efcaea5c80bb92a1bcba76ea17a8e54a6f643229"
+    },
+    {
+      "id": "horizon",
+      "file": "legends/horizon.png",
+      "title": "File:Portrait Horizon square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/9/97/Portrait_Horizon_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Horizon_square.png",
+      "sha256": "5861f89cfc80245d9dc90ce009538de70dc2c99a5bafb56e9bd3a57c0c374d88"
+    },
+    {
+      "id": "ash",
+      "file": "legends/ash.png",
+      "title": "File:Portrait Ash square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/d/d3/Portrait_Ash_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Ash_square.png",
+      "sha256": "11b6e0d1cc898cd406aea9595158757bdc7784a013fb98999791bf85efa27dc0"
+    },
+    {
+      "id": "alter",
+      "file": "legends/alter.png",
+      "title": "File:Portrait Alter square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/5/56/Portrait_Alter_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Alter_square.png",
+      "sha256": "7be9d5e8d944b1b12fc51c7282938b34577f0ad1a5c83670c9353cdf8e348125"
+    },
+    {
+      "id": "axle",
+      "file": "legends/axle.png",
+      "title": "File:Portrait Axle square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/7/7b/Portrait_Axle_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Axle_square.png",
+      "sha256": "f537089f3ce7db08863404ee8c71a79cbb23126b27f6f7b478e06052c545103f"
+    },
+    {
+      "id": "bloodhound",
+      "file": "legends/bloodhound.png",
+      "title": "File:Portrait Bloodhound square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/c/ce/Portrait_Bloodhound_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Bloodhound_square.png",
+      "sha256": "390066e3797f9bb6bc41bf174ab27a4adddef63d3cc11021c8a8fa1874ca3c15"
+    },
+    {
+      "id": "crypto",
+      "file": "legends/crypto.png",
+      "title": "File:Portrait Crypto square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/e/e6/Portrait_Crypto_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Crypto_square.png",
+      "sha256": "686329769be05eadbd3ba1d5c53f5a706c3781d988f27ff1e3a4da603b438df2"
+    },
+    {
+      "id": "valkyrie",
+      "file": "legends/valkyrie.png",
+      "title": "File:Portrait Valkyrie square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/b/b0/Portrait_Valkyrie_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Valkyrie_square.png",
+      "sha256": "e2f36b7b8f47eac8009992adf789f21958f7936489d0473bf4e0962b5094434b"
+    },
+    {
+      "id": "seer",
+      "file": "legends/seer.png",
+      "title": "File:Portrait Seer square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f2/Portrait_Seer_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Seer_square.png",
+      "sha256": "92c483caab36ae84334be9162acdafa02447ca490838c0e4166073975c48cabd"
+    },
+    {
+      "id": "vantage",
+      "file": "legends/vantage.png",
+      "title": "File:Portrait Vantage square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f8/Portrait_Vantage_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Vantage_square.png",
+      "sha256": "b2a046efd4b6f86631151e2df742c2742e5ea7e209e96860e81797d0e17a717d"
+    },
+    {
+      "id": "sparrow",
+      "file": "legends/sparrow.png",
+      "title": "File:Portrait Sparrow square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f2/Portrait_Sparrow_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Sparrow_square.png",
+      "sha256": "dd33ad7629f9cd65d538eb6379dfb7bd502df9730cdf22a83c9b8fec443d856d"
+    },
+    {
+      "id": "gibraltar",
+      "file": "legends/gibraltar.png",
+      "title": "File:Portrait Gibraltar square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/00/Portrait_Gibraltar_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Gibraltar_square.png",
+      "sha256": "d3705a5457a1ea4c92cdbc055303b05660601b31ef78cc6e414104b40e9f0df1"
+    },
+    {
+      "id": "lifeline",
+      "file": "legends/lifeline.png",
+      "title": "File:Portrait Lifeline square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/fa/Portrait_Lifeline_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Lifeline_square.png",
+      "sha256": "f71701dd78813889db41107ba86086f7b3fa870f38ec0ea2aaf1249db0b0f4a8"
+    },
+    {
+      "id": "mirage",
+      "file": "legends/mirage.png",
+      "title": "File:Portrait Mirage square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/c/c8/Portrait_Mirage_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Mirage_square.png",
+      "sha256": "1ca565e48328355c0e455a113c8aa87f240445a6d2235366f25d21e878dbb2dc"
+    },
+    {
+      "id": "loba",
+      "file": "legends/loba.png",
+      "title": "File:Portrait Loba square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/05/Portrait_Loba_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Loba_square.png",
+      "sha256": "ae5d1a1d80f1ae748701cd9abc17b528e8358ffc59bf1c6968e0b43742762749"
+    },
+    {
+      "id": "newcastle",
+      "file": "legends/newcastle.png",
+      "title": "File:Portrait Newcastle square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/0f/Portrait_Newcastle_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Newcastle_square.png",
+      "sha256": "e3c90bb9a294d1b3dd08af92cc878235581a8f226a2f9dad9787a7f0b7361806"
+    },
+    {
+      "id": "conduit",
+      "file": "legends/conduit.png",
+      "title": "File:Portrait Conduit square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/2/27/Portrait_Conduit_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Conduit_square.png",
+      "sha256": "3a602b53fd97bef6dfdd52d1451bcd7786e565ddd623af5d1a4fd604831843d9"
+    },
+    {
+      "id": "caustic",
+      "file": "legends/caustic.png",
+      "title": "File:Portrait Caustic square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/45/Portrait_Caustic_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Caustic_square.png",
+      "sha256": "4acce2733de0c294112fa33f16158efb84c8d764eaf988dca66abbf748d41cb8"
+    },
+    {
+      "id": "wattson",
+      "file": "legends/wattson.png",
+      "title": "File:Portrait Wattson square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/2/22/Portrait_Wattson_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Wattson_square.png",
+      "sha256": "4d44590f700972625141e6be9f86c9931cdb1ab9762b49ca6cf28556524916c8"
+    },
+    {
+      "id": "rampart",
+      "file": "legends/rampart.png",
+      "title": "File:Portrait Rampart square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/0f/Portrait_Rampart_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Rampart_square.png",
+      "sha256": "615cc938e49cda54327068cc18d9c398597d73e7678bd608fd0de453d24ce04a"
+    },
+    {
+      "id": "catalyst",
+      "file": "legends/catalyst.png",
+      "title": "File:Portrait Catalyst square.png",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/9/9a/Portrait_Catalyst_square.png?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Portrait_Catalyst_square.png",
+      "sha256": "a3e78beec6d696e1de8cc5f8a9dff8881dc0f62ebbafc0d01e05e31bd6fa8c05"
+    },
+    {
+      "id": "assault",
+      "file": "classes/assault.svg",
+      "title": "File:Assault.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/45/Assault_Class.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Assault_Class.svg",
+      "sha256": "80f7be92f26079ebd7d1256c12dfbb178d84c17ec423b8d947942d4385da982a"
+    },
+    {
+      "id": "skirmisher",
+      "file": "classes/skirmisher.svg",
+      "title": "File:Skirmisher.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/05/Skirmisher_Class.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Skirmisher_Class.svg",
+      "sha256": "ce5f813a6035443c647107d6b41340454a1d701bfe797725f63de01da8cc6ee5"
+    },
+    {
+      "id": "recon",
+      "file": "classes/recon.svg",
+      "title": "File:Recon.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/f8/Recon_Class.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Recon_Class.svg",
+      "sha256": "687fc99339842b251e3e9da6d072a8ef271e80088df7d99939899a4b69fcb3c5"
+    },
+    {
+      "id": "support",
+      "file": "classes/support.svg",
+      "title": "File:Support.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/0/0a/Support_Class.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Support_Class.svg",
+      "sha256": "96c1cf52e21f341093be058454f0ad63e5565d29421bdca0f603a3d16eea0318"
+    },
+    {
+      "id": "controller",
+      "file": "classes/controller.svg",
+      "title": "File:Controller.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/2/2c/Controller_Class.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Controller_Class.svg",
+      "sha256": "e5e93acb71907abcb9e839c2e8d56c5f3ea46ca4ca9abc3ff825d9e8ccfb478e"
+    },
+    {
+      "id": "light",
+      "file": "ammo/light.svg",
+      "title": "File:Light Rounds.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/a/a5/Light_Rounds.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Light_Rounds.svg",
+      "sha256": "7b91226bdfaffbc2cd11d503c65933d78cd071fb1588ff1292f8d1a581836747"
+    },
+    {
+      "id": "heavy",
+      "file": "ammo/heavy.svg",
+      "title": "File:Heavy Rounds.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/5/55/Heavy_Rounds.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Heavy_Rounds.svg",
+      "sha256": "51e5a670c26ddb7e1d4b171a058b0b7f0995198a0bd3835421ae60e95ed7e132"
+    },
+    {
+      "id": "energy",
+      "file": "ammo/energy.svg",
+      "title": "File:Energy Ammo.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/2/2d/Energy_Ammo.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Energy_Ammo.svg",
+      "sha256": "d6ab49a309c556907dea77017321a82d5c6b49ceb5249834de48205b0ab85e37"
+    },
+    {
+      "id": "shotgun",
+      "file": "ammo/shotgun.svg",
+      "title": "File:Shotgun Shells.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/4/42/Shotgun_Shells.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Shotgun_Shells.svg",
+      "sha256": "abc64e649f25883548a661f9335ddaffd4a6efe73cacbfc9736590c79c10323b"
+    },
+    {
+      "id": "sniper",
+      "file": "ammo/sniper.svg",
+      "title": "File:Sniper Ammo.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/3/3e/Sniper_Ammo.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Sniper_Ammo.svg",
+      "sha256": "937cc0c48f8efbbbc073d5b8d44cd8a976b10e0132f63a24ce5902715533c34a"
+    },
+    {
+      "id": "arrows",
+      "file": "ammo/arrows.svg",
+      "title": "File:Arrows.svg",
+      "url": "https://static.wikia.nocookie.net/apexlegends_gamepedia_en/images/f/fe/Arrows.svg?format=original",
+      "source_page": "https://apexlegends.fandom.com/wiki/File:Arrows.svg",
+      "sha256": "a305c4054a41fe98e5f403f799f7355f81220a94af1462621ce050ac28c216d2"
+    }
+  ]
+}

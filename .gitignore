@@ -83,6 +83,7 @@ electron-ui/.playwright*/
 !/docs/assets/statistics.png
 !/docs/architecture.md
 !/docs/performance.md
+!/docs/user-guide.md
 !/docs/development.md
 /electron-ui/tests/*
 !/electron-ui/tests/protocol.test.cjs
@@ -108,3 +109,6 @@ electron-ui/.playwright*/
 
 !/electron-ui/tests/diagnostics.test.cjs
 !/electron-ui/tests/processing-times.test.cjs
+!/electron-ui/tests/window-placement.test.cjs
+!/electron-ui/tests/qq-share.test.cjs
+!/electron-ui/tests/teammate-exclusions.test.cjs

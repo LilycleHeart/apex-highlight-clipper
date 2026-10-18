@@ -7,8 +7,8 @@ header.titlebar{height:36px;position:sticky;top:0;z-index:12;padding:0;display:f
 .wordmark{width:168px;height:36px;object-fit:contain;flex:none}
 .titlebar nav{display:flex;gap:4px;margin-left:8px;height:36px}
 .nav-tab{width:116px;height:36px;position:relative;font-size:12px;font-weight:500;padding:0;-webkit-app-region:no-drag;overflow:visible;isolation:isolate;opacity:1}
-.nav-tab span{position:relative;display:grid;align-items:center;height:36px;opacity:.8}
-.nav-tab[aria-selected=true] span,.nav-tab:hover span{opacity:1}
+.nav-tab>.nav-label{position:relative;z-index:1;display:grid;align-items:center;height:36px;opacity:.8}
+.nav-tab[aria-selected=true]>.nav-label,.nav-tab:hover>.nav-label{opacity:1}
 .nav-surface{position:absolute;left:-16px;top:0;overflow:visible;z-index:-1;pointer-events:none}
 .titlebar-tools{display:flex;align-items:center;margin-left:auto;margin-right:144px;-webkit-app-region:no-drag;gap:4px}
 .titlebar-tools .icon-button{height:30px;width:36px;color:var(--card-paper);border-radius:8px}

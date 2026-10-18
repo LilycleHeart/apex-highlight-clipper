@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="512"
+   height="512"
+   viewBox="0 0 135.46666 135.46667"
+   version="1.1"
+   id="svg2977"
+   sodipodi:docname="Assault_Class2.svg"
+   inkscape:version="1.1 (c68e22c387, 2021-05-23)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview2979"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="px"
+     showgrid="false"
+     units="px"
+     inkscape:zoom="1.0998546"
+     inkscape:cx="127.74416"
+     inkscape:cy="361.41141"
+     inkscape:window-width="2560"
+     inkscape:window-height="1387"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer5" />
+  <defs
+     id="defs2974" />
+  <g
+     inkscape:groupmode="layer"
+     id="layer5"
+     inkscape:label="Layer"
+     style="display:inline">
+    <g
+       id="g18676"
+       transform="matrix(0.85714291,0,0,0.85714291,530.34521,28.76007)">
+      <path
+         id="path5992"
+         style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.857142px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+         d="M 256 31.171875 L 62.082031 106.67969 C 57.989945 402.38182 197.57611 446.20538 256 480.82812 C 314.42389 446.20538 454.01005 402.38182 449.91797 106.67969 L 256 31.171875 z M 256 57.337891 L 425.69336 123.41406 C 425.17916 355.50979 309.10326 424.52235 256 452.8418 C 202.89674 424.52236 86.820841 355.50979 86.306641 123.41406 L 256 57.337891 z M 256 89.816406 L 119.65039 144.80469 C 122.73456 351.31691 228.63066 411.67617 256 420.52734 C 283.36934 411.67617 389.26544 351.31691 392.34961 144.80469 L 256 89.816406 z M 226.95508 158.73438 L 284.81055 158.73438 L 284.81055 221.52148 L 344.86914 221.52148 L 344.86914 278.0918 L 284.81055 278.0918 L 284.81055 340.66406 L 226.95508 340.66406 L 226.95508 278.0918 L 165.39648 278.0918 L 165.39648 221.52148 L 226.95508 221.52148 L 226.95508 158.73438 z "
+         class="invertable"
+         transform="matrix(0.30868053,0,0,0.30868053,-618.73604,-33.553413)" />
+    </g>
+  </g>
+</svg>

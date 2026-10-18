@@ -1,0 +1,101 @@
+/* Playback expands within the existing library. Its background, view controls
+   and cards stay the same; only the available column widths change. */
+.clip-library-shell{flex:1 1 0;display:grid;grid-template-columns:minmax(0,1fr);min-height:0;min-width:0;height:100%;width:100%;overflow:hidden}
+.clip-library-shell>.clip-library.library-scroll{height:100%;max-height:100%;min-height:0;min-width:0}
+.clip-library-shell.is-playing{grid-template-columns:minmax(0,1fr) clamp(320px,24vw,520px);gap:24px;padding:24px 32px}
+.library-player-pane{grid-column:1;grid-row:1;min-width:0;min-height:0;overflow:auto;padding:0 0 24px;scrollbar-width:thin;overscroll-behavior:contain}
+.watch-player.clip-card{width:100%;max-width:none;min-width:0;margin:0 auto;padding:16px;background:var(--card-paper);color:var(--card-ink);box-shadow:0 8px 24px #0958b71a;border-radius:24px;overflow:visible}
+.watch-player.clip-card.player-wide{max-width:1840px}
+.watch-navigation{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px;margin-bottom:14px;color:var(--card-muted);font-size:12px}
+.watch-navigation>button{display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--card-ink);font-size:13px}
+.watch-navigation>span{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+.watch-player .watch-screen:not(:fullscreen){width:100%;margin:0;border-radius:14px;overflow:hidden;background:#000}
+.watch-player .watch-screen:not(:fullscreen) .media-frame{width:100%;height:var(--watch-picture-height,56vh);max-height:none;aspect-ratio:auto!important;margin:0}
+.watch-player .watch-screen .media-frame>video,.watch-player .watch-screen .media-frame>img{width:100%;height:100%;object-fit:contain!important}
+.watch-title-row{display:flex;align-items:start;justify-content:space-between;gap:20px;margin:18px 0 12px}
+.watch-title-row h1{min-width:0;margin:0;font-size:18px;line-height:1.55;font-weight:600;color:var(--card-ink);overflow-wrap:anywhere}
+.watch-details-toggle{display:flex;align-items:center;gap:6px;flex:none;padding:6px 0;font-size:12px;color:var(--card-muted);white-space:nowrap}
+.watch-details-toggle[aria-expanded=true]>svg{rotate:180deg}
+.watch-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.watch-actions .clip-action-buttons{display:contents}
+.watch-actions .clip-action{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:7px;min-width:0;width:auto;height:34px;padding:0 12px;border-radius:10px;font-size:12px;color:var(--card-ink);background:var(--card-tint)}
+.watch-actions .clip-action>span{font-size:12px}
+.watch-actions .clip-action:not(:has(>span)){width:34px;padding:0}
+.watch-actions .clip-action[data-confirming=true]{color:var(--onErrorContainer);background:var(--errorContainer)}
+.watch-details{padding:18px;border-radius:14px;background:var(--card-tint);color:var(--card-ink)}
+.watch-details>h2{margin:0 0 14px;font-size:14px;font-weight:600}
+.watch-details>.clip-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 28px;font-size:12px}
+.watch-details .combat-stats{grid-column:1/-1;margin:0;padding:0 0 14px;gap:16px;border-bottom:1px solid var(--card-line);border-radius:0;background:none}
+.watch-details .combat-stats>div{display:flex;align-items:center;justify-content:center;gap:12px}
+.watch-details .combat-stats dt{height:auto}
+.watch-details .combat-stats dd{font-size:22px;line-height:1.4}
+.watch-details .clip-recorded,.watch-details .clip-weapons,.watch-details .stats-basis,.watch-details .outcome-evidence{grid-column:1/-1}
+.watch-details .clip-recorded,.watch-details .clip-source,.watch-details .clip-range,.watch-details .clip-identity,.watch-details .clip-rank{margin:0;font-size:12px;line-height:1.7;min-height:0}
+.watch-details .clip-recorded time,.watch-details .detail-filter{font-size:inherit}
+.watch-details .clip-weapons{margin:0;gap:8px}
+.watch-details .clip-weapons .weapon-chip{padding:5px 9px}
+.watch-details .stats-basis{margin:0;font-size:11px}
+.watch-details .detail-names{flex-wrap:wrap;justify-content:flex-end}
+/* Wide mode focuses the picture without unmounting or resetting the library. */
+.clip-library-shell.is-playing:has(.player-wide)>.library-player-pane{grid-column:1/-1}
+.clip-library-shell.is-playing:has(.player-wide)>.library-scroll{visibility:hidden;pointer-events:none}
+.app:has(.watch-player.player-wide) .scroll-to-top{display:none}
+.watch-player.player-wide .watch-title-row{align-items:center;margin:12px 0 0}
+.watch-player.player-wide h1{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip-library-shell.is-playing>.clip-library.library-scroll{grid-column:2;grid-row:1;padding:0 0 20px;scroll-padding-block:16px;min-width:0;container-type:inline-size;container-name:library-browser;background:transparent}
+.clip-library-shell.is-playing .library-toolbar{flex-wrap:wrap;gap:12px}
+.clip-library-shell.is-playing .library-controls{width:100%;min-width:0;flex-wrap:wrap;gap:8px}
+.clip-library-shell.is-playing .view-switch{margin-left:0;width:100%}
+.clip-library-shell.is-playing .view-switch>button{flex:1;min-width:0;width:auto}
+.clip-library-shell.is-playing .clips-grid{--clip-columns:1;grid-template-columns:minmax(0,1fr);gap:18px}
+.clip-library-shell.is-playing .browse-filter-panel{grid-template-columns:minmax(0,1fr);padding:16px;gap:12px}
+.clip-library-shell.is-playing .view-list .clip-card:not(.clip-expanded){grid-template-columns:150px minmax(0,1fr)}
+.clip-library-shell.is-playing .view-list .clip-info{padding:12px}
+@container library-browser (min-width:600px){
+ .clip-library-shell.is-playing .clips-grid.view-grid{--clip-columns:2;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .clip-library-shell.is-playing .browse-filter-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .clip-library-shell.is-playing .view-list .clip-card:not(.clip-expanded){grid-template-columns:190px minmax(0,1fr)}
+}
+@container library-browser (min-width:820px){
+ .clip-library-shell.is-playing .clips-grid.view-detail{--clip-columns:2;grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@container library-browser (min-width:1000px){
+ .clip-library-shell.is-playing .clips-grid.view-grid{--clip-columns:3;grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+/* Keep the original themed glass controls from fullscreen-player.css. */
+.watch-player .watch-screen .player-control-row button:disabled{opacity:.35}
+@media(max-width:1500px){
+ .clip-library-shell.is-playing{grid-template-columns:minmax(0,1fr) clamp(260px,24vw,320px);gap:20px;padding:20px 24px}
+ .watch-title-row h1{font-size:16px}
+ .watch-details>.clip-details{column-gap:16px}
+}
+@media(max-width:1000px){
+ .clip-library-shell.is-playing{grid-template-columns:minmax(0,1fr) 280px;gap:16px;padding:16px 20px}
+ .watch-details>.clip-details{grid-template-columns:minmax(0,1fr)}
+ .watch-player .player-volume input{display:none}
+ .watch-player .player-main-controls>time{font-size:10px}
+ .watch-player .watch-screen .player-control-row button{width:27px}
+}
+
+/* Shared-picture morph and synchronized pane reflow. Only snapshots animate. */
+:root[data-library-playback]::view-transition-group(library-active-picture),
+:root[data-library-playback]::view-transition-group(library-browse),
+:root[data-library-playback]::view-transition-group(library-player-panel){animation-duration:420ms;animation-timing-function:cubic-bezier(.22,.8,.24,1)}
+:root[data-library-playback]::view-transition-group(library-browse){background:transparent;border-radius:0}
+:root[data-library-playback]::view-transition-group(library-active-picture){background:#000;border-radius:14px;overflow:hidden}
+:root[data-library-playback]::view-transition-old(library-active-picture),
+:root[data-library-playback]::view-transition-new(library-active-picture){object-fit:contain;object-position:center;animation-duration:280ms;mix-blend-mode:normal}
+:root[data-library-playback]::view-transition-old(library-browse){object-fit:cover;object-position:right top}
+:root[data-library-playback]::view-transition-new(library-browse){object-fit:cover;object-position:left top}
+:root[data-library-playback=open]::view-transition-new(library-player-panel){animation:library-panel-in 420ms cubic-bezier(.22,.8,.24,1) both}
+/* Closing reflows complete cards; the picture is never cut out of a card. */
+:root[data-library-playback=close] .clips-grid>.clip-card{view-transition-class:library-return-card}
+:root[data-library-playback=close]::view-transition-group(*){background:transparent;border-radius:0;animation-duration:420ms;animation-timing-function:cubic-bezier(.22,.8,.24,1)}
+:root[data-library-playback=close]::view-transition-group(.library-return-card){border-radius:24px;z-index:2}
+:root[data-library-return-reflow]::view-transition-new(.library-return-card):only-child{animation:library-return-enter 140ms ease 280ms both}
+:root[data-library-playback=close]::view-transition-group(library-player-panel){z-index:0;animation:none}
+:root[data-library-playback=close]::view-transition-group(library-browse){z-index:1}
+:root[data-library-playback=close]::view-transition-old(library-player-panel){animation:library-panel-out 140ms ease both;transform-origin:left center}
+@keyframes library-panel-in{from{opacity:0;translate:-16px 0}to{opacity:1;translate:0 0}}
+@keyframes library-panel-out{to{opacity:0;scale:.985}}
+@keyframes library-return-enter{from{opacity:0}to{opacity:1}}

@@ -1,0 +1,61 @@
+/* Independent columns keep every card at its own content height. */
+.statistics-page .statistics-charts{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:24px;align-items:start}
+.statistics-column{display:flex;flex-direction:column;gap:24px;min-width:0}
+.statistics-page .stat-card{min-height:0;height:auto;padding:20px;overflow:visible}
+.statistics-page .stat-card h2{margin:0;line-height:30px}
+.stat-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.stat-heading>span{font-size:11px;color:var(--card-muted);white-space:nowrap}
+.statistics-page .chart-empty{padding:28px 0 12px;font-size:13px}
+.statistics-page .chart-empty p{margin-top:8px;font-size:12px}
+.statistics-page .weapon-summary{height:auto;min-height:64px;margin-top:18px;gap:20px}
+.statistics-page .weapon-summary-data>div:first-child{font-size:14px;margin-bottom:12px}
+.statistics-page .weapon-art{width:128px;height:64px}
+.statistics-page .weapon-stat-icon{width:108px;height:42px}
+.weapon-stat-more{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 18px;margin-top:18px;padding-top:16px;border-top:1px solid var(--card-line)}
+.statistics-page .weapon-stat-more .weapon-summary{min-height:36px;margin:0;gap:10px}
+.statistics-page .weapon-stat-more .weapon-art{width:62px;height:36px;border-radius:8px}
+.statistics-page .weapon-stat-more .weapon-stat-icon{width:52px;height:24px}
+.statistics-page .weapon-stat-more .weapon-summary-data>div:first-child{font-size:12px;margin-bottom:6px;flex-wrap:wrap;gap:3px 8px}
+.statistics-page .weapon-stat-more .weapon-summary-data>div>span{font-size:11px}
+.statistics-page .weapon-stat-more .bar-track{height:3px}
+.statistics-page .statistics-expand{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;height:36px;padding:0 12px;color:var(--card-ink);background:var(--card-tint)}
+.statistics-expand>svg{transition:transform 280ms cubic-bezier(.2,.8,.2,1)}
+.statistics-expand[aria-expanded=true]>svg{transform:rotate(180deg)}
+.statistics-page .rank-ring-wrapper{margin:28px auto}
+.statistics-page .rank-legend{gap:12px;margin:0}
+.statistics-page .rank-legend>div{min-height:32px;font-size:14px;gap:9px}
+.statistics-page .rank-legend img{width:30px;height:32px;object-fit:contain;flex:none}
+.statistics-page .rank-legend b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.statistics-page .ranks-stat .motion-disclosure-content{padding-top:12px}
+.rank-empty{color:var(--card-muted);text-align:center;font-size:12px}
+.statistics-page .preference-summary{margin:18px 0 0}
+.statistics-page .preference-summary>div:first-child{font-size:13px;gap:8px}
+.statistics-page .preference-summary b{overflow-wrap:anywhere;min-width:0}
+.statistics-page .preference-summary span{white-space:nowrap;color:var(--card-muted)}
+.hero-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.hero-stat{min-width:0;background:var(--card-tint);border-radius:9px;overflow:hidden}
+.hero-stat-portrait{position:relative;height:72px;display:flex;align-items:center;justify-content:center;color:var(--card-muted);background:linear-gradient(135deg,color-mix(in srgb,var(--legend-role-color) 24%,transparent),color-mix(in srgb,var(--legend-role-color) 7%,transparent));border-top:2px solid var(--legend-role-color)}
+.hero-stat-portrait>img{width:100%;height:100%;object-fit:cover;object-position:center 30%}
+.hero-stat-count{position:absolute;right:5px;bottom:5px;padding:2px 5px;border-radius:5px;background:#10131ddd;color:#fff;font-size:10px;display:flex;align-items:baseline;gap:3px;white-space:nowrap}
+.hero-stat-count>b{font-size:13px;font-variant-numeric:tabular-nums}
+.hero-stat-info{padding:8px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px}
+.hero-stat-info>b{display:block;font-size:12px;overflow-wrap:anywhere;line-height:1.4}
+.hero-stat-role{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--legend-role-color)}
+.hero-stat-role .apex-icon{width:12px;height:12px}
+.hero-stat-info .bar-track{grid-column:1/-1;height:3px;margin:0;background:color-mix(in srgb,var(--card-muted) 18%,transparent)}
+.hero-stat-info .bar-track>span{background:var(--legend-role-color)}
+@media(max-width:1000px){
+ .statistics-page .statistics-charts{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px}
+ .statistics-column{gap:18px}
+ .statistics-page .stat-card{padding:18px}
+ .hero-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+ .statistics-page .weapon-art{width:94px;height:56px}
+ .statistics-page .weapon-stat-icon{width:78px;height:34px}
+ .statistics-page .weapon-summary{gap:14px;min-height:56px}
+}
+@media(max-width:740px){
+ .statistics-page .statistics-charts{grid-template-columns:minmax(0,1fr)}
+ .hero-stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){.statistics-expand>svg{transition:none}}
+html[data-reduced=true] .statistics-expand>svg{transition:none}

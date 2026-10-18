@@ -1,0 +1,23 @@
+/* Large windows add useful columns instead of enlarging every surface. */
+@media(min-width:1400px){
+ .clip-library.library-scroll,.page-statistics-content>.statistics-page{padding-inline:max(40px,calc((100vw - 1840px)/2));padding-top:24px}
+ .clips-grid.view-detail{--clip-columns:3;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .clips-grid.view-grid{--clip-columns:4;grid-template-columns:repeat(4,minmax(0,1fr))}
+ .clips-grid.view-list{--clip-columns:2;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .browse-filter-panel:not(.hud-enrichment-panel){grid-template-columns:repeat(4,minmax(0,1fr))}
+ .statistics-page .statistics-totals{margin:24px 0 28px}
+ .statistics-page .statistics-charts,.statistics-column{gap:20px}
+ .statistics-page .weapons-stat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:20px;align-items:start}
+ .weapons-stat>h2,.weapons-stat>.motion-disclosure,.weapons-stat>.statistics-expand,.weapons-stat>.chart-empty{grid-column:1/-1}
+ .statistics-page .weapons-stat>.weapon-summary{flex-direction:column;align-items:stretch;gap:12px;min-height:0;margin-top:16px}
+ .statistics-page .weapons-stat>.weapon-summary>.weapon-art{width:100%;height:52px}
+ .weapons-stat>.weapon-summary>.weapon-summary-data{width:100%}
+ .rank-stat-summary{display:grid;grid-template-columns:144px minmax(0,1fr);align-items:center;gap:24px;margin-top:24px}
+ .statistics-page .rank-stat-summary>.rank-ring-wrapper{margin:0}
+}
+@media(min-width:1920px){
+ .clips-grid.view-detail{--clip-columns:4;grid-template-columns:repeat(4,minmax(0,1fr))}
+ .clips-grid.view-grid{--clip-columns:5;grid-template-columns:repeat(5,minmax(0,1fr))}
+ .browse-filter-panel:not(.hud-enrichment-panel){grid-template-columns:repeat(5,minmax(0,1fr))}
+ .hero-stat-grid{grid-template-columns:repeat(8,minmax(0,1fr))}
+}

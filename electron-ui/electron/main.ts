@@ -1,10 +1,13 @@
-import {app,BrowserWindow,dialog,ipcMain,nativeTheme,systemPreferences,protocol,shell,net} from 'electron';
+import {app,BrowserWindow,dialog,ipcMain,nativeTheme,systemPreferences,protocol,shell,net,screen} from 'electron';
 import {spawn,ChildProcess} from 'node:child_process';
 import fs from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import os from 'node:os';
+import {restoreWindowPlacement,type WindowPlacement} from './windowPlacement';
+import {normalizeTeammateExclusions,changeTeammateExclusion} from '../src/teammateExclusions';
+import {shareFiles} from './qqShare';
 import {Diagnostics} from './diagnostics';
 import {JsonLines,safeOptions,safeHudFiles,videoExtensions} from './protocol';
 import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,SystemTheme,UpdateInfo,HudEnrichmentResult} from '../src/shared';
@@ -53,6 +56,8 @@ let updating=false;let updateAbort:AbortController|null=null;
 const processingTimes=new ProcessingTimes(path.join(dataRoot,'processing-times.json'),(source,seconds)=>send({type:'file-timing',source,processing_seconds:seconds}),error=>diagnostics.log('error','processing-time',String(error)));
 const updateRoot=path.join(app.getPath('userData'),'updates');
 let workerExit:Promise<void>=Promise.resolve();let resolveWorkerExit:(()=>void)|null=null;let closeSaveFinished=false;
+let windowPlacement:WindowPlacement|undefined;let placementTimer:ReturnType<typeof setTimeout>|undefined;
+let excludedTeammates:string[]=[];let teammateWrites:Promise<unknown>=Promise.resolve();
 let playerAudio:PlayerAudioPreferences={...defaultPlayerAudio};
 let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:false};let options:Options={...defaults};let output=app.isPackaged?path.join(app.getPath('videos'),'Apex Highlight Clipper'):path.join(project,'output');
 let updateInfo:UpdateInfo={status:'idle',currentVersion:app.getVersion(),autoCheck:true};let updateTimer:ReturnType<typeof setTimeout>|null=null;
@@ -78,7 +83,7 @@ const readJson=async(p:string)=>JSON.parse((await fs.readFile(p,'utf8')).replace
 async function pruneRequests(){
  const root=path.join(validationRoot,'app-requests');
  for(const item of await fs.readdir(root,{withFileTypes:true}).catch(()=>[])){
-  if(!item.isFile()||! /^[a-f0-9-]{36}(?:-counter-repair)?\.(?:json|stop)$/.test(item.name))continue;
+  if(!item.isFile()||! /^[a-f0-9-]{36}(?:-counter-repair|-qq-share)?\.(?:json|stop|ps1)$/.test(item.name))continue;
   const file=path.join(root,item.name),stat=await fs.lstat(file).catch(()=>null);
   if(stat?.isFile()&&Date.now()-stat.mtimeMs>7*86400000)await fs.unlink(file).catch(()=>{});
  }
@@ -87,7 +92,7 @@ let loggedStage='',loggedProgress=-1;
 function send(e:WorkerEvent){if(e.source)diagnostics.alias(e.source,'<video>');const progress=Math.floor((e.progress||0)/10);if(['run','file','stage','done','stopped','fatal','error','exit','log','stderr','close-request','hud-info-start','hud-info-file','hud-info-error','hud-info-done'].includes(e.type)||(e.type==='progress'&&(e.stage!==loggedStage||progress!==loggedProgress))){loggedStage=e.stage||loggedStage;loggedProgress=progress;diagnostics.log(['fatal','error','stderr','hud-info-error'].includes(e.type)?'error':'info','worker',e.message||e.type,{type:e.type,stage:e.stage,progress:e.progress,index:e.index,total:e.total,failures:e.failures,clips:e.clips});}if(win&&!win.isDestroyed())win.webContents.send('worker-event',e);}
 function theme():SystemTheme{let accent='#526b4a';let reduceMotion=false;try{const color=systemPreferences.getAccentColor();if(/^[\da-f]{8}$/i.test(color))accent='#'+color.slice(0,6);}catch{}try{reduceMotion=systemPreferences.getAnimationSettings().prefersReducedMotion;}catch{}return{accent,dark:nativeTheme.shouldUseDarkColors,reduceMotion};}
 let saveChain=Promise.resolve();
-async function flushSaves(){let pending:Promise<void>;do{pending=saveChain;await pending.catch(()=>{});}while(pending!==saveChain);await diagnostics.flush();}
+async function flushSaves(){await teammateWrites.catch(()=>{});let pending:Promise<void>;do{pending=saveChain;await pending.catch(()=>{});}while(pending!==saveChain);await diagnostics.flush();}
 let maintenance:ChildProcess|null=null;let maintenanceExit:Promise<void>=Promise.resolve();let maintenanceTimer:ReturnType<typeof setTimeout>|null=null;
 function scheduleMaintenance(force=false){
  if(process.env.APEX_UI_TEST_HOME||process.env.APEX_UI_VALIDATE||maintenanceTimer||maintenance)return;
@@ -105,7 +110,7 @@ function scheduleMaintenance(force=false){
   maintenanceExit=new Promise<void>(resolve=>{const finish=()=>{if(maintenance===proc)maintenance=null;resolve();};proc.once('error',finish);proc.once('close',code=>{if(code===0&&result.includes('"Bytes"'))send({type:'log',message:'缓存维护已完成'});finish();});});
  },10000);maintenanceTimer.unref();
 }
-async function save(){const snapshot=JSON.stringify({preferences,options,playerAudio,optionDefaultsVersion:2,output,updatePreferences:{autoCheck:updateInfo.autoCheck},updateCache:updateInfo.status==='checking'?undefined:updateInfo});saveChain=saveChain.catch(()=>{}).then(async()=>{await fs.mkdir(app.getPath('userData'),{recursive:true});const target=path.join(app.getPath('userData'),'preferences.json');await fs.writeFile(target+'.tmp',snapshot,'utf8');await fs.rename(target+'.tmp',target);});return saveChain;}
+async function save(){const snapshot=JSON.stringify({preferences,options,playerAudio,windowPlacement,excludedTeammates,optionDefaultsVersion:2,output,updatePreferences:{autoCheck:updateInfo.autoCheck},updateCache:updateInfo.status==='checking'?undefined:updateInfo});saveChain=saveChain.catch(()=>{}).then(async()=>{await fs.mkdir(app.getPath('userData'),{recursive:true});const target=path.join(app.getPath('userData'),'preferences.json');await fs.writeFile(target+'.tmp',snapshot,'utf8');await fs.rename(target+'.tmp',target);});return saveChain;}
 async function imageUrl(p:string){
  const real=await fs.realpath(p);if(!['.jpg','.jpeg','.png'].includes(path.extname(real).toLowerCase()))throw new Error('预览格式无效');
  const roots=await Promise.all([validationRoot,legacyValidationRoot,thumbnails.directory,...taskSampleRoots].map(p=>fs.realpath(p).catch(()=>'')));if(!roots.some(root=>root&&within(real,root)))throw new Error('预览路径不属于画面缓存');
@@ -225,14 +230,18 @@ app.whenReady().then(async()=>{
  await libraryStore.load();
  await clipDeletions.load();
  await processingTimes.load();
- try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));playerAudio=normalizePlayerAudio(saved.playerAudio);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
+ try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));windowPlacement=restoreWindowPlacement(saved.windowPlacement,screen.getAllDisplays().map(display=>display.workArea),screen.getPrimaryDisplay().workArea);playerAudio=normalizePlayerAudio(saved.playerAudio);excludedTeammates=normalizeTeammateExclusions(saved.excludedTeammates);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
  diagnostics.alias(dataRoot,'<data>');diagnostics.alias(output,'<output>');diagnostics.log('info','startup','设置已载入',{options,theme:preferences.mode});
  protocol.handle('apex-media',async request=>{try{const url=new URL(request.url);if(url.hostname==='video')return videos.respond(request);const p=images.get(url.pathname.slice(1));if(url.hostname!=='image'||!p)return new Response('Not found',{status:404});const data=await fs.readFile(p);return new Response(data,{headers:{'Content-Type':p.endsWith('.png')?'image/png':'image/jpeg','Cache-Control':'private, max-age=60'}});}catch{return new Response('Unavailable',{status:404});}});
  const initial=theme();const dark=preferences.mode==='dark'||(preferences.mode==='system'&&initial.dark);
- win=new BrowserWindow({width:1120,height:820,minWidth:760,minHeight:620,show:false,title:'Apex Highlight Clipper',icon:path.join(__dirname,'../../dist/brand/cat-clapperboard.png'),backgroundColor:'#211e1a',titleBarStyle:'hidden',titleBarOverlay:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ const placement=windowPlacement||restoreWindowPlacement(null,[],screen.getPrimaryDisplay().workArea);
+ win=new BrowserWindow({...placement,minWidth:Math.min(760,placement.width),minHeight:Math.min(620,placement.height),show:false,title:'Apex Highlight Clipper',icon:path.join(__dirname,'../../dist/brand/cat-clapperboard.png'),backgroundColor:'#211e1a',titleBarStyle:'hidden',titleBarOverlay:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  win.webContents.on('console-message',details=>{if(details.level==='error')diagnostics.log('error','renderer-console',details.message,{line:details.lineNumber,source:details.sourceId});});
  win.webContents.on('render-process-gone',(_event,details)=>diagnostics.log('error','renderer-process','界面进程退出',details));
  win.on('unresponsive',()=>diagnostics.log('warning','renderer','界面无响应'));
+ const rememberPlacement=()=>{if(win.isDestroyed()||win.isFullScreen())return;windowPlacement={...win.getNormalBounds(),maximized:win.isMinimized()?windowPlacement?.maximized===true:win.isMaximized()};};
+ const persistPlacement=()=>{rememberPlacement();clearTimeout(placementTimer);placementTimer=setTimeout(()=>{placementTimer=undefined;void save().catch(error=>diagnostics.log('error','window-placement',String(error)));},300);};
+ win.on('move',persistPlacement);win.on('resize',persistPlacement);win.on('maximize',persistPlacement);win.on('unmaximize',persistPlacement);
  const windowState=()=>({maximized:win.isMaximized()});
  const publishWindowState=()=>{if(!win.isDestroyed())win.webContents.send('window-state',windowState());};
  win.on('maximize',publishWindowState);win.on('unmaximize',publishWindowState);win.on('restore',publishWindowState);
@@ -244,13 +253,13 @@ app.whenReady().then(async()=>{
  handle('open-diagnostics',async()=>{const info=await diagnostics.info();if(!info.available)throw new Error(info.message||'日志尚未生成');const error=await shell.openPath(diagnostics.directory);if(error)throw new Error(error);});
  handle('export-diagnostics',async()=>{const choice=await dialog.showSaveDialog(win,{title:'导出诊断包',defaultPath:path.join(app.getPath('desktop'),`AHC-diagnostics-v${app.getVersion()}-${new Date().toISOString().slice(0,10)}.zip`),filters:[{name:'诊断包 ZIP',extensions:['zip']}]});if(choice.canceled||!choice.filePath)return null;const file=choice.filePath.endsWith('.zip')?choice.filePath:choice.filePath+'.zip',task=await diagnosticTask();let gpu:unknown;try{const info=await app.getGPUInfo('basic') as Record<string,unknown>;if(Array.isArray(info.gpuDevice))gpu=info.gpuDevice.map(device=>Object.fromEntries(['vendorId','deviceId','driverVendor','driverVersion','deviceString','active'].filter(key=>device[key]!==undefined).map(key=>[key,device[key]])));}catch{}await diagnostics.export(file,{createdAt:new Date().toISOString(),version:app.getVersion(),system:{platform:process.platform,release:os.release(),arch:process.arch,cpu:os.cpus()[0]?.model,logicalCores:os.cpus().length,memoryMiB:Math.round(os.totalmem()/1024**2),versions:process.versions,gpu},options,theme:preferences,task:task.summary,library:{unreadable:unreadableTasks.length},update:{status:updateInfo.status,latestVersion:updateInfo.latestVersion,installState:updateInfo.installState,installMessage:updateInfo.installMessage},runtime:{cpu:existsSync(pythonFor('cpu')),dml:existsSync(pythonFor('dml'))}},task.attachments);return file;});
  handle('open-feedback',()=>shell.openExternal('https://github.com/LilycleHeart/apex-highlight-clipper/issues/new?title='+encodeURIComponent(`[v${app.getVersion()}] 问题反馈`)+'&body='+encodeURIComponent(`软件版本：v${app.getVersion()}\n\n问题现象：\n\n复现步骤：\n1. \n\n请将“剪辑设置 → 诊断与反馈 → 导出诊断包”生成的 ZIP 拖入此处上传。`)));
- let shown=false;handle('ui-ready',()=>{if(!shown&&!win.isDestroyed()){shown=true;win.show();scheduleUpdate();scheduleMaintenance();}});setTimeout(()=>{if(!shown&&!win.isDestroyed())win.show();},10000).unref();
+ let shown=false;const showWindow=()=>{if(shown||win.isDestroyed())return;shown=true;if(placement.maximized)win.maximize();win.show();scheduleUpdate();scheduleMaintenance();};handle('ui-ready',showWindow);setTimeout(showWindow,10000).unref();
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());
  win.on('minimize',()=>send({type:'visibility',hidden:true}));win.on('hide',()=>send({type:'visibility',hidden:true}));win.on('restore',()=>send({type:'visibility',hidden:false}));win.on('show',()=>send({type:'visibility',hidden:false}));
- win.on('close',event=>{if(hudWorker||hudLaunching){event.preventDefault();if(!closing){closing=true;send({type:'close-request',message:'正在停止信息识别，已读结果会保留'});void stop();}return;}if(counterRepair){event.preventDefault();if(!closing){closing=true;void stopCounterRepair().finally(()=>{closing=false;if(!win.isDestroyed())win.close();});}return;}repairWorker?.kill();repairWorker=null;if(worker||launching){event.preventDefault();if(!closing){closing=true;send({type:'close-request',message:'窗口将在断点保存后关闭'});void stop();}}else if(!closeSaveFinished){event.preventDefault();void flushSaves().then(()=>{closeSaveFinished=true;if(!win.isDestroyed())win.close();});}});
+ win.on('close',event=>{if(hudWorker||hudLaunching){event.preventDefault();if(!closing){closing=true;send({type:'close-request',message:'正在停止信息识别，已读结果会保留'});void stop();}return;}if(counterRepair){event.preventDefault();if(!closing){closing=true;void stopCounterRepair().finally(()=>{closing=false;if(!win.isDestroyed())win.close();});}return;}repairWorker?.kill();repairWorker=null;if(worker||launching){event.preventDefault();if(!closing){closing=true;send({type:'close-request',message:'窗口将在断点保存后关闭'});void stop();}}else if(!closeSaveFinished){event.preventDefault();clearTimeout(placementTimer);placementTimer=undefined;rememberPlacement();void save().catch(error=>diagnostics.log('error','window-placement',String(error))).then(()=>flushSaves()).then(()=>{closeSaveFinished=true;if(!win.isDestroyed())win.close();});}});
  const changed=()=>{if(!win.isDestroyed())win.webContents.send('system-theme',theme());};nativeTheme.on('updated',changed);systemPreferences.on('accent-color-changed',changed);systemPreferences.on('color-changed',changed);
  handle('chrome',(color:string,foreground:string)=>{if(!/^#[\da-f]{6}$/i.test(color)||!/^#[\da-f]{6}$/i.test(foreground))throw new Error('窗口配色无效');win.setBackgroundColor(color);});
- handle('bootstrap',async()=>({output,options,preferences,playerAudio,theme:theme(),development,lastTask:await lastTask(),backendAvailable:existsSync(pythonFor('dml')),update:updateInfo}));
+ handle('bootstrap',async()=>({output,options,preferences,playerAudio,excludedTeammates,theme:theme(),development,lastTask:await lastTask(),backendAvailable:existsSync(pythonFor('dml')),update:updateInfo}));
  handle('check-update',async()=>{await updater.check();await saveChain;return updateInfo;});
  handle('install-update',async()=>{
   if(updating)throw new Error('更新正在进行');
@@ -278,6 +287,7 @@ app.whenReady().then(async()=>{
  handle('import-files',imports);
  handle('choose-output',async()=>{const result=await dialog.showOpenDialog(win,{properties:['openDirectory','createDirectory'],defaultPath:output});if(result.canceled)return null;output=result.filePaths[0];allowedPaths.add(normalized(output));await save();return output;});
  handle('player-audio',async(value:PlayerAudioPreferences)=>{if(!value||!Number.isFinite(value.volume)||value.volume<0||value.volume>1||typeof value.muted!=='boolean'||!Number.isFinite(value.lastAudibleVolume)||value.lastAudibleVolume<=0||value.lastAudibleVolume>1)throw new Error('音量设置无效');playerAudio=normalizePlayerAudio(value);await save();});
+ handle('teammate-exclusion',(name:unknown,excluded:unknown)=>{const request=teammateWrites.catch(()=>{}).then(async()=>{const previous=excludedTeammates,next=changeTeammateExclusion(previous,name,excluded);if(next!==previous){excludedTeammates=next;try{await save();}catch(error){excludedTeammates=previous;throw error;}}return [...excludedTeammates];});teammateWrites=request;return request;});
  handle('preferences',async(p:ThemePreferences)=>{if(!['system','light','dark'].includes(p.mode)||p.seed!==null&&!/^#[\da-f]{6}$/i.test(p.seed)||typeof p.reduceMotion!=='boolean'||!['flat','sketch'].includes(p.mascotStyle)||typeof p.mascotEnabled!=='boolean')throw new Error('外观选项无效');preferences=p;await save();});
  handle('options',async(o:Options,p:string)=>{options=safeOptions(o);if(typeof p==='string'&&path.isAbsolute(p))output=p;await save();});
  handle('start',p=>start(p));handle('stop',stop);handle('resume',p=>start(p,true));handle('last-task',lastTask);
@@ -286,6 +296,7 @@ app.whenReady().then(async()=>{
  handle('results',collectResults);handle('library',collectLibrary);
  handle('ignore-library-errors',async()=>{if(libraryRead)await libraryRead;await libraryStore.ignore(unreadableTasks);return collectLibrary();});
  handle('enrich-hud',enrichHud);
+ let sharingClips=false;handle('share-clips',async(files:unknown)=>{if(sharingClips)throw new Error('正在打开 QQ 分享，请稍候');sharingClips=true;try{const result=await shareFiles(files,allowedClips,uri=>shell.openExternal(uri));diagnostics.log('info','qq-share','已请求QQ会话选择',{count:result.count,command:result.command});return result;}finally{sharingClips=false;}});
  handle('choose-library-root',async()=>{const selected=await dialog.showOpenDialog(win,{title:'添加历史输出目录',properties:['openDirectory']});if(selected.canceled)return false;await libraryStore.addRoot(selected.filePaths[0]);return true;});
  handle('video-url',file=>videos.url(file));
  handle('delete-clip',async(file:string)=>{await clipDeletions.remove(file);allowedClips.delete(normalized(file));diagnostics.log('info','library','片段已移至回收站');});
