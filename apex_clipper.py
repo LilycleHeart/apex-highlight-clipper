@@ -280,12 +280,13 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
     backend=os.environ.get('APEX_OCR_BACKEND','cpu').lower()
     from engine_pool import pooled_engine
     def make_engine():
-        if backend=='cpu':
+        from gpu_load import get_gpu_policy
+        if backend=='cpu' and get_gpu_policy()['name']!='fast':
             from rapidocr_onnxruntime import RapidOCR
             return RapidOCR(intra_op_num_threads=2, inter_op_num_threads=1,
                         det_limit_side_len=256, det_limit_type='max', rec_batch_num=24)
         from gpu_ocr_backend import create_ocr_engine
-        return create_ocr_engine(backend=backend,rec_batch_num=24)
+        return create_ocr_engine(backend=backend,rec_batch_num=24,adaptive_numeric=True)
     engine=pooled_engine(('digits',backend,os.environ.get('APEX_GPU_LOAD','fast')),make_engine)
     if backend!='cpu':
         print(f'OCR 后端: {engine.backend_info["providers"]}',flush=True)
@@ -340,51 +341,72 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
             if session is not None: session.update(signature=signature,journal=journal)
         rows=list(journal.rows)
         if rows: print(f'OCR 续接：保留 {len(rows)} 帧，从 {rows[-1]["time"]:.2f} 秒后继续',flush=True)
-    for offset in range(len(rows),len(selected),HUD_BATCH_SIZE):
-        if resume:
-            from app_cancel import check_cancel
-            check_cancel()
-        before_count=len(rows)
-        batch=selected[offset:offset+HUD_BATCH_SIZE]
-        crops=[]; slots=[]; signatures=[]; offsets=[]; inactive=[]; downed_scores=[]
-        for path in batch:
-            frame=read_image(str(path))
-            delta,score=counter_offset(frame,profile,marker)
-            offsets.append((delta,score)); inactive.append(inactive_view(frame))
-            if lifecycle_marker is not None: downed_scores.append(downed_score(frame,profile,lifecycle_marker))
-            for k in keys:
-                box=profile[k]
-                if k in ['damage','kills']:
-                    if delta is None:
-                        if optimize: slots.append(None)
-                        else: slots.append(len(crops)); crops.append(np.zeros((48,64,3),dtype=np.uint8))
-                        continue
-                    dx,dy=delta
-                    box=[box[0]+dx,box[1]+dy,box[2]+dx,box[3]+dy]
-                slots.append(len(crops)); crops.append(crop(frame,box,profile['reference_size']))
-            signatures.append(icon_signature(frame,profile))
-        recognized,_=recognizer(crops)
-        result=[('',0.) if index is None else recognized[index] for index in slots]
-        for j,path in enumerate(batch):
-            # fps 滤镜在每个采样单元取近中心帧；用中心时间标注（2 Hz 时 +0.25s）。
-            t=frame_time(path)
-            row={'time':t,'frame':path.name,'weapon_icon':signatures[j],
-                 'counter_offset':offsets[j][0],'counter_marker_score':offsets[j][1],
-                 'inactive_view':inactive[j]}
-            if lifecycle_marker is not None:
-                row.update(downed_score=downed_scores[j],downed=downed_scores[j]>=profile['downed_marker_threshold'])
-            for k,(text,score) in zip(keys,result[j*len(keys):(j+1)*len(keys)]):
-                row[k+'_text']=text; row[k+'_score']=float(score)
-                if k!='weapon':
-                    row[k]=ammo_number(text,score) if k=='ammo' else numeric(text,score, {'damage':20000,'kills':60}[k], .88)
-            rows.append(row)
-        if journal: journal.append(rows[before_count:])
-        from ui_observer import preview
-        preview(batch[-1],rows[-1]['time'])
-        if offset%64==0:
-            print(f'OCR: {t:.1f}s / {display_duration:.1f}s，{len(rows)}帧，耗时{time.perf_counter()-tic:.1f}s',flush=True)
-            if not resume: write_json(output,{'profile':profile,'fps':fps,'timestamp_basis':'cell_center','complete':False,'rows':rows})
+    def prepare(path):
+        frame=read_image(str(path))
+        delta,score=counter_offset(frame,profile,marker)
+        rois=[]
+        for key in keys:
+            box=profile[key]
+            if key in ['damage','kills']:
+                if delta is None:
+                    rois.append(None if optimize else np.zeros((48,64,3),dtype=np.uint8)); continue
+                dx,dy=delta;box=[box[0]+dx,box[1]+dy,box[2]+dx,box[3]+dy]
+            rois.append(crop(frame,box,profile['reference_size']))
+        return (rois,(delta,score),inactive_view(frame),
+                downed_score(frame,profile,lifecycle_marker) if lifecycle_marker is not None else None,
+                icon_signature(frame,profile))
+    from contextlib import nullcontext
+    from gpu_load import get_gpu_policy
+    scheduling={}
+    remaining=selected[len(rows):]
+    if get_gpu_policy()['name']=='fast':
+        from adaptive_scheduler import WorkBudget,ThroughputTuner,ordered_work
+        from app_cancel import check_cancel
+        width,height=profile['reference_size']
+        budget=WorkBudget.detect(width*height*6)
+        tuner=session.setdefault('prepare_tuner',ThroughputTuner(budget.workers,initial=math.isqrt(budget.workers))) if session is not None else None
+        work=ordered_work(remaining,prepare,budget=budget,tuner=tuner,cancel=check_cancel,stats=scheduling,lookahead=HUD_BATCH_SIZE)
+    else:
+        work=nullcontext(map(prepare,remaining))
+    with work as prepared_inputs:
+        for offset in range(len(rows),len(selected),HUD_BATCH_SIZE):
+            if resume:
+                from app_cancel import check_cancel
+                check_cancel()
+            before_count=len(rows)
+            batch=selected[offset:offset+HUD_BATCH_SIZE]
+            crops=[]; slots=[]; signatures=[]; offsets=[]; inactive=[]; downed_scores=[]
+            for path in batch:
+                rois,offset_info,is_inactive,shield,signature=next(prepared_inputs)
+                offsets.append(offset_info); inactive.append(is_inactive)
+                if lifecycle_marker is not None: downed_scores.append(shield)
+                for roi in rois:
+                    slots.append(None if roi is None else len(crops))
+                    if roi is not None:crops.append(roi)
+                signatures.append(signature)
+            recognized,_=recognizer(crops)
+            result=[('',0.) if index is None else recognized[index] for index in slots]
+            for j,path in enumerate(batch):
+                # fps 滤镜在每个采样单元取近中心帧；用中心时间标注（2 Hz 时 +0.25s）。
+                t=frame_time(path)
+                row={'time':t,'frame':path.name,'weapon_icon':signatures[j],
+                     'counter_offset':offsets[j][0],'counter_marker_score':offsets[j][1],
+                     'inactive_view':inactive[j]}
+                if lifecycle_marker is not None:
+                    row.update(downed_score=downed_scores[j],downed=downed_scores[j]>=profile['downed_marker_threshold'])
+                for k,(text,score) in zip(keys,result[j*len(keys):(j+1)*len(keys)]):
+                    row[k+'_text']=text; row[k+'_score']=float(score)
+                    if k!='weapon':
+                        row[k]=ammo_number(text,score) if k=='ammo' else numeric(text,score, {'damage':20000,'kills':60}[k], .88)
+                rows.append(row)
+            if journal: journal.append(rows[before_count:])
+            from ui_observer import preview
+            preview(batch[-1],rows[-1]['time'])
+            if offset%64==0:
+                print(f'OCR: {t:.1f}s / {display_duration:.1f}s，{len(rows)}帧，耗时{time.perf_counter()-tic:.1f}s',flush=True)
+                if not resume: write_json(output,{'profile':profile,'fps':fps,'timestamp_basis':'cell_center','complete':False,'rows':rows})
     completed={'profile':profile,'fps':fps,'timestamp_basis':'explicit_pts' if timestamps is not None else 'cell_center','complete':not partial,'rows':rows}
+    if scheduling:completed['scheduling']=scheduling
     if lifecycle_id: completed['lifecycle_signature']=lifecycle_id
     if optimize: completed['ocr_optimization']=recognizer.stats()
     if source_identity is not None: completed['source']=source_identity

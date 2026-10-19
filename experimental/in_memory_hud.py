@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from fractions import Fraction
 import json
+import math
 import os
 from pathlib import Path
 import threading
@@ -39,6 +40,74 @@ class MemoryFrame:
     @property
     def frame_id(self):
         return f'memory:key-{self.keyframe_index}:slot-{self.burst_slot}:pts-{self.pts}'
+
+
+@dataclass
+class PreparedHUD:
+    row: dict
+    rois: dict
+
+
+def iter_prepared_keyframes(source, features, *, start_index=0, stats=None,
+                            cancel=None, preview=None, reader_factory=IndexedKeyframeReader, batch_frames=16):
+    """Overlap independent decode/features with serial OCR and ordered commits.
+
+    One native slice thread per decoder avoids nested pools. Measured useful
+    throughput controls the number of independent decoders, not GPU percent.
+    """
+    from adaptive_scheduler import WorkBudget, ThroughputTuner, ordered_work
+    stats = stats if stats is not None else {}
+    with reader_factory(source, threads=1) as reader:
+        count = len(reader.keyframes)
+        width, height = reader.width, reader.height
+        source_frames = reader.source_frames
+        stats.update(keyframes=count, source_index_entries=source_frames,
+                     width=width, height=height, decoder_threads_per_worker=1)
+    if not 0 <= start_index <= count:
+        raise ValueError('Invalid starting keyframe index')
+    # Native surfaces/reorder buffers, BGR/ROI copies, per-reader container index.
+    budget = WorkBudget.detect(width * height * 12 + source_frames * 256 + 1280 * round(height * 1280 / width) * 6)
+    readers = []; idle = []; lock = threading.Lock(); created=0; peak=0
+    tuner = ThroughputTuner(budget.workers,initial=math.isqrt(budget.workers))
+    def prepare(index):
+        nonlocal created,peak
+        if cancel: cancel()
+        with lock:
+            reader = idle.pop() if idle else None
+        if reader is None:
+            reader = reader_factory(source, threads=1)
+            with lock:
+                readers.append(reader);created+=1;peak=max(peak,len(readers))
+        try:
+            started = time.perf_counter(); raw = reader.read_keyframe(index)
+            if raw.pts is None or raw.time_base is None:
+                raise ValueError('Authoritative decoder PTS/time_base are required')
+            image = reader.body_image(raw)
+            frame = MemoryFrame(int(raw.pts), Fraction(raw.time_base), index, 0, image)
+            if cancel: cancel()
+            decoded = time.perf_counter() - started; started = time.perf_counter()
+            row, rois = features.prepare(frame)
+            return frame, PreparedHUD(row, rois), decoded, time.perf_counter() - started
+        finally:
+            with lock:
+                if len(readers) > tuner.value:
+                    readers.remove(reader); reader.close()
+                else: idle.append(reader)
+    previous = None; stage_stats = {}
+    stats.update(video_packets_submitted=0, decode_worker_seconds=0., feature_worker_seconds=0., yielded_frames=0)
+    try:
+        with ordered_work(range(start_index, count), prepare, budget=budget, tuner=tuner,cancel=cancel, stats=stage_stats,lookahead=batch_frames) as values:
+            for frame, prepared, decoded, feature_seconds in values:
+                if previous is not None and frame.timestamp <= previous:
+                    raise ValueError('Overlapping/out-of-order keyframes')
+                previous = frame.timestamp
+                if preview: prepared.row['diagnostics'] = preview(frame.image, dict(prepared.row))
+                stats['video_packets_submitted'] += 1; stats['decode_worker_seconds'] += decoded
+                stats['feature_worker_seconds'] += feature_seconds; stats['yielded_frames'] += 1
+                yield prepared
+    finally:
+        for reader in readers: reader.close()
+        stats['reader_instances'] = created;stats['max_live_readers']=peak;stats['scheduler'] = stage_stats
 
 
 def iter_indexed_images(source, *, mode='bursts', span=Fraction(1, 8), workers=4,
@@ -147,7 +216,7 @@ def numeric_recognizer(backend=None):
     from gpu_ocr_backend import create_ocr_engine
     backend=backend or os.environ.get('APEX_OCR_BACKEND','cpu')
     engine=pooled_engine(('digits',backend,os.environ.get('APEX_GPU_LOAD','fast')),
-        lambda:create_ocr_engine(backend=backend,rec_batch_num=24))
+        lambda:create_ocr_engine(backend=backend,rec_batch_num=24,adaptive_numeric=True))
     return ExactTextCache(engine.text_rec)
 
 
@@ -181,7 +250,8 @@ def read_memory_frames(frames, features, recognizer, *, batch_frames=16, stats=N
     try:
         for frame in frames:
             if cancel: cancel()
-            started=time.perf_counter(); prepared.append(features.prepare(frame))
+            started=time.perf_counter()
+            prepared.append((frame.row,frame.rois) if isinstance(frame,PreparedHUD) else features.prepare(frame))
             stats['feature_seconds']+=time.perf_counter()-started
             stats['max_prepared_frames']=max(stats['max_prepared_frames'],len(prepared))
             if len(prepared)>=batch_frames: flush()
