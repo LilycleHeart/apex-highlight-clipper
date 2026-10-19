@@ -1,4 +1,8 @@
-"""GPU 工作节奏：限制突发批次，并在推理间给其他程序留出时间。"""
+"""Low/balanced pacing; fast uses throughput-adaptive numeric scheduling.
+
+Fast's batch is the legacy grouping for compatibility checks/warm start, not
+the adaptive recognizer's batch ceiling. DML device Run remains serialized.
+"""
 import os
 
 POLICIES={

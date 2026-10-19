@@ -46,7 +46,8 @@ class ExplicitOrtSession(OrtInferSession):
         if provider not in ort.get_available_providers():
             raise RuntimeError(f'{provider} unavailable; available={ort.get_available_providers()}')
         options = ort.SessionOptions()
-        options.intra_op_num_threads = 2
+        from adaptive_scheduler import ort_threads
+        options.intra_op_num_threads = ort_threads()
         options.inter_op_num_threads = 1
         options.enable_cpu_mem_arena = False
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
@@ -73,6 +74,8 @@ class ExplicitOrtSession(OrtInferSession):
         # interface too so a caller can safely swap providers.
         with _DML_DEVICE_LOCK if self.backend == 'dml' else nullcontext():
             with self._lock:
+                from app_cancel import check_cancel
+                check_cancel()
                 started=time.perf_counter()
                 try:
                     result=self.session.run(self.get_output_names(),
@@ -87,7 +90,8 @@ class ExplicitOrtSession(OrtInferSession):
                                        f'{input_content.shape}: {message}') from error
                 if self.backend=='dml':
                     pause=cooldown_seconds(time.perf_counter()-started,get_gpu_policy())
-                    if pause: time.sleep(pause)
+                    while pause > 0:
+                        check_cancel(); step=min(.05,pause); time.sleep(step); pause-=step
                 return result
 
     def describe(self):
@@ -104,7 +108,7 @@ class ExplicitOrtSession(OrtInferSession):
 
 
 def create_ocr_engine(*, backend='cpu', model_path=None, rec_batch_num=24,
-                      device_id=0, profile_prefix=None):
+                      device_id=0, profile_prefix=None, adaptive_numeric=False):
     """Return .text_rec(crops) -> ([(text, confidence), ...], elapsed).
 
     CPU is the safe default. GPU requests are strict: an unavailable provider
@@ -121,7 +125,8 @@ def create_ocr_engine(*, backend='cpu', model_path=None, rec_batch_num=24,
     if backend == 'dml' and profile_prefix is None:
         resolved = Path(model_path).resolve()
         stat = resolved.stat()
-        key = (str(resolved), stat.st_size, stat.st_mtime_ns, backend, device_id)
+        from adaptive_scheduler import ort_threads
+        key = (str(resolved), stat.st_size, stat.st_mtime_ns, backend, device_id, ort_threads())
         with _SESSION_CACHE_LOCK:
             session = _LIVE_SESSIONS.get(key)
             reused = session is not None
@@ -137,7 +142,12 @@ def create_ocr_engine(*, backend='cpu', model_path=None, rec_batch_num=24,
     recognizer.postprocess_op = CTCLabelDecode(character=session.get_character_list())
     recognizer.rec_batch_num = min(int(rec_batch_num),get_gpu_policy()['batch']) if backend=='dml' else int(rec_batch_num)
     recognizer.rec_image_shape = [3, 48, 320]
-    return SimpleNamespace(text_rec=recognizer, backend_info={**session.describe(), 'session_reused': reused,'rec_batch_num':recognizer.rec_batch_num})
+    batch=recognizer.rec_batch_num
+    if adaptive_numeric and get_gpu_policy()['name']=='fast':
+        from adaptive_ocr import AdaptiveNumericRecognizer
+        recognizer=AdaptiveNumericRecognizer(recognizer,backend=backend)
+    return SimpleNamespace(text_rec=recognizer, backend_info={**session.describe(), 'session_reused': reused,
+                           'rec_batch_num':batch,'adaptive_numeric':adaptive_numeric and get_gpu_policy()['name']=='fast'})
 
 
 def create_full_ocr_engine(*, backend='cpu', model_path=None, rec_batch_num=24,
@@ -152,7 +162,8 @@ def create_full_ocr_engine(*, backend='cpu', model_path=None, rec_batch_num=24,
     from rapidocr_onnxruntime import RapidOCR
     rec = create_ocr_engine(backend=backend, model_path=model_path,
                            rec_batch_num=rec_batch_num, device_id=device_id)
-    settings = dict(intra_op_num_threads=2, inter_op_num_threads=1,
+    from adaptive_scheduler import ort_threads
+    settings = dict(intra_op_num_threads=ort_threads(), inter_op_num_threads=1,
                     rec_batch_num=rec_batch_num)
     settings.update(rapidocr_kwargs)
     # The wrapper always controls provider selection. Do not enable RapidOCR's

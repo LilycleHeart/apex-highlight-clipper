@@ -101,7 +101,7 @@ class IndexedCheckpointTests(unittest.TestCase):
             def cancel():
                 header=root/'indexed-coarse/rows.jsonl.checkpoint.json'
                 if stop[0] and header.exists() and json.loads(header.read_text())['committed']>=16: raise TaskStopped()
-            with patch('indexed_coarse._runtime_version',return_value='fixture'),patch('indexed_coarse.IndexedKeyframeReader',Reader),patch('indexed_coarse.HUDFeatures',Features),patch('indexed_coarse.numeric_recognizer',return_value=Recognizer()),patch('indexed_coarse.iter_indexed_images',side_effect=frames),patch('indexed_coarse.check_cancel',side_effect=cancel):
+            with patch('indexed_coarse._runtime_version',return_value='fixture'),patch('indexed_coarse.IndexedKeyframeReader',Reader),patch('indexed_coarse.HUDFeatures',Features),patch('indexed_coarse.numeric_recognizer',return_value=Recognizer()),patch('indexed_coarse.iter_prepared_keyframes',side_effect=frames),patch('indexed_coarse.check_cancel',side_effect=cancel),patch.dict(os.environ,{'APEX_GPU_LOAD':'fast'}):
                 with self.assertRaises(TaskStopped): indexed_coarse_scan(source,root,profile,2)
                 stop[0]=False
                 result=indexed_coarse_scan(source,root,profile,2)

@@ -20,8 +20,8 @@ class SparseHUDTests(unittest.TestCase):
                  'kills':[0,0,1,1],'reference_size':[1280,540]}
         engine=SimpleNamespace(text_rec=lambda crops:([('8',.99)]*len(crops),0.))
         stack=ExitStack()
-        stack.enter_context(patch.dict(os.environ,{'APEX_OCR_BACKEND':'cpu','APEX_OCR_POOL':'0'}))
-        stack.enter_context(patch('rapidocr_onnxruntime.RapidOCR',return_value=engine))
+        stack.enter_context(patch.dict(os.environ,{'APEX_OCR_BACKEND':'cpu','APEX_OCR_POOL':'0','APEX_GPU_LOAD':'fast'}))
+        stack.enter_context(patch('gpu_ocr_backend.create_ocr_engine',return_value=engine))
         stack.enter_context(patch('apex_clipper.read_image',return_value=np.zeros((540,1280,3),np.uint8)))
         stack.enter_context(patch('apex_clipper.counter_offset',return_value=((0,0),.99)))
         stack.enter_context(patch('apex_clipper.crop',return_value=np.zeros((48,64,3),np.uint8)))

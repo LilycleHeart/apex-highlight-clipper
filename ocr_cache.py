@@ -36,4 +36,7 @@ class ExactTextCache:
             while len(self.cache)>self.capacity: self.cache.popitem(last=False)
         return [result[key] for key in keys],time.perf_counter()-started
 
-    def stats(self): return {'requested':self.requested,'inferred':self.inferred,'exact_reuse':self.hits}
+    def stats(self):
+        result={'requested':self.requested,'inferred':self.inferred,'exact_reuse':self.hits}
+        if hasattr(self.recognizer,'scheduler_stats'):result['scheduler']=self.recognizer.scheduler_stats()
+        return result

@@ -18,7 +18,7 @@ from app_cancel import check_cancel
 from gpu_load import get_gpu_policy
 from resume_io import RowJournal
 from experimental.indexed_reader import IndexedKeyframeReader,UnsupportedIndexedVideo
-from experimental.in_memory_hud import HUDFeatures,numeric_recognizer,iter_indexed_images,read_memory_frames
+from experimental.in_memory_hud import HUDFeatures,numeric_recognizer,iter_indexed_images,iter_prepared_keyframes,read_memory_frames
 
 
 def _runtime_version():
@@ -55,8 +55,9 @@ def indexed_coarse_scan(source,job,profile,fps):
                 all(key in row for key in ['ammo','damage','kills','weapon_icon','inactive_view','downed','friend_spectate']))
         except (KeyError,TypeError,ValueError,ZeroDivisionError): return False
     journal=RowJournal(folder/'rows.jsonl',signature,valid)
-    workers=2 if get_gpu_policy()['name'] in ['low','balanced'] else 4
-    stats={'restored_frames':len(journal.rows),'workers':workers}; preview_time=-1.
+    adaptive=get_gpu_policy()['name']=='fast'
+    workers=2
+    stats={'restored_frames':len(journal.rows),'scheduling':'adaptive' if adaptive else 'limited','commit_seconds':0.}; preview_time=-1.
     if len(journal.rows)<total:
         def show(image,row):
             nonlocal preview_time
@@ -72,14 +73,18 @@ def indexed_coarse_scan(source,job,profile,fps):
                 for old in sorted(previews.glob('frame-pts-*.jpg'),key=lambda p:p.stat().st_mtime_ns)[:-8]:
                     old.resolve().relative_to(previews.resolve()); old.unlink()
             return {}
-        features=HUDFeatures(profile,feature_hook=show); recognizer=numeric_recognizer()
+        features=HUDFeatures(profile,feature_hook=None if adaptive else show); recognizer=numeric_recognizer()
         def committed(rows):
-            journal.append(rows)
+            started=time.perf_counter();journal.append(rows);stats['commit_seconds']+=time.perf_counter()-started
             print(f'SMART_PROGRESS: {5+15*len(journal.rows)/max(1,total):.1f}',flush=True)
             print(f'索引粗查：{len(journal.rows)}/{total} 帧，已保存断点',flush=True)
             check_cancel()
-        frames=iter_indexed_images(source,mode='keyframes',workers=workers,prefetch=workers*2,
-                                   start_index=len(journal.rows),stats=stats)
+        if adaptive:
+            frames=iter_prepared_keyframes(source,features,start_index=len(journal.rows),stats=stats,cancel=check_cancel,preview=show)
+        else:
+            stats['workers']=workers
+            frames=iter_indexed_images(source,mode='keyframes',workers=workers,prefetch=workers*2,
+                                       start_index=len(journal.rows),stats=stats)
         read_memory_frames(frames,features,recognizer,batch_frames=16,stats=stats,on_batch=committed,cancel=check_cancel)
         stats['ocr']=recognizer.stats()
     else:

@@ -17,7 +17,7 @@ sys.path.insert(0,str(ROOT))
 from scripts.portable_runtime import assemble_runtime, dependency_files
 OUT = ROOT / 'publish'
 PYTHON_URL = 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip'
-PRODUCT_MODULES = '''adaptive_evidence apex_clipper app_cancel app_options app_task app_ui_info app_worker clip_deletions
+PRODUCT_MODULES = '''adaptive_evidence adaptive_ocr adaptive_scheduler apex_clipper app_cancel app_options app_task app_ui_info app_worker clip_deletions
     build_weapon_catalog clip_quality_filter combat_candidate_completion combat_outcome_reader combat_statistics continuous_sampler
     damage_bisection early_round_end engine_pool event_weapon_reader evidence_completion gpu_load gpu_ocr_backend hero_reader hero_portrait_reader hud_layout hud_enrichment image_io indexed_coarse
     inspect_video japanese_name_reader latin_word_boundaries name_reader numeric_reader ocr_cache outcome_reader player_names planning_evidence rank_reader rename_exports repair_cached_statistics

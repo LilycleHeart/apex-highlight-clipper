@@ -19,7 +19,7 @@ class ExactReuseTests(unittest.TestCase):
             profile={'counter_marker':'fixture.png','ammo':[0,0,1,1],'damage':[0,0,1,1],'kills':[0,0,1,1],'reference_size':[1280,540]}
             image=np.zeros((540,1280,3),dtype=np.uint8)
             engine=SimpleNamespace(text_rec=lambda crops:([('0',.99) for _ in crops],0.))
-            with patch.dict(os.environ,{'APEX_OCR_BACKEND':'cpu'}),patch('rapidocr_onnxruntime.RapidOCR',return_value=engine),patch('apex_clipper.read_image',return_value=image),patch('apex_clipper.counter_offset',return_value=((0,0),.99)),patch('apex_clipper.crop',return_value=np.zeros((48,64,3),dtype=np.uint8)),patch('apex_clipper.icon_signature',return_value='AA=='):
+            with patch.dict(os.environ,{'APEX_OCR_BACKEND':'cpu','APEX_GPU_LOAD':'fast'}),patch('gpu_ocr_backend.create_ocr_engine',return_value=engine),patch('apex_clipper.read_image',return_value=image),patch('apex_clipper.counter_offset',return_value=((0,0),.99)),patch('apex_clipper.crop',return_value=np.zeros((48,64,3),dtype=np.uint8)),patch('apex_clipper.icon_signature',return_value='AA=='):
                 rows=read_hud(directory,profile,2,directory/'hud.json',timestamps={'000001.jpg':0.,'000002.jpg':2.083333})
             self.assertEqual([r['time'] for r in rows],[0.,2.083333])
             self.assertEqual(json.loads((directory/'hud.json').read_text(encoding='utf-8'))['timestamp_basis'],'explicit_pts')
