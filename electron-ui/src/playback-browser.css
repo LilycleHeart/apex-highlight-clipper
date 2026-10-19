@@ -1,0 +1,58 @@
+.library-management[hidden],.library-management-panel[hidden],.library-selection-toolbar[hidden],.library-active-filters[hidden]{display:none}
+.library-management-panel{flex:none}
+.clip-library-shell.is-playing>.clip-library.library-scroll{padding:16px 12px 14px;border-radius:20px;background:var(--card-paper);color:var(--card-ink);scroll-padding-block:12px}
+.playback-browser-header{display:block;flex:none;margin:0 4px 14px;min-width:0}
+.playback-browser-title,.playback-browser-title>div{display:flex;align-items:center;gap:7px}
+.playback-browser-title{justify-content:space-between;margin-bottom:12px}
+.playback-browser-title h2{display:flex;align-items:center;flex:1;gap:9px;margin:0;font-size:17px;font-weight:600;line-height:1.5;white-space:nowrap}
+.playback-browser-title>div{flex:none}
+.playback-browser-title h2>span{font-size:11px;font-weight:400;color:var(--card-muted);font-variant-numeric:tabular-nums}
+.playback-browser-icon{position:relative;display:grid;place-items:center;flex:none;width:30px;height:30px;padding:0;border-radius:9px;background:transparent;color:var(--card-muted)}
+.playback-browser-icon:hover:not(:disabled),.playback-browser-icon[aria-expanded=true]{background:var(--card-tint);color:var(--card-accent)}
+.playback-browser-icon:disabled{opacity:.35}
+.playback-filter-count{position:absolute;right:-3px;top:-3px;display:grid;place-items:center;min-width:14px;height:14px;padding:0 3px;border-radius:7px;font-size:9px;background:var(--card-accent);color:var(--card-paper)}
+.playback-browser-order{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.playback-browser-order>.library-sort{min-width:0;gap:4px}
+.playback-browser-order .styled-select{width:120px;height:28px;padding:0 8px;border:0;border-radius:8px;font-size:11px}
+.playback-browser-order .sort-direction{width:28px;height:28px;border-radius:8px;background:transparent;color:var(--card-muted)}
+.playback-browser-order>span{min-width:0;font-size:10px;color:var(--card-muted);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.playback-job-progress{display:flex;align-items:center;gap:7px;margin-top:10px;padding-top:8px;border-top:1px solid var(--card-line);color:var(--card-muted);font-size:11px}
+.playback-job-progress>span{flex:1}
+.playback-job-progress>.playback-browser-icon{width:24px;height:24px}
+.is-playing .library-active-filters{height:30px;min-height:30px;margin:0 4px 10px;color:var(--card-muted);gap:5px}
+.is-playing .library-active-filters>b{display:none}
+.is-playing .library-filter-values{height:30px}
+.is-playing .library-active-filters>.clear-library-filters{font-size:10px;padding:4px}
+.is-playing .clip-day-heading{min-height:28px;margin:0 4px;padding:0;font-size:11px;color:var(--card-muted);gap:8px}
+.is-playing .clip-day-heading:before{display:none}
+.is-playing .clip-day-heading>time:before{display:none}
+.is-playing .clip-day-heading>span{padding:2px 5px;font-size:9px;color:var(--card-muted);background:var(--card-tint)}
+.is-playing .clips-grid>.playback-clip.clip-card{position:relative;display:grid;grid-template-columns:minmax(96px,34%) minmax(0,1fr);align-items:center;gap:10px;min-width:0;min-height:98px;padding:8px;border:1px solid transparent;border-radius:14px;background:transparent;box-shadow:none;outline:none;overflow:hidden}
+.is-playing .clips-grid>.playback-clip:hover{background:var(--card-tint)}
+.is-playing .clips-grid>.playback-clip.clip-current{border-color:color-mix(in srgb,var(--card-accent) 65%,transparent);background:color-mix(in srgb,var(--card-accent) 11%,var(--card-paper))}
+.playback-clip>.card-surface{display:none}
+.playback-clip>.clip-cover{position:relative;align-self:center;width:100%;min-width:0;height:auto;min-height:0;border-radius:8px;overflow:hidden}
+.playback-clip .media-frame{height:auto;max-height:none;aspect-ratio:16/9!important;border-radius:8px;overflow:hidden}
+.playback-clip .media-frame>img{width:100%;height:100%;object-fit:cover!important}
+.playback-clip .cover-placeholder{min-height:0;height:100%;font-size:0}
+.playback-clip .cover-placeholder>svg{width:20px;height:20px}
+.playback-clip .clip-current-label,.playback-clip .play-button{display:none}
+.playback-clip .duration{left:4px;bottom:4px;min-width:0;padding:3px 5px;border-radius:5px;font-size:9px;line-height:1.2;background:#111924d9;color:#fff;pointer-events:none}
+.playback-clip>.clip-info{min-width:0;padding:0;background:none}
+.playback-clip-info{display:flex;flex-direction:column;min-width:0;gap:3px;color:var(--card-ink)}
+.playback-clip-title{display:flex;align-items:center;gap:7px;color:var(--card-accent)}
+.playback-clip-title>h3{margin:0;font-size:12px;line-height:1.5;font-weight:600}
+.playback-clip-title>svg{flex:none}
+.playback-clip-info>time{font-size:10px;line-height:1.5;color:var(--card-muted);font-variant-numeric:tabular-nums}
+.playback-clip-context{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.4;color:var(--card-muted)}
+.playback-clip-stats{display:flex;align-items:center;gap:14px;margin-top:3px;font-size:11px;font-variant-numeric:tabular-nums}
+.playback-clip-stats>span{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.playback-clip-stats .apex-icon{width:12px;height:12px;color:var(--card-muted)}
+.playback-clip-select{position:absolute;inset:0;z-index:3;width:100%;height:100%;padding:0;border:0;border-radius:inherit;background:transparent;color:var(--card-accent);text-align:left}
+.playback-clip-select:focus-visible{outline:2px solid var(--card-accent);outline-offset:-3px}
+.playback-clip-select:disabled{cursor:default}
+.playback-clip-play{position:absolute;left:calc(17% - 4px);top:50%;translate:-50% -50%;opacity:0;padding:6px;box-sizing:content-box;border-radius:50%;background:#111924d9;color:#fff;transition:opacity .16s ease}
+.playback-clip-select:hover .playback-clip-play,.playback-clip-select:focus-visible .playback-clip-play{opacity:1}
+.is-playing .library-action-notice{font-size:11px;padding:9px;line-height:1.5}
+.is-playing .empty-clips{min-height:180px;padding:20px 8px}
+.is-playing .empty-clips h2{font-size:16px}

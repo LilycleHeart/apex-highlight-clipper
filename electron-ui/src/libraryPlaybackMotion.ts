@@ -12,8 +12,12 @@ export function cancelLibraryPlaybackMotion(){generation++;const previous=active
 export function transitionLibraryPlayback(shell:HTMLElement|null,library:HTMLElement|null,update:()=>void,options:Options){
  cancelLibraryPlaybackMotion();cancelLibraryViewReveal();
  const settleLayout=()=>{
-  for(let pass=0;pass<2;pass++)flushSync(()=>library?.querySelector('.clips-grid')?.dispatchEvent(new Event('library-layout-measure')));
-  options.afterLayout?.();
+  // Commit width, row measurements and the restored scroll window before the
+  // browser captures a transition between full cards and compact playback rows.
+  for(let pass=0;pass<3;pass++){
+   flushSync(()=>library?.querySelector('.clips-grid')?.dispatchEvent(new Event('library-layout-measure')));
+   options.afterLayout?.();
+  }
  };
  const root=document.documentElement,reduced=options.reduced||root.dataset.reduced==='true'||matchMedia('(prefers-reduced-motion: reduce)').matches;
  if(!shell||!library||reduced||document.hidden||typeof document.startViewTransition!=='function'){flushSync(update);settleLayout();return;}

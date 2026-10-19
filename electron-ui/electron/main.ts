@@ -123,7 +123,7 @@ const repairedCounters=new Set<string>();let counterRepair:Promise<void>|null=nu
 async function stopCounterRepair(){const pending=counterRepair;if(!pending)return;const file=counterStopFile;if(file){await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,'stop','utf8');}await pending;}
 async function repairLegacyCounters(task:any){
  if(counterRepair){await counterRepair;}const records:any[]=[];
- for(const item of task.items){const record=item.record;if(!record||record.status!=='complete'||repairedCounters.has(normalized(item.destination))||normalized(record.directory)!==normalized(item.destination)||!within(path.resolve(item.destination),path.resolve(task.directory)))continue;
+ for(const item of task.items){const record=item.record;if(!record||record.status!=='complete'||typeof record.directory!=='string'||repairedCounters.has(normalized(item.destination))||normalized(record.directory)!==normalized(item.destination)||!within(path.resolve(item.destination),path.resolve(task.directory)))continue;
   if(typeof record.analysis_cache!=='string'||typeof record.sample_directory!=='string'||(![validationRoot,legacyValidationRoot].some(root=>within(path.resolve(record.analysis_cache),root))&&![...taskSampleRoots].some(root=>within(root,path.resolve(record.analysis_cache))))||![validationRoot,legacyValidationRoot,...taskSampleRoots].some(root=>within(path.resolve(record.sample_directory),root)))continue;
   try{const stats=await readJson(path.join(item.destination,'statistics.json'));if(stats.version!=='combat-statistics-v9'&&stats.segments?.some((s:any)=>['kills','assists','damage'].some(k=>s.counts[k]===null)))records.push(record);}catch{}
  }
@@ -136,7 +136,7 @@ async function collectResults(p:string,repair=true):Promise<Result[]>{
  for(const item of task.items){const record=item.record;if(!record)continue;
   if(!within(path.resolve(item.destination),path.resolve(task.directory)))throw new Error('成片目录不属于任务');
   if(existsSync(item.destination)&&!within(await fs.realpath(item.destination),await fs.realpath(task.directory)))throw new Error('任务分析目录指向外部位置');
-  const result:Result={...record,clips:[]};
+  const result:Result={...record,source:item.source,directory:item.destination,clips:[]};
   try{const report=await readJson(path.join(item.destination,'quality-filter.json'));result.qualityRejected=report.decisions?.filter((s:any)=>s.status==='rejected');}catch{}
   if(record.outputs?.length&&record.outputs.some((f:string)=>!existsSync(f)&&!clipDeletions.isRemoved(f))){result.status='error';result.error='记录中的成片缺失，请检查输出目录或恢复原片后续接。';}
   try{result.review=await readJson(path.join(item.destination,'review-candidates.json'));}catch{}try{const rejected=await readJson(path.join(item.destination,'rejected-candidates.json'));if(Array.isArray(rejected))result.rejected=rejected.filter(s=>Number.isFinite(s.start)&&Number.isFinite(s.end));}catch{}

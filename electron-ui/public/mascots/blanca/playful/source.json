@@ -1,0 +1,77 @@
+{
+  "source": "User-provided Blanca playful v3 artwork; original PNG bytes preserved.",
+  "processing": "Content-aware component clip paths, explicit foot anchors; no generated walking frames. Detached alpha components smaller than 64 source pixels omitted; clip edges expanded 4 pixels to retain fine edges.",
+  "limitations": "Connected edge halos and original prop drawing imperfections may remain.",
+  "files": [
+    {
+      "file": "01-scan.png",
+      "sha256": "8d03fcc7592de8ac2908d6fd1e40e865cdac92917f47189a6b952df70a770ce9",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "02-locate.png",
+      "sha256": "0019b6e141c1198be97baf92df8d50870b0b0c536faef9241c22b791cbe6dacc",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "03-inspect.png",
+      "sha256": "ea9188bd8877bdca6f35c11f0d3653d862acdbdf22cb8391ea8ac34938a2b4c7",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "04-identify.png",
+      "sha256": "849b6a0a9be0715ef84f2cdbd3df90d3bc12bb0e0d666d9184dd84aca844a0b2",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "05-export.png",
+      "sha256": "dd2536cc504196bd16041e7c49d5572aeadbe104dbead641d1c15c485214be3a",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "06-verify.png",
+      "sha256": "ba00cf4411e2968c5a7ce05df4234d510a84959c3e251c038519541b2b582a41",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "07-save.png",
+      "sha256": "04f344e6e841312718b7906846dbb44c99464275556989032d7c195d2d24a073",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "08-finish.png",
+      "sha256": "a1be0a567d1c2d05e0722c4e7efee3d94fbdf2e68852aad168617c5fed309122",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "walk-left.png",
+      "sha256": "d42ab6de4420517413ff12295f9c6da8546c27541372cb4bf2b12f10b1c723f6",
+      "width": 1254,
+      "height": 1254,
+      "frames": 1
+    },
+    {
+      "file": "walk-right.png",
+      "sha256": "db8420b185ebcaa090fbf51ff7cf4b8ef11465809c21c66da4acef9f6bd4bdfd",
+      "width": 1254,
+      "height": 1254,
+      "frames": 1
+    }
+  ]
+}

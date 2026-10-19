@@ -1,16 +1,16 @@
 import type {MascotStyle,Stage} from './shared';
 export type BlancaAction='scan'|'locate'|'detail'|'weapons'|'export'|'verify'|'save'|'completed';
-export const FRAME_DURATIONS=[2600,2600,2600,4000] as const;
-export const CYCLE_MS=11800;
-export const PUPPET_TURN_MS=600;
+export const FRAME_DURATIONS=[4000,4000,4000,6000] as const;
+export const CYCLE_MS=18000;
+export const PUPPET_TURN_MS=240;
 export function actionForStage(stage:Stage):BlancaAction{
  if(stage==='bisect')return'locate';
- if(stage==='weapons'||stage==='rank')return'weapons';
+ if(['weapons','rank','numeric','hud_info','outcomes'].includes(stage))return'weapons';
  if(stage==='export')return'export';
  if(['audit','verify','combat_outcomes','statistics'].includes(stage))return'verify';
  if(['stopping','stopped','error'].includes(stage))return'save';
  if(stage==='completed')return'completed';
- if(['probe','fine','numeric','lifecycle','outcomes','unknown'].includes(stage))return'detail';
+ if(['probe','fine','lifecycle','unknown'].includes(stage))return'detail';
  return'scan';
 }
 export function frameAt(stage:Stage,elapsedMs:number,reduced=false){
@@ -22,10 +22,18 @@ export function frameAt(stage:Stage,elapsedMs:number,reduced=false){
  for(let i=0;i<FRAME_DURATIONS.length;i++){if(time<FRAME_DURATIONS[i])return i;time-=FRAME_DURATIONS[i];}
  return 3;
 }
-export function assetUrl(style:MascotStyle,action:BlancaAction,frame:number,outline=false){return `./mascots/blanca/${style}/${action}-${String(frame+1).padStart(2,'0')}.${outline?'svg':'png'}`;}
+export function assetUrl(_style:MascotStyle,action:BlancaAction,_frame:number,_outline=false){const files={scan:'01-scan',locate:'02-locate',detail:'03-inspect',weapons:'04-identify',export:'05-export',verify:'06-verify',save:'07-save',completed:'08-finish'};return`./mascots/blanca/playful/${files[action]}.png`;}
 export const clamp=(value:number)=>Math.max(0,Math.min(1,value));
 const smooth=(value:number)=>{const v=clamp(value);return v*v*(3-2*v);};
-export function puppetTurnState(elapsedMs:number,durationMs=PUPPET_TURN_MS){const t=clamp(elapsedMs/durationMs);return{angle:t>=1?0:t<.5?90*smooth(t*2):-90*(1-smooth((t-.5)*2)),swap:t>=.5,done:t>=1};}
+export function puppetTurnState(elapsedMs:number,durationMs=PUPPET_TURN_MS){const t=clamp(elapsedMs/durationMs),p=smooth(t);return{angle:t>=1?0:p<.5?180*p:180*(p-1),swap:p>=.5,done:t>=1};}
+export function actionPosition(action:BlancaAction){return(['scan','locate','detail','weapons','export','verify','save','completed'] as BlancaAction[]).indexOf(action)*4-14;}
+export const HOP_MOVE_MS=2200;
+export const HOPS_PER_MOVE=4;
+export function hopState(elapsedMs:number,from:number,to:number,fromY=0,durationMs=HOP_MOVE_MS){
+ const t=clamp(elapsedMs/durationMs),done=t>=1;if(done)return{x:to,y:0,scaleX:1,scaleY:1,done:true};
+ const p=smooth(t),hops=Math.max(HOPS_PER_MOVE,Math.ceil(Math.abs(to-from)/10)),bounce=t>.965?Math.sin((t-.965)/.035*Math.PI)*.035:0;
+ return{x:from+(to-from)*p,y:fromY*(1-p)-4.5*Math.abs(Math.sin(t*hops*Math.PI)),scaleX:1+bounce,scaleY:1-bounce,done:false};
+}
 export function visibilityLayers(value:number){return{image:smooth((value-.42)/.58),outline:smooth(value/.4)*smooth((1-value)/.25)};}
 export class VisibilityMotion{
  private from:number;private target:number;private started=0;private duration=0;

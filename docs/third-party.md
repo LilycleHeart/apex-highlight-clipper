@@ -19,6 +19,7 @@
 | 英雄技能识别模板 | [EA 官方英雄页面](https://www.ea.com/games/apex-legends/apex-legends/characters-hub) 的战术与终极技能图形；权利属于 EA / Respawn。28 位英雄的原图地址与 SHA256 记录在 `assets/legends/sources.json`，用于本人 HUD 图形比对，不代表官方合作 |
 | 本人英雄头像比对资源 | EA / Respawn 游戏内固定头像的局部图像，已去除玩家名称和场景。标签由独立技能图形证据或固定英雄字幕核对；逐项来源说明与 SHA256 在 `assets/legends/portraits/sources.json`。这些资源不是玩家昵称答案表 |
 | Blanca两套角色、开关音效 | 用户提供的平涂/线稿 PNG 与“消失”“复原”WAV，保留原素材；轮廓SVG由alpha边缘派生，不改变原图与音频。项目不对这些第三方素材另行授予授权 |
+| Blanca 俏皮工作动作第三版 | 用户提供的八张 2×2 阶段 PNG 与左右各一张静态行走 PNG，保存在 `electron-ui/public/mascots/blanca/playful/`，逐文件 SHA256 见该目录 `source.json`。原 PNG 字节保持不变；`sprites.json` 记录按实际主体和道具分离的矢量裁切及脚底锚点，运行时绘制、跳跃位移与侧翻。小型独立透明杂点被裁切遮罩排除，连接在主体上的边缘杂色和原画道具瑕疵仍可能保留。未采用或生成其他走路帧 |
 
 OpenCV、NumPy、Pillow、Send2Trash及其余 Python 依赖的许可证随各包元数据保存。图标、模型、字体、角色和音频不因项目公开而自动成为公有领域。
 

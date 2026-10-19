@@ -1,8 +1,7 @@
-/* Playback expands within the existing library. Its background, view controls
-   and cards stay the same; only the available column widths change. */
+/* Playback keeps library state while presenting a compact browsing sidebar. */
 .clip-library-shell{flex:1 1 0;display:grid;grid-template-columns:minmax(0,1fr);min-height:0;min-width:0;height:100%;width:100%;overflow:hidden}
 .clip-library-shell>.clip-library.library-scroll{height:100%;max-height:100%;min-height:0;min-width:0}
-.clip-library-shell.is-playing{grid-template-columns:minmax(0,1fr) clamp(320px,24vw,520px);gap:24px;padding:24px 32px}
+.clip-library-shell.is-playing{grid-template-columns:minmax(0,1fr) clamp(280px,22vw,400px);gap:24px;padding:24px 32px}
 .library-player-pane{grid-column:1;grid-row:1;min-width:0;min-height:0;overflow:auto;padding:0 0 24px;scrollbar-width:thin;overscroll-behavior:contain}
 .watch-player.clip-card{width:100%;max-width:none;min-width:0;margin:0 auto;padding:16px;background:var(--card-paper);color:var(--card-ink);box-shadow:0 8px 24px #0958b71a;border-radius:24px;overflow:visible}
 .watch-player.clip-card.player-wide{max-width:1840px}
@@ -43,25 +42,8 @@
 .watch-player.player-wide .watch-title-row{align-items:center;margin:12px 0 0}
 .watch-player.player-wide h1{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .clip-library-shell.is-playing>.clip-library.library-scroll{grid-column:2;grid-row:1;padding:0 0 20px;scroll-padding-block:16px;min-width:0;container-type:inline-size;container-name:library-browser;background:transparent}
-.clip-library-shell.is-playing .library-toolbar{flex-wrap:wrap;gap:12px}
-.clip-library-shell.is-playing .library-controls{width:100%;min-width:0;flex-wrap:wrap;gap:8px}
-.clip-library-shell.is-playing .view-switch{margin-left:0;width:100%}
-.clip-library-shell.is-playing .view-switch>button{flex:1;min-width:0;width:auto}
-.clip-library-shell.is-playing .clips-grid{--clip-columns:1;grid-template-columns:minmax(0,1fr);gap:18px}
-.clip-library-shell.is-playing .browse-filter-panel{grid-template-columns:minmax(0,1fr);padding:16px;gap:12px}
-.clip-library-shell.is-playing .view-list .clip-card:not(.clip-expanded){grid-template-columns:150px minmax(0,1fr)}
-.clip-library-shell.is-playing .view-list .clip-info{padding:12px}
-@container library-browser (min-width:600px){
- .clip-library-shell.is-playing .clips-grid.view-grid{--clip-columns:2;grid-template-columns:repeat(2,minmax(0,1fr))}
- .clip-library-shell.is-playing .browse-filter-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
- .clip-library-shell.is-playing .view-list .clip-card:not(.clip-expanded){grid-template-columns:190px minmax(0,1fr)}
-}
-@container library-browser (min-width:820px){
- .clip-library-shell.is-playing .clips-grid.view-detail{--clip-columns:2;grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@container library-browser (min-width:1000px){
- .clip-library-shell.is-playing .clips-grid.view-grid{--clip-columns:3;grid-template-columns:repeat(3,minmax(0,1fr))}
-}
+.clip-library-shell.is-playing .clips-grid{--clip-columns:1;grid-template-columns:minmax(0,1fr);gap:8px}
+.clip-library-shell.is-playing .browse-filter-panel{grid-template-columns:minmax(0,1fr);padding:12px;gap:12px}
 /* Keep the original themed glass controls from fullscreen-player.css. */
 .watch-player .watch-screen .player-control-row button:disabled{opacity:.35}
 @media(max-width:1500px){
