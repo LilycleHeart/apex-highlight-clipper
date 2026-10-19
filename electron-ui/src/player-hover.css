@@ -3,6 +3,8 @@
 .player-controls .event-marker:focus-visible{outline:2px solid var(--card-accent);outline-offset:2px}
 .clip-card:not(.clip-expanded) .play-button{opacity:0;pointer-events:none;translate:0 5px;transition:opacity .32s cubic-bezier(.2,.9,.25,1),translate .32s cubic-bezier(.2,.9,.25,1)}
 .clip-card:not(.clip-expanded):hover .play-button,.clip-card:not(.clip-expanded):focus-within .play-button{opacity:1;pointer-events:auto;translate:0 0}
+.clips-grid .media-frame>.play-button{z-index:2}
+.clips-grid .media-frame>img{pointer-events:none}
 @media(hover:none){.clip-card:not(.clip-expanded) .play-button{opacity:1;pointer-events:auto;translate:0 0}}
 :root[data-reduced=true] .clip-card:not(.clip-expanded) .play-button{transition:none}
 @media(prefers-reduced-motion:reduce){.clip-card:not(.clip-expanded) .play-button{transition:none}}

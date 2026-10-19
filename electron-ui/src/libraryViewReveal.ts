@@ -10,9 +10,9 @@ export function cancelLibraryViewReveal(){
 }
 
 /** Animate browser snapshots, never the grid's measured dimensions. */
-export function revealLibraryView(scroller:HTMLElement|null,update:()=>void,animated:boolean){
+export function revealLibraryView(scroller:HTMLElement|null,update:()=>void,animated:boolean,afterLayout?:()=>void){
  cancelLibraryViewReveal();
- if(!scroller||!animated||document.documentElement.dataset.themeReveal||typeof document.startViewTransition!=='function'){flushSync(update);return;}
+ if(!scroller||!animated||document.documentElement.dataset.themeReveal||typeof document.startViewTransition!=='function'){flushSync(update);afterLayout?.();return;}
  const token=generation,root=document.documentElement,previousName=root.style.viewTransitionName,box=scroller.getBoundingClientRect(),names=new Map<string,string>(),named=new Set<HTMLElement>();
  root.style.viewTransitionName='none';root.dataset.libraryReveal='true';
  root.style.setProperty('--library-reveal-clip',`inset(${Math.max(0,box.top)}px ${Math.max(0,innerWidth-box.right)}px ${Math.max(0,innerHeight-box.bottom)}px ${Math.max(0,box.left)}px)`);
@@ -22,10 +22,10 @@ export function revealLibraryView(scroller:HTMLElement|null,update:()=>void,anim
  let transition:ViewTransition;
  try{transition=document.startViewTransition(()=>{
   if(token!==generation)return;
-  flushSync(update);
+  flushSync(update);afterLayout?.();
   // The transition suspends animation frames; commit and measure synchronously.
   nameCards();
- });}catch{restore();flushSync(update);return;}
+ });}catch{restore();flushSync(update);afterLayout?.();return;}
  const current={transition,restore};active=current;
  void transition.ready.catch(()=>{});
  void transition.updateCallbackDone.catch(()=>{});

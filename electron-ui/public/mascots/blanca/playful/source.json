@@ -72,6 +72,13 @@
       "width": 1254,
       "height": 1254,
       "frames": 1
+    },
+    {
+      "file": "idle.png",
+      "sha256": "94b11bfca57df025179d3f2b503dc716765682fb819009837a4e1eb3f0e82208",
+      "width": 1202,
+      "height": 1309,
+      "frames": 1
     }
   ]
 }

@@ -21,7 +21,7 @@
 @media(max-width:820px){.page-content{padding:28px 24px 20px}.ahc-region{width:84px}.titlebar nav{margin-left:8px}.nav-tab{width:116px}.nav-surface{transform:none}.titlebar-tools{margin-right:146px}.library-controls{min-width:0;width:100%;flex:1 0 100%;flex-wrap:wrap}.library-controls select:first-child{flex:1;width:160px}.library-controls select:nth-child(2){width:132px}.library-controls select:last-child{width:150px}.view-switch{width:316px}.view-switch button{width:100px}.browse-filter-panel{grid-template-columns:1fr 1fr}.statistics-totals{gap:16px}.statistics-totals b{font-size:25px}.statistics-charts{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px}.weapon-summary{height:88px;gap:12px}.weapon-art{width:86px}.weapon-stat-icon{width:76px;height:30px}.stat-card h2{font-size:18px}.rank-legend{gap:16px}.player-control-row{gap:8px}.player-control-row>time{font-size:11px}.player-volume input{width:48px}.clip-expanded .media-frame{max-height:62vh}.event-hud{gap:6px;font-size:11px}.event-group{width:185px}.stat-card{min-height:480px}}
 /* 浏览与播放修复：只裁切装饰背景，不遮挡可滚动内容。 */
 .controller-background{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:clip;border-radius:inherit}
-.controller-pattern{inset:-160px;min-height:0;will-change:transform}
+.controller-pattern{inset:-160px;min-height:0;will-change:transform;animation-timing-function:steps(var(--background-frame-steps,1920),end)}
 @keyframes controller-slide{from{transform:translate3d(0,0,0)}to{transform:translate3d(160px,160px,0)}}
 .page-content{min-height:100%;display:flex;flex-direction:column}
 .page-clips-content,.page-statistics-content{height:100%;min-height:0;padding-bottom:16px}
@@ -48,17 +48,10 @@
 .clip-tail>.compact-details[open]{flex-basis:100%;padding-top:0}
 .view-list .clip-card:not(.clip-expanded){align-items:center}
 .view-list .clip-card:not(.clip-expanded) .media-frame{width:min(100%,calc(300px * var(--media-ratio)));margin-inline:auto}
-.view-list .clip-card:not(.clip-expanded) .clip-info{padding:14px 20px}
-.view-list .clip-card:not(.clip-expanded) .clip-info h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:4px 0 10px;font-size:11px;line-height:1.5}
-.view-list .clip-info>.clip-details{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.view-list .clip-info>.clip-details>.combat-stats{display:flex;flex:1;min-width:250px;justify-content:space-between;background:none;margin:0;padding:0;gap:20px}
-.view-list .clip-info>.clip-details>.combat-stats>div{display:flex;align-items:center;gap:8px}
-.view-list .clip-info>.clip-details>.combat-stats dd{font-size:19px;line-height:1.5}
-.view-list .clip-info>.clip-details>.clip-weapons{margin:0}
 .view-list .clip-tail{margin-top:8px}
 .menu-blocker{position:absolute;inset:0}
 .menu-scrim{width:100%;height:100%;background:none;pointer-events:none}
-@media(max-width:820px){.library-sort-trigger{width:150px}.view-list .clip-card:not(.clip-expanded) .clip-info{padding:12px 16px}.view-list .clip-info>.clip-details{gap:8px}.view-list .clip-info>.clip-details>.combat-stats{min-width:200px;gap:12px}}
+@media(max-width:820px){.library-sort-trigger{width:150px}}
 .library-scroll{overflow-anchor:none}
 .clips-grid{--clip-columns:2}.view-grid{--clip-columns:3}.view-list{--clip-columns:1}
 @media(max-width:820px){.view-grid{--clip-columns:2}}

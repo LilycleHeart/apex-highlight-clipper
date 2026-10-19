@@ -13,7 +13,7 @@ export function fitPlayerSize(width:number,viewportHeight:number,ratio:number,wi
  const r=Number.isFinite(ratio)&&ratio>0?ratio:16/9;
  // Inline viewing shares the workspace with the library and metadata. Only
  // native fullscreen should consume the entire available picture area.
- const heightLimit=Math.max(1,Math.min(wide?1100:900,viewportHeight*(wide ? .84 : .7),viewportHeight-36));
+ const heightLimit=Math.max(1,Math.min(wide?1200:900,wide?viewportHeight-90:viewportHeight*.64,viewportHeight-36));
  const fittedWidth=Math.min(Math.max(1,width),wide?2400:1920,heightLimit*r);
  return {width:fittedWidth,height:fittedWidth/r};
 }

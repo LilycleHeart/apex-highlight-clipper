@@ -11,6 +11,7 @@ import {shareFiles} from './qqShare';
 import {Diagnostics} from './diagnostics';
 import {JsonLines,safeOptions,safeHudFiles,videoExtensions} from './protocol';
 import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,SystemTheme,UpdateInfo,HudEnrichmentResult} from '../src/shared';
+import {animationDefaults,normalizeAnimationPreferences} from '../src/animationPreferences';
 import {normalizePlayerAudio,defaultPlayerAudio,type PlayerAudioPreferences} from '../src/audioPreferences';
 import {clipStatistics,recordingTime,applyStatisticsCorrection} from '../src/clipStats';
 import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo} from './updates';
@@ -52,6 +53,10 @@ function pythonFor(backend:'cpu'|'dml'='cpu'){const bundled=path.join(project,'r
 function pythonArguments(entry:string,...args:string[]){return ['-B','-X','utf8','-X',`pycache_prefix=${path.join(validationRoot,'unused-bytecode',randomUUID())}`,entry,...args];}
 const development=!app.isPackaged||process.argv.includes('--preview');
 let win:BrowserWindow;let worker:ChildProcess|null=null;let launching=false;let stopFile='';let stopRequested=false;let closing=false;let terminal=false;let currentTask='';let currentSource='';let eventChain=Promise.resolve();
+if(process.argv.includes('--preview')){
+ if(!app.requestSingleInstanceLock())app.quit();
+ else app.on('second-instance',()=>{if(!win||win.isDestroyed())return;if(win.isMinimized())win.restore();win.show();win.focus();});
+}
 let updating=false;let updateAbort:AbortController|null=null;
 const processingTimes=new ProcessingTimes(path.join(dataRoot,'processing-times.json'),(source,seconds)=>send({type:'file-timing',source,processing_seconds:seconds}),error=>diagnostics.log('error','processing-time',String(error)));
 const updateRoot=path.join(app.getPath('userData'),'updates');
@@ -59,7 +64,7 @@ let workerExit:Promise<void>=Promise.resolve();let resolveWorkerExit:(()=>void)|
 let windowPlacement:WindowPlacement|undefined;let placementTimer:ReturnType<typeof setTimeout>|undefined;
 let excludedTeammates:string[]=[];let teammateWrites:Promise<unknown>=Promise.resolve();
 let playerAudio:PlayerAudioPreferences={...defaultPlayerAudio};
-let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:false};let options:Options={...defaults};let output=app.isPackaged?path.join(app.getPath('videos'),'Apex Highlight Clipper'):path.join(project,'output');
+let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:false,...animationDefaults};let options:Options={...defaults};let output=app.isPackaged?path.join(app.getPath('videos'),'Apex Highlight Clipper'):path.join(project,'output');
 let updateInfo:UpdateInfo={status:'idle',currentVersion:app.getVersion(),autoCheck:true};let updateTimer:ReturnType<typeof setTimeout>|null=null;
 function publishUpdate(info:UpdateInfo){diagnostics.log(info.status==='error'?'error':'info','update',info.status,{currentVersion:info.currentVersion,latestVersion:info.latestVersion,message:info.message});updateInfo=info;if(info.status!=='checking')void save().catch(error=>diagnostics.log('error','preferences',String(error)));if(win&&!win.isDestroyed())win.webContents.send('update-status',info);}
 const updater=new UpdateChecker(app.getVersion(),(url,init)=>net.fetch(url,init),()=>updateInfo,publishUpdate);
@@ -230,7 +235,7 @@ app.whenReady().then(async()=>{
  await libraryStore.load();
  await clipDeletions.load();
  await processingTimes.load();
- try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));windowPlacement=restoreWindowPlacement(saved.windowPlacement,screen.getAllDisplays().map(display=>display.workArea),screen.getPrimaryDisplay().workArea);playerAudio=normalizePlayerAudio(saved.playerAudio);excludedTeammates=normalizeTeammateExclusions(saved.excludedTeammates);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
+ try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));windowPlacement=restoreWindowPlacement(saved.windowPlacement,screen.getAllDisplays().map(display=>display.workArea),screen.getPrimaryDisplay().workArea);playerAudio=normalizePlayerAudio(saved.playerAudio);excludedTeammates=normalizeTeammateExclusions(saved.excludedTeammates);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences,...normalizeAnimationPreferences(saved.preferences)};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
  diagnostics.alias(dataRoot,'<data>');diagnostics.alias(output,'<output>');diagnostics.log('info','startup','设置已载入',{options,theme:preferences.mode});
  protocol.handle('apex-media',async request=>{try{const url=new URL(request.url);if(url.hostname==='video')return videos.respond(request);const p=images.get(url.pathname.slice(1));if(url.hostname!=='image'||!p)return new Response('Not found',{status:404});const data=await fs.readFile(p);return new Response(data,{headers:{'Content-Type':p.endsWith('.png')?'image/png':'image/jpeg','Cache-Control':'private, max-age=60'}});}catch{return new Response('Unavailable',{status:404});}});
  const initial=theme();const dark=preferences.mode==='dark'||(preferences.mode==='system'&&initial.dark);
@@ -288,7 +293,7 @@ app.whenReady().then(async()=>{
  handle('choose-output',async()=>{const result=await dialog.showOpenDialog(win,{properties:['openDirectory','createDirectory'],defaultPath:output});if(result.canceled)return null;output=result.filePaths[0];allowedPaths.add(normalized(output));await save();return output;});
  handle('player-audio',async(value:PlayerAudioPreferences)=>{if(!value||!Number.isFinite(value.volume)||value.volume<0||value.volume>1||typeof value.muted!=='boolean'||!Number.isFinite(value.lastAudibleVolume)||value.lastAudibleVolume<=0||value.lastAudibleVolume>1)throw new Error('音量设置无效');playerAudio=normalizePlayerAudio(value);await save();});
  handle('teammate-exclusion',(name:unknown,excluded:unknown)=>{const request=teammateWrites.catch(()=>{}).then(async()=>{const previous=excludedTeammates,next=changeTeammateExclusion(previous,name,excluded);if(next!==previous){excludedTeammates=next;try{await save();}catch(error){excludedTeammates=previous;throw error;}}return [...excludedTeammates];});teammateWrites=request;return request;});
- handle('preferences',async(p:ThemePreferences)=>{if(!['system','light','dark'].includes(p.mode)||p.seed!==null&&!/^#[\da-f]{6}$/i.test(p.seed)||typeof p.reduceMotion!=='boolean'||!['flat','sketch'].includes(p.mascotStyle)||typeof p.mascotEnabled!=='boolean')throw new Error('外观选项无效');preferences=p;await save();});
+ handle('preferences',async(p:ThemePreferences)=>{if(!['system','light','dark'].includes(p.mode)||p.seed!==null&&!/^#[\da-f]{6}$/i.test(p.seed)||typeof p.reduceMotion!=='boolean'||!['flat','sketch'].includes(p.mascotStyle)||typeof p.mascotEnabled!=='boolean')throw new Error('外观选项无效');preferences={...p,...normalizeAnimationPreferences(p)};await save();});
  handle('options',async(o:Options,p:string)=>{options=safeOptions(o);if(typeof p==='string'&&path.isAbsolute(p))output=p;await save();});
  handle('start',p=>start(p));handle('stop',stop);handle('resume',p=>start(p,true));handle('last-task',lastTask);
  handle('task',p=>{if(typeof p!=='string'||!allowedTasks.has(normalized(p)))throw new Error('请先选择任务');return taskInfo(p);});

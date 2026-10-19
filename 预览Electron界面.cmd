@@ -1,2 +1,2 @@
 @echo off
-call "%~dp0启动Electron界面.cmd" --preview
+start "" powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0scripts\launch-preview.ps1"

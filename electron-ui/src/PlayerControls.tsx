@@ -42,7 +42,8 @@ export default function PlayerControls({clip,video,stage,roundTotals,onError,wid
   const down=()=>{dragging=true;schedule();},up=()=>{if(dragging){dragging=false;schedule();}};
   const events=['pointerenter','pointermove','keydown','focusin','focusout'];
   for(const name of events)container.addEventListener(name,schedule);container.addEventListener('pointerdown',down);container.addEventListener('pointerleave',leave);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);schedule();
-  return()=>{clearTimeout(timer);for(const name of events)container.removeEventListener(name,schedule);container.removeEventListener('pointerdown',down);container.removeEventListener('pointerleave',leave);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);};
+  const fullscreenMove=()=>{if(document.fullscreenElement===container)schedule();};if(fullscreen)document.addEventListener('pointermove',fullscreenMove);
+  return()=>{clearTimeout(timer);for(const name of events)container.removeEventListener(name,schedule);container.removeEventListener('pointerdown',down);container.removeEventListener('pointerleave',leave);window.removeEventListener('pointerup',up);window.removeEventListener('pointercancel',up);document.removeEventListener('pointermove',fullscreenMove);};
  },[fullscreen,stage]);
  const visible=controlsVisible;
  useEffect(()=>{const container=stage.current;if(!container)return;container.dataset.controlsVisible=String(visible);return()=>{delete container.dataset.controlsVisible;};},[stage,visible]);

@@ -15,7 +15,7 @@ input[type=checkbox]:disabled{opacity:.4;cursor:default}
 .home-processing-options .toggle>input[type=checkbox]{order:0;width:34px;min-width:34px;height:20px;background:color-mix(in srgb,var(--page-on) 16%,transparent);border:1px solid color-mix(in srgb,var(--page-on) 50%,transparent)}
 .home-processing-options .toggle>input[type=checkbox]::before{display:block;width:14px;height:14px;top:2px;left:2px;background:var(--page-on)}
 .home-processing-options .toggle>input[type=checkbox]:checked{background:var(--page-on);border-color:var(--page-on)}
-.home-processing-options .toggle>input[type=checkbox]:checked::before{background:var(--primary);transform:translateX(14px)}
+.home-processing-options .toggle>input[type=checkbox]:checked::before{background:var(--page-blue);transform:translateX(14px)}
 .home-processing-options .toggle>input:focus-visible{outline-color:var(--page-on)}
 .toggle-disclosure{order:2;display:grid;place-items:center;flex:none;width:24px;height:24px;padding:4px;color:inherit;border-radius:7px;background:transparent}
 .toggle-disclosure svg{width:14px;height:14px;fill:currentColor;transition:transform .18s}
@@ -23,3 +23,6 @@ input[type=checkbox]:disabled{opacity:.4;cursor:default}
 .toggle-disclosure:hover{background:color-mix(in srgb,currentColor 12%,transparent)}
 .toggle-disclosure:focus-visible{outline:2px solid currentColor;outline-offset:1px}
 :root[data-reduced=true] input[type=checkbox],:root[data-reduced=true] input[type=checkbox]::before,:root[data-reduced=true] .toggle-disclosure svg{transition:none}
+:root[data-theme=dark] .page-start-content .primary{background:var(--card-accent);color:var(--accent-on)}
+.setting-caption{display:inline-flex;align-items:center;gap:6px;min-height:22px}
+.setting-caption>.info-tip-button{width:20px;height:20px}

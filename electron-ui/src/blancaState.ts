@@ -1,9 +1,10 @@
 import type {MascotStyle,Stage} from './shared';
-export type BlancaAction='scan'|'locate'|'detail'|'weapons'|'export'|'verify'|'save'|'completed';
+export type BlancaAction='idle'|'scan'|'locate'|'detail'|'weapons'|'export'|'verify'|'save'|'completed';
 export const FRAME_DURATIONS=[4000,4000,4000,6000] as const;
 export const CYCLE_MS=18000;
 export const PUPPET_TURN_MS=240;
 export function actionForStage(stage:Stage):BlancaAction{
+ if(stage==='idle'||stage==='importing')return'idle';
  if(stage==='bisect')return'locate';
  if(['weapons','rank','numeric','hud_info','outcomes'].includes(stage))return'weapons';
  if(stage==='export')return'export';
@@ -22,11 +23,11 @@ export function frameAt(stage:Stage,elapsedMs:number,reduced=false){
  for(let i=0;i<FRAME_DURATIONS.length;i++){if(time<FRAME_DURATIONS[i])return i;time-=FRAME_DURATIONS[i];}
  return 3;
 }
-export function assetUrl(_style:MascotStyle,action:BlancaAction,_frame:number,_outline=false){const files={scan:'01-scan',locate:'02-locate',detail:'03-inspect',weapons:'04-identify',export:'05-export',verify:'06-verify',save:'07-save',completed:'08-finish'};return`./mascots/blanca/playful/${files[action]}.png`;}
+export function assetUrl(_style:MascotStyle,action:BlancaAction,_frame:number,_outline=false){const files={idle:'idle',scan:'01-scan',locate:'02-locate',detail:'03-inspect',weapons:'04-identify',export:'05-export',verify:'06-verify',save:'07-save',completed:'08-finish'};return`./mascots/blanca/playful/${files[action]}.png`;}
 export const clamp=(value:number)=>Math.max(0,Math.min(1,value));
 const smooth=(value:number)=>{const v=clamp(value);return v*v*(3-2*v);};
 export function puppetTurnState(elapsedMs:number,durationMs=PUPPET_TURN_MS){const t=clamp(elapsedMs/durationMs),p=smooth(t);return{angle:t>=1?0:p<.5?180*p:180*(p-1),swap:p>=.5,done:t>=1};}
-export function actionPosition(action:BlancaAction){return(['scan','locate','detail','weapons','export','verify','save','completed'] as BlancaAction[]).indexOf(action)*4-14;}
+export function actionPosition(action:BlancaAction){return action==='idle'?0:(['scan','locate','detail','weapons','export','verify','save','completed'] as BlancaAction[]).indexOf(action)*4-14;}
 export const HOP_MOVE_MS=2200;
 export const HOPS_PER_MOVE=4;
 export function hopState(elapsedMs:number,from:number,to:number,fromY=0,durationMs=HOP_MOVE_MS){

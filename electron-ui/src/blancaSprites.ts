@@ -7,10 +7,10 @@ const base=()=>new URL(`${import.meta.env.BASE_URL}mascots/blanca/playful/`,loca
 let atlas:Promise<Atlas>|undefined;
 const sources=new Map<string,Promise<HTMLImageElement>>(),frames=new Map<string,Promise<string>>();
 
-/** Fixed 34-frame cache; retain at most two decoded source sheets. Original PNGs
+/** Fixed 35-frame cache; retain at most two decoded source sheets. Original PNGs
  * stay untouched. Vector clips isolate full props across the uneven gutters. */
 export function getBlancaSprite(action:BlancaSpriteAction,frame=0):Promise<string>{
- const index=action.startsWith('walk-')?0:Math.max(0,Math.min(3,Math.floor(frame))),key=`${action}/${index}`,cached=frames.get(key);if(cached)return cached;
+ const index=action==='idle'||action.startsWith('walk-')?0:Math.max(0,Math.min(3,Math.floor(frame))),key=`${action}/${index}`,cached=frames.get(key);if(cached)return cached;
  const result=(async()=>{
   atlas??=fetch(new URL('sprites.json',base())).then(response=>{if(!response.ok)throw Error('无法读取角色帧配置');return response.json() as Promise<Atlas>;}).catch(error=>{atlas=undefined;throw error;});
   const config=await atlas,entry=config.sprites[action],crop=entry.frames[index];

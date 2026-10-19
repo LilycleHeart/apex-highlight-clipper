@@ -30,16 +30,25 @@ STAGES = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', required=True, type=Path, help='Verified handoff folder with source/ and extracted/')
+    parser.add_argument('--source', type=Path, help='Verified handoff folder with source/ and extracted/')
+    parser.add_argument('--idle', type=Path, help='Optional original single-pose home idle PNG; may be imported alone')
     args = parser.parse_args()
+    if not args.source and not args.idle:
+        parser.error('Provide --source or --idle')
     output = ROOT / 'electron-ui/public/mascots/blanca/playful'
     output.mkdir(parents=True, exist_ok=True)
-    atlas = {'version': 1, 'size': 320, 'anchor': [160, 284], 'sprites': {}}
+    atlas_file, source_file = output / 'sprites.json', output / 'source.json'
+    atlas = json.loads(atlas_file.read_text('utf-8')) if atlas_file.exists() else {'version': 1, 'size': 320, 'anchor': [160, 284], 'sprites': {}}
     provenance = {'source': 'User-provided Blanca playful v3 artwork; original PNG bytes preserved.',
                   'processing': 'Content-aware component clip paths, explicit foot anchors; no generated walking frames. Detached alpha components smaller than 64 source pixels omitted; clip edges expanded 4 pixels to retain fine edges.',
                   'limitations': 'Connected edge halos and original prop drawing imperfections may remain.', 'files': []}
-    for action, (filename, anchors) in STAGES.items():
-        source = args.source / ('source' if action.startswith('walk-') else 'extracted') / filename
+    if source_file.exists():
+        provenance = json.loads(source_file.read_text('utf-8'))
+    stages = dict(STAGES) if args.source else {}
+    if args.idle:
+        stages['idle'] = ('idle.png', [(589, 1278)])
+    for action, (filename, anchors) in stages.items():
+        source = args.idle if action == 'idle' else args.source / ('source' if action.startswith('walk-') else 'extracted') / filename
         image = np.asarray(Image.open(source).convert('RGBA'))
         height, width = image.shape[:2]
         count, labels, stats, centers = cv2.connectedComponentsWithStats((image[:, :, 3] > 128).astype('uint8'))
@@ -69,7 +78,7 @@ def main():
                     paths.append('M' + 'L'.join(f'{x},{y}' for x, y in points) + 'Z')
             ys, xs = np.where(mask)
             rect = [int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1)]
-            scale = .18 if action.startswith('walk-') else .36
+            scale = .18 if len(anchors) == 1 else .36
             bounds = [round(160 + (rect[0] - anchor[0]) * scale, 2), round(284 + (rect[1] - anchor[1]) * scale, 2),
                       round(160 + (rect[2] - anchor[0]) * scale, 2), round(284 + (rect[3] - anchor[1]) * scale, 2)]
             if min(bounds[:2]) < 0 or max(bounds[2:]) > 320:
@@ -79,10 +88,11 @@ def main():
         shutil.copy2(source, output / filename)
         checksum = hashlib.sha256(source.read_bytes()).hexdigest()
         assert hashlib.sha256((output / filename).read_bytes()).hexdigest() == checksum
+        provenance['files'] = [entry for entry in provenance['files'] if entry['file'] != filename]
         provenance['files'].append({'file': filename, 'sha256': checksum, 'width': width, 'height': height, 'frames': len(frames)})
     (output / 'sprites.json').write_text(json.dumps(atlas, separators=(',', ':')), 'utf-8')
     (output / 'source.json').write_text(json.dumps(provenance, indent=2), 'utf-8')
-    print(f'Imported {len(STAGES)} unchanged PNGs; 32 action crops, 2 static walks; all content bounds fit the shared canvas.')
+    print(f'Imported {len(stages)} unchanged PNGs; {sum(len(entry["frames"]) for entry in atlas["sprites"].values())} total runtime crops; all imported content bounds fit the shared canvas.')
 
 
 if __name__ == '__main__':

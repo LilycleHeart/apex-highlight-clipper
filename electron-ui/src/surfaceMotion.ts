@@ -3,25 +3,27 @@ import {NAV,PRESS,MENU_EASE,sampleSpring,bezierProgress} from './surfaceGeometry
 const hidden=()=>document.hidden||document.documentElement.dataset.hidden==='true';
 // Keep small surfaces mounted through exit. Interruptions start from the current
 // presentation; only disclosure height is measured, never card or text geometry.
-export function useMotionPresence(open:boolean,node:RefObject<HTMLElement|null>,kind:'popover'|'disclosure'='popover',onComplete?:()=>void){
- const [retained,setRetained]=useState(open),present=open||retained,completion=useRef(onComplete);completion.current=onComplete;
+export function useMotionPresence(open:boolean,node:RefObject<HTMLElement|null>,kind:'popover'|'disclosure'|'drawer'='popover',onComplete?:()=>void){
+ const [retained,setRetained]=useState(open),present=open||retained,completion=useRef(onComplete),initial=useRef(true);completion.current=onComplete;
  useLayoutEffect(()=>{
-  const element=node.current;if(!present||!element)return;
+  const first=initial.current;initial.current=false;const element=node.current;if(!present||!element)return;
   if(open)setRetained(true);
   const style=getComputedStyle(element),from:Keyframe={opacity:style.opacity},to:Keyframe={opacity:open?1:0};
   if(kind==='disclosure'){
    from.height=element.getBoundingClientRect().height+'px';
    to.height=open?(element.firstElementChild?.getBoundingClientRect().height||0)+'px':'0px';
-  }else{from.translate=style.translate==='none'?'0 -6px':style.translate;to.translate=open?'0 0':'0 -6px';}
+  }else{const offset=kind==='drawer'?'calc(100% + 16px) 0':'0 -6px';from.translate=style.translate==='none'?offset:style.translate;to.translate=open?'0 0':offset;}
   let animation:Animation|null=null,finished=false;
   const finish=()=>{
    if(finished)return;finished=true;
    element.style.opacity=open?'1':'0';
-   if(kind==='disclosure')element.style.height=open?'auto':'0px';else element.style.translate=open?'0 0':'0 -6px';
+   if(kind==='disclosure')element.style.height=open?'auto':'0px';else element.style.translate=open?'0 0':kind==='drawer'?'calc(100% + 16px) 0':'0 -6px';
    animation?.cancel();if(!open)setRetained(false);completion.current?.();
   };
   const media=matchMedia('(prefers-reduced-motion: reduce)'),reduced=()=>media.matches||document.documentElement.dataset.reduced==='true';
-  if(reduced())finish();else animation=element.animate([from,to],{duration:320,easing:`cubic-bezier(${MENU_EASE.join(',')})`,fill:'both'});
+  // A live card morph measures its destination once; nested disclosures must
+  // already have their final height rather than growing again after arrival.
+  if(reduced()||document.documentElement.dataset.libraryPlayback||kind==='disclosure'&&first&&open)finish();else animation=element.animate([from,to],{duration:320,easing:`cubic-bezier(${MENU_EASE.join(',')})`,fill:'both'});
   if(animation)animation.onfinish=finish;
   const sync=()=>{if(finished)return;if(reduced())finish();else if(hidden())animation?.pause();else animation?.play();};
   const observer=new MutationObserver(sync);observer.observe(document.documentElement,{attributes:true,attributeFilter:['data-hidden','data-reduced']});

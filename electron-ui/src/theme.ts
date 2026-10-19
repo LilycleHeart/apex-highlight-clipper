@@ -27,6 +27,7 @@ export function applyTheme(prefs:ThemePreferences,system:SystemTheme){
   document.documentElement.dataset.theme=dark?'dark':'light';
   document.documentElement.dataset.seed=seed;
   document.documentElement.dataset.reduced=String(prefs.reduceMotion||system.reduceMotion);
+  document.documentElement.style.setProperty('--background-frame-steps',String(32*prefs.backgroundFps));
   document.documentElement.style.colorScheme=dark?'dark':'light';
   return {color:tokens.chrome,foreground:tokens['chrome-on']};
  }catch{/* 保留上次有效配色，不把非法颜色或部分token写进界面。 */}

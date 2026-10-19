@@ -28,5 +28,6 @@ import './statistics.css';
 import './wide-workspace.css';
 import './library-player-layout.css';
 import './playback-browser.css';
+import './library-refinements.css';
 initializeRendererDiagnostics();
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);

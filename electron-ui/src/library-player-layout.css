@@ -1,21 +1,29 @@
-/* Playback keeps library state while presenting a compact browsing sidebar. */
+/* Normal playback shares width with a browsing grid; wide playback prioritizes
+   the picture and keeps only a short navigation rail. */
 .clip-library-shell{flex:1 1 0;display:grid;grid-template-columns:minmax(0,1fr);min-height:0;min-width:0;height:100%;width:100%;overflow:hidden}
 .clip-library-shell>.clip-library.library-scroll{height:100%;max-height:100%;min-height:0;min-width:0}
 .clip-library-shell.is-playing{grid-template-columns:minmax(0,1fr) clamp(280px,22vw,400px);gap:24px;padding:24px 32px}
-.library-player-pane{grid-column:1;grid-row:1;min-width:0;min-height:0;overflow:auto;padding:0 0 24px;scrollbar-width:thin;overscroll-behavior:contain}
+.library-player-pane{grid-column:1;grid-row:1;min-width:0;min-height:0;overflow:auto;padding:0 0 24px;scrollbar-width:thin;overscroll-behavior:contain;container:watch/inline-size}
 .watch-player.clip-card{width:100%;max-width:none;min-width:0;margin:0 auto;padding:16px;background:var(--card-paper);color:var(--card-ink);box-shadow:0 8px 24px #0958b71a;border-radius:24px;overflow:visible}
 .watch-player.clip-card.player-wide{max-width:1840px}
 .watch-navigation{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px;margin-bottom:14px;color:var(--card-muted);font-size:12px}
 .watch-navigation>button{display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--card-ink);font-size:13px}
-.watch-navigation>span{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
-.watch-player .watch-screen:not(:fullscreen){width:100%;margin:0;border-radius:14px;overflow:hidden;background:#000}
+.watch-navigation-info,.watch-navigation-info>span{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+.watch-navigation-info{gap:18px;min-width:0}
+.watch-layout-switch{display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--card-tint)}
+.watch-layout-switch>button{display:flex;align-items:center;justify-content:center;gap:5px;padding:5px 8px;border-radius:8px;font-size:11px;white-space:nowrap;color:var(--card-muted)}
+.watch-layout-switch>button[aria-pressed=true]{background:var(--card-paper);color:var(--card-accent)}
+.watch-player .watch-screen:not(:fullscreen){width:min(100%,var(--watch-picture-width,100%));margin:0 auto;border-radius:14px;overflow:hidden;background:#000}
 .watch-player .watch-screen:not(:fullscreen) .media-frame{width:100%;height:var(--watch-picture-height,56vh);max-height:none;aspect-ratio:auto!important;margin:0}
 .watch-player .watch-screen .media-frame>video,.watch-player .watch-screen .media-frame>img{width:100%;height:100%;object-fit:contain!important}
 .watch-title-row{display:flex;align-items:start;justify-content:space-between;gap:20px;margin:18px 0 12px}
 .watch-title-row h1{min-width:0;margin:0;font-size:18px;line-height:1.55;font-weight:600;color:var(--card-ink);overflow-wrap:anywhere}
-.watch-details-toggle{display:flex;align-items:center;gap:6px;flex:none;padding:6px 0;font-size:12px;color:var(--card-muted);white-space:nowrap}
-.watch-details-toggle[aria-expanded=true]>svg{rotate:180deg}
-.watch-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.watch-details-toggle{display:flex;align-items:center;justify-content:center;gap:6px;flex:none;height:34px;padding:0 10px;border-radius:10px;background:var(--card-tint);font-size:12px;color:var(--card-ink);white-space:nowrap}
+.watch-details-toggle:not(.watch-drawer-toggle)[aria-expanded=true]>svg{rotate:180deg}
+.watch-drawer-toggle{height:30px;padding:0 9px;border-radius:8px;background:var(--card-tint);color:var(--card-ink);gap:6px}
+.watch-drawer-toggle[aria-expanded=true]{background:color-mix(in srgb,var(--card-accent) 16%,var(--card-tint));color:var(--card-accent)}
+.watch-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.watch-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 0 auto}
 .watch-actions .clip-action-buttons{display:contents}
 .watch-actions .clip-action{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:7px;min-width:0;width:auto;height:34px;padding:0 12px;border-radius:10px;font-size:12px;color:var(--card-ink);background:var(--card-tint)}
 .watch-actions .clip-action>span{font-size:12px}
@@ -31,19 +39,32 @@
 .watch-details .clip-recorded,.watch-details .clip-weapons,.watch-details .stats-basis,.watch-details .outcome-evidence{grid-column:1/-1}
 .watch-details .clip-recorded,.watch-details .clip-source,.watch-details .clip-range,.watch-details .clip-identity,.watch-details .clip-rank{margin:0;font-size:12px;line-height:1.7;min-height:0}
 .watch-details .clip-recorded time,.watch-details .detail-filter{font-size:inherit}
+.watch-quick-info{display:flex;align-items:center;gap:18px;min-width:0;font-size:12px;color:var(--card-muted)}
+.watch-quick-info>span{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.watch-quick-info .apex-icon{width:14px;height:14px}
+.watch-quick-hero{max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.player-wide .watch-title-row{margin:12px 0 8px;align-items:center}
+.player-wide .watch-title-row h1{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player-wide .watch-actions{margin-left:auto}
+.player-wide .watch-actions .clip-action{width:30px;height:30px;padding:0;border-radius:8px}
+@container watch (max-width:640px){
+ .watch-navigation-info>span{display:none}
+ .watch-layout-switch>button{padding:5px 6px}
+ .watch-title-row{gap:10px}
+ .watch-title-row h1{font-size:14px}
+ .watch-details>.clip-details{grid-template-columns:minmax(0,1fr)}
+}
 .watch-details .clip-weapons{margin:0;gap:8px}
 .watch-details .clip-weapons .weapon-chip{padding:5px 9px}
 .watch-details .stats-basis{margin:0;font-size:11px}
 .watch-details .detail-names{flex-wrap:wrap;justify-content:flex-end}
-/* Wide mode focuses the picture without unmounting or resetting the library. */
-.clip-library-shell.is-playing:has(.player-wide)>.library-player-pane{grid-column:1/-1}
-.clip-library-shell.is-playing:has(.player-wide)>.library-scroll{visibility:hidden;pointer-events:none}
+/* The same player and library remain mounted through both orientations. */
 .app:has(.watch-player.player-wide) .scroll-to-top{display:none}
 .watch-player.player-wide .watch-title-row{align-items:center;margin:12px 0 0}
 .watch-player.player-wide h1{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .clip-library-shell.is-playing>.clip-library.library-scroll{grid-column:2;grid-row:1;padding:0 0 20px;scroll-padding-block:16px;min-width:0;container-type:inline-size;container-name:library-browser;background:transparent}
-.clip-library-shell.is-playing .clips-grid{--clip-columns:1;grid-template-columns:minmax(0,1fr);gap:8px}
-.clip-library-shell.is-playing .browse-filter-panel{grid-template-columns:minmax(0,1fr);padding:12px;gap:12px}
+.clip-library-shell.is-playing .clips-grid{--clip-columns:1;grid-template-columns:repeat(var(--clip-columns),minmax(0,1fr));gap:10px}
+.clip-library-shell.is-playing .browse-filter-panel{padding:12px;gap:12px}
 /* Keep the original themed glass controls from fullscreen-player.css. */
 .watch-player .watch-screen .player-control-row button:disabled{opacity:.35}
 @media(max-width:1500px){
@@ -59,25 +80,75 @@
  .watch-player .watch-screen .player-control-row button{width:27px}
 }
 
-/* Shared-picture morph and synchronized pane reflow. Only snapshots animate. */
-:root[data-library-playback]::view-transition-group(library-active-picture),
-:root[data-library-playback]::view-transition-group(library-browse),
-:root[data-library-playback]::view-transition-group(library-player-panel){animation-duration:420ms;animation-timing-function:cubic-bezier(.22,.8,.24,1)}
-:root[data-library-playback]::view-transition-group(library-browse){background:transparent;border-radius:0}
-:root[data-library-playback]::view-transition-group(library-active-picture){background:#000;border-radius:14px;overflow:hidden}
-:root[data-library-playback]::view-transition-old(library-active-picture),
-:root[data-library-playback]::view-transition-new(library-active-picture){object-fit:contain;object-position:center;animation-duration:280ms;mix-blend-mode:normal}
-:root[data-library-playback]::view-transition-old(library-browse){object-fit:cover;object-position:right top}
-:root[data-library-playback]::view-transition-new(library-browse){object-fit:cover;object-position:left top}
-:root[data-library-playback=open]::view-transition-new(library-player-panel){animation:library-panel-in 420ms cubic-bezier(.22,.8,.24,1) both}
-/* Closing reflows complete cards; the picture is never cut out of a card. */
-:root[data-library-playback=close] .clips-grid>.clip-card{view-transition-class:library-return-card}
-:root[data-library-playback=close]::view-transition-group(*){background:transparent;border-radius:0;animation-duration:420ms;animation-timing-function:cubic-bezier(.22,.8,.24,1)}
-:root[data-library-playback=close]::view-transition-group(.library-return-card){border-radius:24px;z-index:2}
-:root[data-library-return-reflow]::view-transition-new(.library-return-card):only-child{animation:library-return-enter 140ms ease 280ms both}
-:root[data-library-playback=close]::view-transition-group(library-player-panel){z-index:0;animation:none}
-:root[data-library-playback=close]::view-transition-group(library-browse){z-index:1}
-:root[data-library-playback=close]::view-transition-old(library-player-panel){animation:library-panel-out 140ms ease both;transform-origin:left center}
-@keyframes library-panel-in{from{opacity:0;translate:-16px 0}to{opacity:1;translate:0 0}}
-@keyframes library-panel-out{to{opacity:0;scale:.985}}
-@keyframes library-return-enter{from{opacity:0}to{opacity:1}}
+/* Wide viewing changes to stacked regions: picture above, a film rail below. */
+.library-player-pane[hidden],.library-items[hidden]{display:none}
+.clip-library-shell.is-playing.is-wide{--playback-rail-height:160px;grid-template-columns:minmax(0,1fr);grid-template-rows:max-content var(--playback-rail-height);align-content:center;gap:12px;padding:12px 24px}
+.clip-library-shell.is-playing.is-wide:has(.library-filter-chip),.clip-library-shell.is-playing.is-wide:has(.playback-job-progress){--playback-rail-height:188px}
+.is-wide>.library-player-pane{grid-column:1;grid-row:1;padding:0;overflow:hidden}
+.watch-player.clip-card.player-wide{width:min(100%,calc(var(--watch-picture-width,100%) + 16px));max-width:none;padding:8px;height:auto;overflow:hidden}
+.player-wide .watch-navigation{min-height:28px;margin-bottom:6px}
+.watch-player.player-wide{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:14px;align-items:center}
+.player-wide .watch-screen{grid-column:1/-1}
+.player-wide .watch-title-row{grid-column:1;margin:6px 0 0;min-height:30px;min-width:0;gap:12px}
+.player-wide .watch-title-row h1{font-size:12px;color:var(--card-muted)}
+.player-wide .watch-footer{grid-column:2;margin:6px 0 0;min-height:30px;gap:14px}
+.watch-player.player-wide>.watch-card-info>.motion-disclosure{display:none}
+.watch-title-row h1{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:15px}
+.watch-card-info>.motion-disclosure{margin-top:16px}
+.watch-details .detail-names{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+.watch-details .detail-names>span{display:inline-flex;white-space:nowrap}
+.watch-details .clip-source b{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.watch-details .clip-source .detail-filter{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.watch-details .clip-rank>img{width:28px;height:28px;object-fit:contain;flex:none}
+.watch-details .clip-rank{display:flex;align-items:center;gap:8px}
+.watch-details .clip-rank b{margin-left:auto;min-width:0}
+.watch-details-drawer{position:absolute;z-index:25;inset:12px 12px 12px auto;width:min(360px,calc(100% - 24px));display:flex;flex-direction:column;border:1px solid var(--card-line);border-radius:16px;background:var(--card-paper);color:var(--card-ink);box-shadow:-12px 0 40px #0005;opacity:0;translate:calc(100% + 16px) 0;overflow:hidden}
+.watch-drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--card-line);flex:none}
+.watch-drawer-heading h2{font-size:14px;margin:0}
+.watch-drawer-heading .icon-button{width:28px;height:28px;color:var(--card-muted)}
+.watch-drawer-body.watch-details{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;border-radius:0;background:transparent;padding:16px;scrollbar-width:thin}
+.watch-drawer-body>.clip-details{grid-template-columns:minmax(0,1fr);gap:12px}
+.watch-drawer-body .combat-stats{gap:8px;padding-bottom:12px}
+.watch-drawer-body .combat-stats>div{flex-direction:column;gap:5px}
+.watch-drawer-body .combat-stats dd{font-size:18px}
+.watch-drawer-body .clip-recorded{flex-wrap:wrap;gap:4px}
+/* Below-picture metadata reads across the available width, with labels above
+   their values. The narrow drawer keeps its separate single-column layout. */
+.watch-details-below>.clip-details{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 20px;align-items:start}
+.watch-details-below .clip-recorded,.watch-details-below .clip-weapons{grid-column:auto}
+.watch-details-below .combat-stats{grid-column:span 2;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;border:0;padding:0;align-self:center}
+.watch-details-below .combat-stats>div{flex-direction:row;gap:8px}
+.watch-details-below .clip-recorded,.watch-details-below .clip-source,.watch-details-below .clip-range,.watch-details-below .clip-identity{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:6px;min-width:0}
+.watch-details-below .clip-source{grid-column:span 2}
+.watch-details-below .clip-identity:has(.detail-names){grid-column:span 2}
+.watch-details-below .clip-source b,.watch-details-below .clip-range b,.watch-details-below .clip-identity b,.watch-details-below .clip-recorded time{width:100%;max-width:100%;min-width:0;margin:0;flex:none;text-align:left;font-size:12px}
+.watch-details-below .clip-recorded time{display:flex;flex-wrap:wrap;gap:0}
+.watch-details-below .clip-recorded time>span{flex:none;white-space:nowrap}
+.watch-details-below b>.detail-filter{box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top}
+.watch-details-below .detail-names{justify-content:flex-start}
+.watch-details-below .clip-weapons{align-self:center;margin:0;gap:6px}
+.watch-details-below .clip-rank{display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 8px;align-items:center}
+.watch-details-below .clip-rank>img{grid-column:1;grid-row:1/3}
+.watch-details-below .clip-rank>span,.watch-details-below .clip-rank>b{grid-column:2;text-align:left;margin:0}
+.watch-details-below .stats-basis,.watch-details-below .outcome-evidence{grid-column:1/-1;margin:0}
+@container watch (min-width:1400px){.watch-details-below>.clip-details{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@container watch (max-width:880px){.watch-details-below>.clip-details{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container watch (max-width:420px){
+ .watch-details-below>.clip-details{grid-template-columns:minmax(0,1fr)}
+ .watch-details-below .combat-stats,.watch-details-below .clip-source,.watch-details-below .clip-identity:has(.detail-names){grid-column:1}
+}
+@media(max-width:1000px){
+ .clip-library-shell.is-playing{grid-template-columns:minmax(0,1fr) 256px;gap:14px;padding:16px}
+ .clip-library-shell.is-playing.is-wide{padding:12px 16px;gap:12px}
+ .watch-navigation-info>span{display:none}
+ .player-wide .watch-quick-hero{display:none}
+ .player-wide .watch-title-row h1{font-size:11px}
+ .player-wide .watch-footer{gap:10px}
+ .watch-details-toggle{font-size:11px}
+}
+
+.clip-slot{min-width:0;align-self:start}.clip-slot[hidden]{display:none}.clip-surface-host{display:contents}
+.watch-card-info{display:contents}.watch-player .watch-navigation{grid-column:1/-1}
+.library-morph-layer{position:fixed;inset:0;z-index:180;pointer-events:none;overflow:visible}
+.library-morph-layer .clip-surface-host>.clip-card{pointer-events:auto}
+.library-morph-spacer{flex:none;min-width:0;visibility:hidden;pointer-events:none}

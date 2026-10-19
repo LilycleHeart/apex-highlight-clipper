@@ -1,0 +1,71 @@
+/* Information surfaces share the same soft corners. Full cards retain a
+   larger enclosing radius; circular affordances and titlebar geometry differ. */
+:root{--radius-information:14px;--radius-card:24px}
+:is(.styled-select,.sort-direction,.browse-filter-toggle,.clip-action,.watch-details-toggle,.playback-browser-icon,.statistics-expand,.filter-clear,.weapon-chip,.text-button,.primary,.secondary,.number-input,.algorithm-summary,.hud-run-progress,.library-action-notice,.library-filter-chip){border-radius:var(--radius-information)}
+.browse-filter-panel input:not([type=checkbox]),.clip-library .clip-action-toolbar .clip-action,.watch-player .watch-actions>button,.watch-player .watch-actions .clip-action{border-radius:var(--radius-information)}
+:is(.styled-select-menu,.calendar-panel,.clip-recognition-panel,.event-hover-popover,.watch-details,.combat-stats,.browse-filter-panel,.player-main-controls,.player-end-controls,.player-round-totals){border-radius:var(--radius-information)}
+:is(.clip-card,.stat-card,.work-card,.queue-panel,.surface-drawer){border-radius:var(--radius-card)}
+.view-switch,.watch-layout-switch{border-radius:var(--radius-information)}
+.view-switch>button,.watch-layout-switch>button{border-radius:calc(var(--radius-information) - 3px)}
+.library-controls .styled-select,.playback-browser-order .styled-select,.playback-browser-order .sort-direction,.is-wide .playback-browser-icon,.clip-library .library-selection-toolbar>button,
+.clip-card .clip-file-actions.clip-action-toolbar.clip-actions-compact .clip-action,.clip-expanded .clip-cover .player-control-row button,.clip-expanded .clip-cover .event-marker,.clip-card .duration{border-radius:var(--radius-information)}
+.settings-fields .styled-select,.calendar-grid>button{border-radius:var(--radius-information)}
+
+/* Weapon tags share the trailing edge of library card actions. */
+.clips-grid.view-grid .clip-info>.clip-details>.clip-weapons,
+.clips-grid.view-detail .clip-info>.clip-details>.clip-weapons{justify-content:flex-end}
+.clip-metric-heading>b{font-weight:600}
+
+/* List rows spend their height on data rather than a large cover. */
+.clips-grid.view-list{gap:10px}
+.clips-grid.view-list .clip-card:not(.clip-expanded){grid-template-columns:148px minmax(0,1fr);min-height:96px;align-items:stretch}
+.clips-grid.view-list .clip-card:not(.clip-expanded)>.clip-cover{height:100%;min-height:0;display:grid;place-items:center;overflow:hidden;background:#000}
+.clips-grid.view-list .clip-card:not(.clip-expanded) .media-frame{position:relative;inset:auto;width:100%;height:auto;min-height:0;max-height:none;aspect-ratio:var(--media-ratio,16/9)!important}
+.clips-grid.view-list .clip-card:not(.clip-expanded) .media-frame img{object-fit:contain!important}
+.clips-grid.view-list .clip-info{padding:8px 12px}
+.clips-grid.view-list .clip-number{display:inline-flex;vertical-align:top;width:54px;margin:0 6px 4px 0;font-size:10px;line-height:18px}
+.clips-grid.view-list .clip-info>h3{display:inline-block;vertical-align:top;width:calc(100% - 60px);min-height:0;margin:0 0 4px;font-size:10px;line-height:18px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.clips-grid.view-list .clip-info>.clip-details{display:flex;align-items:center;gap:10px;min-width:0}
+.clips-grid.view-list .combat-stats{flex:1;min-width:0;margin:0;padding:0;gap:6px;background:transparent;border-radius:0}
+.clips-grid.view-list .combat-stats>div{display:flex;align-items:center;justify-content:flex-start;gap:5px}
+.clips-grid.view-list .combat-stats dt{height:auto}
+.clips-grid.view-list .combat-stats dd{font-size:14px;line-height:24px}
+.clips-grid.view-list .combat-stats .apex-icon{width:12px;height:12px}
+.clips-grid.view-list .clip-weapons{justify-content:flex-end;flex:none;max-width:45%;margin:0;gap:4px}
+.clips-grid.view-list .weapon-chip{padding:3px 5px;gap:4px;font-size:9px}
+.clips-grid.view-list .weapon-chip .weapon-icon{width:24px;height:12px}
+.clips-grid.view-list .clip-tail{margin-top:4px}
+.clips-grid.view-list .clip-action-toolbar{gap:4px}
+.clips-grid.view-list .clip-actions-compact .clip-action{min-width:26px;width:26px;height:26px}
+.clips-grid.view-list .clip-actions-compact .clip-primary-action{width:auto;min-width:0;padding:0 8px}
+.clips-grid.view-list .play-button{width:30px;height:30px;right:8px;bottom:8px}
+.clips-grid.view-list .duration{font-size:10px;padding:4px 7px;left:7px;bottom:7px}
+@media(min-width:1920px){.clips-grid.view-list{--clip-columns:3;grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Playing entries identify both the exported clip and its original recording. */
+.playback-clip-title{min-width:0;gap:5px}
+.playback-clip-title>h3{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;line-height:16px}
+.playback-clip-index{flex:none;font-size:10px;font-variant-numeric:tabular-nums;color:var(--card-muted)}
+.playback-clip-source{display:flex;align-items:center;gap:4px;min-width:0;margin:0;color:var(--card-muted);font-size:9px;line-height:14px}
+.playback-clip-source>svg{flex:none}.playback-clip-source>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.playback-clip-info>time{font-size:9px;line-height:14px}
+.playback-clip-info.is-compact{display:grid;grid-template-columns:70px minmax(0,1fr);gap:3px 6px}
+.is-compact .playback-clip-title,.is-compact .playback-clip-source,.is-compact .playback-clip-stats{grid-column:1/-1}
+.is-compact .playback-clip-context{font-size:9px;line-height:14px}
+.playback-rail-slot .playback-clip-context{display:block}
+.is-playing .playback-rail-slot .playback-clip{grid-template-columns:88px minmax(0,1fr);padding:4px 8px}
+.playback-rail-slot .playback-clip-play{left:53px}
+.playback-rail-slot{display:flex;flex-direction:column;gap:3px}
+.playback-rail-group-label{height:14px;flex:none;padding:0 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;line-height:14px;color:var(--card-muted)}
+.playback-rail-slot>.clip-slot{flex:1;min-height:0;width:100%;height:auto}
+@container library-browser (min-width:356px){
+ .is-playing:not(.is-wide) .clips-grid .playback-clip{grid-template-rows:auto auto auto auto auto;min-height:118px}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-source{grid-column:1/-1;grid-row:3}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-context{grid-row:4}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-stats{grid-row:5}
+}
+
+/* Keep secondary home actions alongside the information they modify. */
+.page-start-content .resume-card>div:nth-child(2){flex:0 1 auto}
+.page-start-content .stable-output-rail>div{flex:0 1 auto}
+.page-start-content .stable-output-rail>.start-button{margin-left:auto}

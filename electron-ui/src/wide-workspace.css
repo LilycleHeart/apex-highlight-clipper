@@ -1,4 +1,52 @@
 /* Large windows add useful columns instead of enlarging every surface. */
+/* Processing is a status dashboard; sampling must leave room for progress and
+   controls. Keep the original import/welcome layout independent of this. */
+.page-start-content:has(.is-processing){
+ --processing-width:1640px;
+}
+.page-start-content .workspace.is-processing{
+ width:100%;max-width:var(--processing-width);margin:0 auto;flex:0 0 auto;
+}
+.page-start-content .workspace.is-processing.with-queue{
+ width:100%;grid-template-columns:minmax(0,1fr) 288px;gap:24px;
+}
+.is-processing .work-card{margin-top:0}
+.is-processing .preview-frame{max-height:min(38vh,420px)}
+.is-processing .preview-frame>img{position:absolute;inset:0;min-height:0}
+.is-processing .queue-panel{
+ margin-top:0;min-height:280px;height:auto;max-height:calc(100vh - 230px);
+ padding:20px;top:24px;
+}
+.is-processing .queue-list{flex:0 1 auto;max-height:360px}
+.is-processing .queue-bottom{margin-top:20px}
+.page-start-content:has(.is-processing)>.stable-output-rail,
+.page-start-content:has(.is-processing)>footer,
+.page-start-content:has(.is-processing)>.demo-banner{
+ width:100%;max-width:var(--processing-width);margin-inline:auto;
+}
+@media(min-width:1440px){
+ .is-processing .work-card{
+  display:grid;grid-template-columns:minmax(0,1fr) 272px;column-gap:28px;
+ }
+ .is-processing .work-top,.is-processing .work-filename,.is-processing .work-actions{grid-column:1/-1}
+ .is-processing .preview-frame{align-self:center;grid-column:1;grid-row:3}
+ .is-processing .work-status{
+  grid-column:2;grid-row:3;flex-direction:column-reverse;align-items:stretch;
+  justify-content:center;gap:12px;padding-top:0;min-height:320px;
+ }
+ .is-processing .status-content{flex:none}
+ .page-start-content .is-processing .work-status>.mascot-slot{align-self:center;width:192px;height:192px}
+ .is-processing .stage-summary{min-height:0;margin-top:14px}
+ .is-processing .stage-detail{min-height:0}
+ .is-processing .work-actions{margin-top:16px;padding-top:12px;border-top:1px solid var(--card-line)}
+}
+@media(max-width:1000px){
+ .page-start-content .workspace.is-processing.with-queue{grid-template-columns:minmax(0,1fr) 260px;gap:20px}
+}
+@media(max-width:680px){
+ .page-start-content .workspace.is-processing.with-queue{grid-template-columns:minmax(0,1fr)}
+ .is-processing .queue-panel{position:static;max-height:360px;min-height:0}
+}
 @media(min-width:1400px){
  .clip-library.library-scroll,.page-statistics-content>.statistics-page{padding-inline:max(40px,calc((100vw - 1840px)/2));padding-top:24px}
  .clips-grid.view-detail{--clip-columns:3;grid-template-columns:repeat(3,minmax(0,1fr))}

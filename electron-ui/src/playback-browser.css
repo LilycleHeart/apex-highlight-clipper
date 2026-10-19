@@ -1,7 +1,7 @@
 .library-management[hidden],.library-management-panel[hidden],.library-selection-toolbar[hidden],.library-active-filters[hidden]{display:none}
 .library-management-panel{flex:none}
 .clip-library-shell.is-playing>.clip-library.library-scroll{padding:16px 12px 14px;border-radius:20px;background:var(--card-paper);color:var(--card-ink);scroll-padding-block:12px}
-.playback-browser-header{display:block;flex:none;margin:0 4px 14px;min-width:0}
+.playback-browser-header{display:block;flex:none;height:auto;margin:0 4px 14px;min-width:0}
 .playback-browser-title,.playback-browser-title>div{display:flex;align-items:center;gap:7px}
 .playback-browser-title{justify-content:space-between;margin-bottom:12px}
 .playback-browser-title h2{display:flex;align-items:center;flex:1;gap:9px;margin:0;font-size:17px;font-weight:600;line-height:1.5;white-space:nowrap}
@@ -27,9 +27,9 @@
 .is-playing .clip-day-heading:before{display:none}
 .is-playing .clip-day-heading>time:before{display:none}
 .is-playing .clip-day-heading>span{padding:2px 5px;font-size:9px;color:var(--card-muted);background:var(--card-tint)}
-.is-playing .clips-grid>.playback-clip.clip-card{position:relative;display:grid;grid-template-columns:minmax(96px,34%) minmax(0,1fr);align-items:center;gap:10px;min-width:0;min-height:98px;padding:8px;border:1px solid transparent;border-radius:14px;background:transparent;box-shadow:none;outline:none;overflow:hidden}
-.is-playing .clips-grid>.playback-clip:hover{background:var(--card-tint)}
-.is-playing .clips-grid>.playback-clip.clip-current{border-color:color-mix(in srgb,var(--card-accent) 65%,transparent);background:color-mix(in srgb,var(--card-accent) 11%,var(--card-paper))}
+.is-playing .clips-grid .playback-clip.clip-card{position:relative;display:grid;grid-template-columns:minmax(88px,32%) minmax(0,1fr);align-items:center;gap:8px;min-width:0;min-height:98px;padding:8px;border:1px solid transparent;border-radius:14px;background:transparent;box-shadow:none;outline:none;overflow:hidden}
+.is-playing .clips-grid .playback-clip:hover{background:var(--card-tint)}
+.is-playing .clips-grid .playback-clip.clip-current{border-color:color-mix(in srgb,var(--card-accent) 65%,transparent);background:color-mix(in srgb,var(--card-accent) 11%,var(--card-paper))}
 .playback-clip>.card-surface{display:none}
 .playback-clip>.clip-cover{position:relative;align-self:center;width:100%;min-width:0;height:auto;min-height:0;border-radius:8px;overflow:hidden}
 .playback-clip .media-frame{height:auto;max-height:none;aspect-ratio:16/9!important;border-radius:8px;overflow:hidden}
@@ -41,18 +41,81 @@
 .playback-clip>.clip-info{min-width:0;padding:0;background:none}
 .playback-clip-info{display:flex;flex-direction:column;min-width:0;gap:3px;color:var(--card-ink)}
 .playback-clip-title{display:flex;align-items:center;gap:7px;color:var(--card-accent)}
-.playback-clip-title>h3{margin:0;font-size:12px;line-height:1.5;font-weight:600}
+.playback-clip-title>h3{margin:0;min-height:0;font-size:12px;line-height:1.5;font-weight:600}
 .playback-clip-title>svg{flex:none}
 .playback-clip-info>time{font-size:10px;line-height:1.5;color:var(--card-muted);font-variant-numeric:tabular-nums}
 .playback-clip-context{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.4;color:var(--card-muted)}
-.playback-clip-stats{display:flex;align-items:center;gap:14px;margin-top:3px;font-size:11px;font-variant-numeric:tabular-nums}
+.playback-clip-stats{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:3px;font-size:10px;font-variant-numeric:tabular-nums}
 .playback-clip-stats>span{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .playback-clip-stats .apex-icon{width:12px;height:12px;color:var(--card-muted)}
 .playback-clip-select{position:absolute;inset:0;z-index:3;width:100%;height:100%;padding:0;border:0;border-radius:inherit;background:transparent;color:var(--card-accent);text-align:left}
 .playback-clip-select:focus-visible{outline:2px solid var(--card-accent);outline-offset:-3px}
 .playback-clip-select:disabled{cursor:default}
-.playback-clip-play{position:absolute;left:calc(17% - 4px);top:50%;translate:-50% -50%;opacity:0;padding:6px;box-sizing:content-box;border-radius:50%;background:#111924d9;color:#fff;transition:opacity .16s ease}
+.playback-clip-play{position:absolute;left:calc(16% + 5px);top:50%;translate:-50% -50%;opacity:0;padding:6px;box-sizing:content-box;border-radius:50%;background:#111924d9;color:#fff;transition:opacity .16s ease}
 .playback-clip-select:hover .playback-clip-play,.playback-clip-select:focus-visible .playback-clip-play{opacity:1}
 .is-playing .library-action-notice{font-size:11px;padding:9px;line-height:1.5}
 .is-playing .empty-clips{min-height:180px;padding:20px 8px}
 .is-playing .empty-clips h2{font-size:16px}
+
+/* Denser tiles use the existing sidebar width; the player allocation stays fixed. */
+@container library-browser (min-width:356px){
+ .clip-library-shell.is-playing:not(.is-wide) .clips-grid{--clip-columns:2}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip{grid-template-columns:64px minmax(0,1fr);grid-template-rows:auto auto auto auto;gap:3px 7px;min-height:100px;padding:7px}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip>.clip-cover{grid-column:1;grid-row:1/3}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip>.clip-info,.is-playing:not(.is-wide) .clips-grid .playback-clip-info{display:contents}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-title{grid-column:2;grid-row:1;gap:4px}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-title>h3{font-size:11px;white-space:nowrap}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-info>time{grid-column:2;grid-row:2;font-size:9px;white-space:nowrap}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-context{grid-column:1/-1;grid-row:3;font-size:9px}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-stats{grid-column:1/-1;grid-row:4;justify-content:space-between;gap:3px;font-size:10px;margin-top:1px}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-stats>span{gap:3px}
+ .is-playing:not(.is-wide) .clips-grid .playback-clip-play{left:40px;top:27px}
+}
+@container library-browser (min-width:560px){.clip-library-shell.is-playing:not(.is-wide) .clips-grid{--clip-columns:3}}
+.playback-rail-slot>.clip-slot{height:100%}
+
+/* The rail owns horizontal scrolling; the list itself keeps its saved scroll. */
+.clip-library-shell.is-playing.is-wide>.clip-library.library-scroll{width:min(100%,var(--wide-player-width,100%));justify-self:center;position:relative;grid-column:1;grid-row:2;display:flex;flex-direction:column;padding:8px 12px;border-radius:18px;background:var(--card-paper);overflow:visible;isolation:isolate}
+.is-wide .playback-browser-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 4px 6px}
+.is-wide .playback-browser-title{margin:0;gap:18px}
+.is-wide .playback-browser-title h2{font-size:14px}
+.is-wide .playback-browser-icon{width:24px;height:24px;border-radius:7px}
+.is-wide .playback-browser-order{margin-left:auto;gap:16px}
+.is-wide .playback-job-progress{margin:0;padding:0;border:0}
+.is-wide .library-active-filters{height:24px;min-height:24px;margin:0 4px 6px}
+.is-wide .library-active-filters:has(.library-filter-all){display:none}
+.is-wide>.library-scroll>.motion-disclosure:has(.browse-filter-panel){position:absolute;right:0;bottom:calc(100% + 8px);z-index:30;width:min(720px,100%);max-height:65vh;overflow:auto;box-shadow:0 -8px 32px #0003;border-radius:16px;background:var(--card-paper)}
+.is-wide .browse-filter-panel{margin:0}
+.playback-rail-scroll{flex:1;min-width:0;min-height:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;overscroll-behavior-x:contain;scroll-padding-inline:8px;padding-bottom:4px}
+.playback-rail-track{position:relative;height:100%}
+.playback-rail-slot{position:absolute;top:0;bottom:0}
+.is-playing .playback-rail-slot .playback-clip{position:relative;display:grid;grid-template-columns:80px minmax(0,1fr);align-items:center;gap:10px;width:100%;height:100%;min-height:0;padding:2px 8px;border:1px solid transparent;border-radius:12px;background:transparent;box-shadow:none;outline:none;overflow:hidden}
+.is-playing .playback-rail-slot .playback-clip:hover{background:var(--card-tint)}
+.is-playing .playback-rail-slot .clip-current{border-color:color-mix(in srgb,var(--card-accent) 65%,transparent);background:color-mix(in srgb,var(--card-accent) 11%,var(--card-paper))}
+.playback-rail-slot .playback-clip-play{left:49px}
+.playback-rail-slot .playback-clip-context{display:none}
+@media(max-width:1000px){.is-wide .playback-browser-title{gap:8px}.is-wide .playback-browser-order{gap:8px}}
+
+/* The filter form owns its columns independently of the playback sidebar. */
+.clip-library-shell .browse-filter-panel.browse-criteria-panel{container:clip-filters/inline-size;grid-template-columns:minmax(0,1fr);gap:10px}
+.library-filter-fields,.library-filter-numbers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;min-width:0}
+.library-filter-numbers{padding-top:10px;border-top:1px solid var(--card-line)}
+.library-filter-numbers>h3{grid-column:1/-1;margin:0;font-size:11px;line-height:1.5;font-weight:500;color:var(--card-muted)}
+.browse-criteria-panel .library-filter-field{gap:4px}
+.browse-criteria-panel .styled-select,.browse-criteria-panel .filter-control input,.browse-criteria-panel .filter-clear{height:32px;min-height:32px;font-size:11px}
+.browse-criteria-panel .styled-select{padding:0 8px;gap:6px}
+.browse-criteria-panel .filter-control input{padding:0 8px;margin:0}
+.browse-criteria-panel .styled-select-meta{font-size:10px}
+.browse-criteria-panel .date-picker-value{gap:6px}
+.browse-criteria-panel .date-picker-value>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.browse-criteria-panel .library-filter-check{line-height:1.6;align-items:flex-start}
+.browse-criteria-panel .library-filter-check>input{margin-top:1px}
+@container clip-filters (min-width:500px){
+ .library-filter-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .library-filter-search{grid-column:span 2}
+ .library-filter-numbers{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@container clip-filters (min-width:840px){
+ .library-filter-fields{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .library-filter-search{grid-column:auto}
+}

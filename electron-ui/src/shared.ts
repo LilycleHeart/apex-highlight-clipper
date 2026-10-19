@@ -1,4 +1,5 @@
 import type {PlayerAudioPreferences} from './audioPreferences';
+import type {AnimationPreferences} from './animationPreferences';
 export type Stage = 'idle'|'importing'|'probe'|'coarse'|'bisect'|'fine'|'audit'|'fallback'|'smart'|'sample'|'numeric'|'pipeline'|'cache'|'hud_info'|'lifecycle'|'weapons'|'rank'|'statistics'|'outcomes'|'combat_outcomes'|'export'|'stopping'|'stopped'|'completed'|'error'|'unknown';
 export type State = 'empty'|'ready'|'starting'|'running'|'stopping'|'stopped'|'completed'|'completed_with_errors'|'failed';
 export type HudField='account'|'weapons'|'teammates'|'hero'|'rank';
@@ -9,7 +10,7 @@ export interface Options {export_layout:'task'|'flat';scan_mode:'smart'|'complet
 export const defaults:Options={export_layout:'task',scan_mode:'indexed',backend:'dml',gpu_load:'low',fps:2,gap:10,pre:6,post:6,delete_source:false,pipeline:false,hud_info_enabled:false,hud_info_fields:['account','weapons','teammates','hero','rank'],filter_enabled:false,filter_mode:'any',min_damage:0,min_kills:0,min_assists:0,min_duration:0};
 export interface FileItem {id:string;path:string;name:string;bytes?:number;duration?:number;width?:number;height?:number;fps?:number;processingSeconds?:number;status:'pending'|'running'|'complete'|'stopped'|'error';error?:string;missing?:boolean}
 export type MascotStyle='flat'|'sketch';
-export interface ThemePreferences {mode:'system'|'light'|'dark';seed:string|null;reduceMotion:boolean;mascotStyle:MascotStyle;mascotEnabled:boolean}
+export interface ThemePreferences extends AnimationPreferences {mode:'system'|'light'|'dark';seed:string|null;reduceMotion:boolean;mascotStyle:MascotStyle;mascotEnabled:boolean}
 export interface SystemTheme {dark:boolean;accent:string;reduceMotion:boolean}
 export interface OutcomeEvidence {kind:'knock'|'assist'|'elimination';time:number;processStart?:number;processStartBasis?:'shoot'|'hit'|'candidate'|'near_result';text?:string;confidence?:number;target?:string;weapon?:string;weaponContext?:{scope:'nearby_firing'|'held_at_event';weapon:string;label:string}}
 export interface Rank {tier:string;name:string;division:string|null;confidence:number;method:string;scope?:string}
