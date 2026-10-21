@@ -28,6 +28,9 @@ def clips():
 class JobStoreTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
+        # Windows CI may expose the temp directory through an 8.3 short name;
+        # JobStore resolves its root, so compare against the resolved form.
+        self.root = Path(self.temp.name).resolve()
         self.store = JobStore(self.temp.name)
         self.registry = registry()
         self.clips = clips()
@@ -157,7 +160,7 @@ class JobStoreTests(unittest.TestCase):
     def test_corrupt_primary_recovers_valid_backup_and_ignores_half_written_temp(self):
         job = self.create()
         self.store.claim(job, 'clip-a', ['hero'])
-        root = Path(self.temp.name)
+        root = self.root
         (root / (job + '.json')).write_text('{half-write', encoding='utf-8')
         (root / (job + '.json.half.tmp')).write_text('{"clips": "fake done"}', encoding='utf-8')
         recovered = self.store.load(job)
@@ -229,7 +232,7 @@ class JobStoreTests(unittest.TestCase):
                 session.claim('real.mp4', ['hero'])
             self.assertEqual(load.call_count, 1)
             load.reset_mock()
-            output = Path(self.temp.name) / 'output.json'
+            output = self.root / 'output.json'
             output.write_text('{}', encoding='utf-8')
             session.committed('real.mp4', ['hero'], output)
             self.assertEqual(load.call_count, 1)
@@ -243,7 +246,7 @@ class JobStoreTests(unittest.TestCase):
         events = []
         session = Session(self.temp.name, job, self.registry, events.append)
         session.claim('real.mp4', ['hero', 'rank'])
-        output = Path(self.temp.name) / 'output.json'
+        output = self.root / 'output.json'
         output.write_text('{}', encoding='utf-8')
         saved = threading.Event(); release = threading.Event()
         second_started = threading.Event(); second_saved = threading.Event()
@@ -271,7 +274,7 @@ class JobStoreTests(unittest.TestCase):
 
     def test_both_damaged_raise_without_overwriting_or_guessing(self):
         job = self.create()
-        path = Path(self.temp.name) / (job + '.json')
+        path = self.root / (job + '.json')
         path.write_text('{}', encoding='utf-8')
         with self.assertRaises(CorruptCheckpoint):
             self.store.load(job)
@@ -280,9 +283,9 @@ class JobStoreTests(unittest.TestCase):
     def test_atomic_replace_failure_leaves_primary_recoverable(self):
         job = self.create()
         real_replace = os.replace
-        path = Path(self.temp.name) / (job + '.json')
+        path = self.root / (job + '.json')
         def replace(source, target):
-            if Path(target) == path:
+            if Path(target).resolve() == path:
                 raise OSError('simulated failed atomic replace')
             return real_replace(source, target)
         with patch('hud_job_store.os.replace', side_effect=replace):

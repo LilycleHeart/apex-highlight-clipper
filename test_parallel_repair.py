@@ -25,7 +25,9 @@ class ParallelRepairTests(unittest.TestCase):
 
     def test_two_prepared_clips_rebase_other_segments_instead_of_overwriting(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);first=self.fixture(root,0,100);second=self.fixture(root,1,200)
+            # Repair targets are built from resolved paths; match that form so an
+            # 8.3 short-name temp directory does not look like a moved location.
+            root=Path(tmp).resolve();first=self.fixture(root,0,100);second=self.fixture(root,1,200)
             with patch.dict(os.environ,{'APEX_DATA_ROOT':str(root/'data')}):
                 commit_repair(first);result=commit_repair(second)
             self.assertEqual([segment['counts']['damage'] for segment in result['segments']],[100,200])

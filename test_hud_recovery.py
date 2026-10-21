@@ -18,7 +18,10 @@ from test_hud_enrichment import HudEnrichmentTests
 class RecoveryIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
-        self.root=Path(self.temp.name);self.files,self.manifest=HudEnrichmentTests().fixture(self.root)
+        # Windows CI may expose the temp directory through an 8.3 short name;
+        # the recovery store and repair targets resolve paths, so fixtures and
+        # their expectations must use the same resolved form.
+        self.root=Path(self.temp.name).resolve();self.files,self.manifest=HudEnrichmentTests().fixture(self.root)
         self.registry={field:descriptor(field,{'rule':'fixture-v1'}) for field in FIELDS}
         self.store=JobStore(self.root/'jobs')
         self.request={'backend':'cpu','cpu_workers':1,'gpu_load':'fast','force':True,
