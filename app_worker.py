@@ -84,6 +84,8 @@ def _run_task(request_path):
     gap,pre,post,fps=(options[k] for k in ['gap','pre','post','fps'])
     os.environ['APEX_OCR_BACKEND']=request['backend']; os.environ['APEX_GPU_LOAD']=options['gpu_load']
     os.environ['APEX_OCR_POOL']='1'
+    from performance_options import apply_resources
+    apply_resources({**options,'backend':request['backend']})
     run_root=Path(task['directory']); cache_root=task_cache_root(task); profile=task['profile']; skipped=0
     from gpu_load import get_gpu_policy
     with task_lock(run_root):
@@ -96,16 +98,17 @@ def _run_task(request_path):
             stop_marker=run_root/'stop.request'; stop_marker.unlink(missing_ok=True)
         os.environ['APEX_TASK_STOP_FILE']=str(stop_marker)
         save_task(task_path,task)
-        emit('run',directory=str(run_root),task_path=str(task_path),message=('继续任务 · ' if incoming.get('resume_task') else '新任务 · ')+('GPU '+get_gpu_policy()['label'] if request['backend']=='dml' else 'CPU'),
+        emit('run',directory=str(run_root),task_path=str(task_path),message=('继续任务 · ' if incoming.get('resume_task') else '新任务 · ')+('GPU '+get_gpu_policy()['label'] if request['backend'] in {'dml','cuda'} else 'CPU'),
             scan_mode=options['scan_mode'],indexed_experimental=options['scan_mode']=='indexed',
             result_filter_version=task.get('result_filter_version'),
             result_filter_rule='击倒/助攻/消灭任一' if task.get('result_filter_version') else '沿用旧任务交战规则',
             sampling_warning='沿用旧任务低于 1 帧/秒的参数，可能漏掉交战候选；建议新建至少 1 帧/秒的任务' if fps<1 else None,
             legacy_rule=None if task.get('result_filter_version') else '此任务沿用旧规则；要应用本人击倒/助攻/消灭筛选，请新建任务')
         check_cancel()
-        if request['backend']=='dml':
+        if request['backend'] in {'dml','cuda'}:
             import onnxruntime
-            if 'DmlExecutionProvider' not in onnxruntime.get_available_providers(): raise RuntimeError('GPU 环境不可用，可改用 CPU 继续任务')
+            provider={'dml':'DmlExecutionProvider','cuda':'CUDAExecutionProvider'}[request['backend']]
+            if provider not in onnxruntime.get_available_providers(): raise RuntimeError(f'{provider} 环境不可用，可改用 CPU 继续任务')
         for index,item in enumerate(task['items']):
             check_cancel()
             _STAGE_TIMINGS.clear(); source=Path(item['source']); destination=Path(item['destination']); destination.resolve().relative_to(run_root.resolve())
@@ -191,21 +194,21 @@ def _run_task(request_path):
                         if options['scan_mode'] in ['smart','indexed']:
                             from smart_scan import smart_read
                             _,samples=stage('smart','索引实验：内存粗定位和局部细查' if options['scan_mode']=='indexed' else '智能识别：粗查、二分和局部细查',5,65,
-                                lambda:smart_read(source,job,samples,profile,fps,hud_path,gap,pre,post,cuda=request['backend']=='dml',
+                                lambda:smart_read(source,job,samples,profile,fps,hud_path,gap,pre,post,cuda=request['backend'] in {'dml','cuda'},
                                     result_first=planner_version.startswith('focused-v6'),indexed=options['scan_mode']=='indexed',
                                     continuous=planner_version=='indexed-v2'))
                         elif options['pipeline']:
                             from sample_pipeline import sample_and_read
                             stage('pipeline','采样与数字识别并行（支持续接）',5,65,
-                                lambda:sample_and_read(source,samples,profile,fps,hud_path,cuda=request['backend']=='dml'))
+                                lambda:sample_and_read(source,samples,profile,fps,hud_path,cuda=request['backend'] in {'dml','cuda'}))
                         else:
                             stage('sample','提取交战识别画面（支持续接）',5,30,
-                                lambda:sample_video(source,samples,fps,cuda=request['backend']=='dml',resume=True))
+                                lambda:sample_video(source,samples,fps,cuda=request['backend'] in {'dml','cuda'},resume=True))
                             stage('numeric','识别弹药、伤害和击杀（支持续接）',30,65,
                                 lambda:read_hud(samples,profile,fps,hud_path,resume=True,source_identity=identity))
                         saved=load(hud_path)
                     else:
-                        if options['scan_mode']=='complete': stage('sample','复查已完成采样',5,30,lambda:sample_video(source,samples,fps,cuda=request['backend']=='dml',resume=True))
+                        if options['scan_mode']=='complete': stage('sample','复查已完成采样',5,30,lambda:sample_video(source,samples,fps,cuda=request['backend'] in {'dml','cuda'},resume=True))
                         phase('cache','复用本录像已完成的识别缓存',65,cached=True)
                         if saved['rows']:
                             row=saved['rows'][-1]; preview(samples/row['frame'],row['time'],force=True)

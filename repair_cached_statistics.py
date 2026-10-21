@@ -6,8 +6,59 @@ import os
 import math
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass,replace
 from pathlib import Path
 import sys
+
+
+@dataclass(frozen=True)
+class PreparedRepair:
+    directory:Path
+    original_sha256:str
+    target:Path
+    report:dict
+    selected:tuple
+    media_identities:tuple=()
+    computed_fields:tuple=()
+
+
+def prepare_repair(record,on_activity=None):
+    """Compute one clip's evidence without writing a shared correction file."""
+    from native_frame_reader import native_frame_session
+    from apex_clipper import fingerprint
+    identities=tuple(fingerprint(Path(file)) for file in record.get('files',[]))
+    original=Path(record['directory'])/'statistics.json'
+    if original.is_file():record=_existing_recheck_request(record,original.read_bytes(),original)
+    with native_frame_session():result=_repair(record,on_activity,deferred=True)
+    if any(fingerprint(Path(identity['path']))!=identity for identity in identities):raise ValueError('成片在后台复核期间发生变化')
+    return replace(result,media_identities=identities) if isinstance(result,PreparedRepair) else result
+
+
+def commit_repair(prepared,on_activity=None):
+    """Rebase untouched segments under the record lock, then atomically save."""
+    if prepared is None:return None
+    from app_task import data_root
+    from apex_clipper import write_json,fingerprint
+    original=prepared.directory/'statistics.json';raw=original.read_bytes()
+    key=correction_key(raw,prepared.directory)
+    with correction_lock(data_root()/'recognition-corrections/locks'/(key+'.lock'),on_activity):
+        if hashlib.sha256(raw).hexdigest()!=prepared.original_sha256 or original.read_bytes()!=raw:raise ValueError('统计记录已变化，请重新开始复核')
+        if any(fingerprint(Path(identity['path']))!=identity for identity in prepared.media_identities):raise ValueError('成片在后台复核后发生变化，请重新识别')
+        target=data_root()/'recognition-corrections'/(key+'.json')
+        if target!=prepared.target:raise ValueError('复核保存位置已变化')
+        report=copy.deepcopy(prepared.report)
+        try:
+            latest=json.loads(target.read_text('utf-8-sig'))
+            valid=latest.get('repair_signature')==hashlib.sha256(raw+latest.get('version','').encode()+latest.get('counter_recipe','').encode()).hexdigest()
+            context=str(prepared.directory.resolve()).replace('\\','/').lower()
+            if valid and latest.get('correction_context',context)==context:
+                by_bounds={(segment['start'],segment['end']):segment for segment in latest['segments']}
+                selected={(report['segments'][index]['start'],report['segments'][index]['end']) for index in prepared.selected}
+                report['segments']=[segment if (segment['start'],segment['end']) in selected else copy.deepcopy(by_bounds.get((segment['start'],segment['end']),segment)) for segment in report['segments']]
+        except (OSError,ValueError,TypeError,KeyError,AttributeError):pass
+        report['verification_mode']='native-existing' if any(segment.get('native_repaired_fields') for segment in report['segments']) else 'missing'
+        write_json(target,report)
+        return report
 
 
 def opponent_needs_review(event):
@@ -118,6 +169,8 @@ def exported_view(clips,segment,profile):
         if not math.isfinite(duration) or duration<=0:duration=float(metadata['format']['duration'])
         if duration<.35:return None
         selected_profile=clip.get('recognition',{}).get('hud_info',{}).get('profile') or profile
+        from hud_recovery import profile_reusable,active
+        if active() and not profile_reusable(clip.get('recognition',{}),['statistics','opponents','event_weapons']):selected_profile={}
         if not selected_profile.get('layout_version'):
             from hud_layout import make_profile
             selected_profile=make_profile(video['width'],video['height'])
@@ -203,6 +256,24 @@ def correction_lock(path,on_activity=None,timeout=90.):
     finally:stream.close()
 
 
+def _existing_recheck_request(record,raw,original):
+    from app_task import data_root
+    if record.get('native') and not record.get('force') and 'statistics' in record.get('fields',['statistics']):
+        root=data_root()/'recognition-corrections';key=correction_key(raw,original.parent)
+        candidates=[root/(key+'.json'),root/(hashlib.sha256(raw).hexdigest()+'.json'),original.with_name('statistics-corrected.json')]
+        wanted={str(Path(file).resolve()).casefold() for file in record['files']} if record.get('files') is not None else None
+        bounds=[clip.get('segment',{}) for clip,identity in exported_clips(original.parent,json.loads(raw)) if wanted is not None and identity['path'].casefold() in wanted]
+        for candidate in candidates:
+            try:
+                saved=json.loads(candidate.read_text('utf-8-sig'))
+                if saved.get('repair_signature')!=hashlib.sha256(raw+saved.get('version','').encode()+saved.get('counter_recipe','').encode()).hexdigest():continue
+                selected=[segment for segment in saved['segments'] if wanted is None or any(all(abs(segment[key]-bound.get(key,-1))<.001 for key in ['start','end']) for bound in bounds)]
+                if any(segment.get('repair_applied') and 'statistics' in segment.get('repair_fields',[]) and needs_fields(segment,{'statistics'}) for segment in selected):record={**record,'recheck_existing':True}
+                break
+            except (OSError,ValueError,TypeError,KeyError,AttributeError):continue
+    return record
+
+
 def repair(record,on_activity=None):
     from app_task import data_root
     original=Path(record['directory'])/'statistics.json'
@@ -210,24 +281,10 @@ def repair(record,on_activity=None):
     raw=original.read_bytes();key=correction_key(raw,original.parent)
     with correction_lock(data_root()/'recognition-corrections/locks'/(key+'.lock'),on_activity):
         if original.read_bytes()!=raw:raise ValueError('统计记录已变化，请重新开始复核')
-        if record.get('native') and not record.get('force') and 'statistics' in record.get('fields',['statistics']):
-            root=data_root()/'recognition-corrections'
-            candidates=[root/(key+'.json'),root/(hashlib.sha256(raw).hexdigest()+'.json'),original.with_name('statistics-corrected.json')]
-            wanted={str(Path(file).resolve()).casefold() for file in record['files']} if record.get('files') is not None else None
-            bounds=[clip.get('segment',{}) for clip,identity in exported_clips(original.parent,json.loads(raw)) if wanted is not None and identity['path'].casefold() in wanted]
-            for candidate in candidates:
-                try:
-                    saved=json.loads(candidate.read_text('utf-8-sig'))
-                    if saved.get('repair_signature')!=hashlib.sha256(raw+saved.get('version','').encode()+saved.get('counter_recipe','').encode()).hexdigest():continue
-                    selected=[segment for segment in saved['segments'] if wanted is None or any(all(abs(segment[key]-bound.get(key,-1))<.001 for key in ['start','end']) for bound in bounds)]
-                    if any(segment.get('repair_applied') and 'statistics' in segment.get('repair_fields',[]) and needs_fields(segment,{'statistics'}) for segment in selected):
-                        record={**record,'recheck_existing':True}
-                    break
-                except (OSError,ValueError,TypeError,KeyError,AttributeError):continue
-        return _repair(record,on_activity)
+        return _repair(_existing_recheck_request(record,raw,original),on_activity)
 
 
-def _repair(record,on_activity=None):
+def _repair(record,on_activity=None,*,deferred=False):
     from combat_statistics import counter_endpoints,reconciled_counts,VERSION
     from apex_clipper import BASE,write_json
     destination=Path(record['directory']);original=destination/'statistics.json'
@@ -273,7 +330,8 @@ def _repair(record,on_activity=None):
     if recheck_names and record.get('opponent_events') is not None:
         recipe+=':opponent-selection-'+hashlib.sha256(json.dumps(record['opponent_events'],sort_keys=True).encode()).hexdigest()
     signature=hashlib.sha256(raw+VERSION.encode()+recipe.encode()).hexdigest()
-    root=data_root()/'recognition-corrections';root.mkdir(parents=True,exist_ok=True)
+    root=data_root()/'recognition-corrections'
+    if not deferred:root.mkdir(parents=True,exist_ok=True)
     target=root/(correction_key(raw,destination)+'.json')
     candidates=[target,root/(hashlib.sha256(raw).hexdigest()+'.json'),destination/'statistics-corrected.json']
     for candidate in candidates:
@@ -281,10 +339,12 @@ def _repair(record,on_activity=None):
         try:
             saved=json.loads(candidate.read_text(encoding='utf-8'))
             if saved.get('repair_signature')==signature and not record.get('force') and not any(needs_fields(saved['segments'][index],requested) for index in selected):
+                if deferred:return PreparedRepair(destination,hashlib.sha256(raw).hexdigest(),target,saved,tuple(selected))
                 if candidate!=target:write_json(target,saved)
                 return saved
             saved_valid=saved.get('repair_signature')==hashlib.sha256(raw+saved.get('version','').encode()+saved.get('counter_recipe','').encode()).hexdigest()
-            if saved_valid and not native_exports and saved.get('verification_mode')=='native-existing' and saved.get('version')==VERSION and saved.get('base_counter_recipe')==base_recipe:return saved
+            if saved_valid and not native_exports and saved.get('verification_mode')=='native-existing' and saved.get('version')==VERSION and saved.get('base_counter_recipe')==base_recipe:
+                return PreparedRepair(destination,hashlib.sha256(raw).hexdigest(),target,saved,tuple(selected)) if deferred else saved
             if saved_valid and isinstance(saved.get('segments'),list):
                 prior={(segment['start'],segment['end']):segment for segment in saved['segments']}
                 for segment in prior.values():
@@ -428,6 +488,7 @@ def _repair(record,on_activity=None):
     report.update(repair_signature=signature,counter_recipe=recipe,base_counter_recipe=base_recipe,version=VERSION,repair_fields=changed,repair_schema=2,verification_mode='native-existing' if any(segment.get('native_repaired_fields') for segment in report['segments']) else 'missing',original_statistics_sha256=hashlib.sha256(raw).hexdigest())
     report['correction_context']=str(destination.resolve()).replace('\\','/').lower()
     if recheck_names:report['parser_version']=PARSER_VERSION
+    if deferred:return PreparedRepair(destination,hashlib.sha256(raw).hexdigest(),target,report,tuple(selected),computed_fields=tuple(sorted(requested)))
     write_json(target,report)
     return report
 

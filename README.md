@@ -119,6 +119,7 @@ npm start
 ```
 
 - 开启 GPU 加速调试请运行 `.\setup_gpu.ps1` 搭建独立的 `.gpu-venv`。
+- NVIDIA 显卡可运行 `.\setup_cuda.ps1` 安装独立的 `.cuda-venv`，重开界面后在「性能设置 → 识别设备」选择「GPU · CUDA」。安装会下载 CUDA/cuDNN 运行库；「自动」仍沿用 DirectML/CPU，已有便携包不包含这套可选环境。
 - 更多内核架构、测试用例与打包说明，请查阅 [开发说明文档](docs/development.md)。
 
 ---

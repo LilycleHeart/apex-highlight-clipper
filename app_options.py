@@ -28,7 +28,8 @@ def parse_options(request,legacy=False):
     if not isinstance(fields,list) or any(key not in ['account','weapons','teammates','hero','rank'] for key in fields):raise ValueError('HUD信息字段无效')
     values['hud_info_enabled']=enabled;values['hud_info_fields']=list(dict.fromkeys(fields))
     from gpu_load import get_gpu_policy
-    values['gpu_load']=get_gpu_policy(request.get('gpu_load','low'))['name']
+    from performance_options import performance_options
+    values.update(performance_options(request))
     values['scan_mode']=request.get('scan_mode','indexed')
     if values['scan_mode'] not in ['complete','smart','indexed']: raise ValueError('识别方式必须是 complete、smart 或 indexed')
     # 新任务统一索引算法；旧任务只在恢复时保留原规划和缓存，避免混用断点。

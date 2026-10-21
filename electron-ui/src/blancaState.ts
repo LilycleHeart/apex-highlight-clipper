@@ -1,21 +1,24 @@
 import type {MascotStyle,Stage} from './shared';
-export type BlancaAction='idle'|'scan'|'locate'|'detail'|'weapons'|'export'|'verify'|'save'|'completed';
+export const EXTENDED_ACTIONS=['importing','statistics','bisect','rank','combat_outcomes','unknown','idle','coarse','fallback','sample','numeric','pipeline','lifecycle'] as const;
+export type BlancaAction=typeof EXTENDED_ACTIONS[number]|'scan'|'locate'|'detail'|'weapons'|'export'|'verify'|'save'|'completed';
 export const FRAME_DURATIONS=[4000,4000,4000,6000] as const;
 export const CYCLE_MS=18000;
 export const PUPPET_TURN_MS=240;
 export function actionForStage(stage:Stage):BlancaAction{
- if(stage==='idle'||stage==='importing')return'idle';
- if(stage==='bisect')return'locate';
- if(['weapons','rank','numeric','hud_info','outcomes'].includes(stage))return'weapons';
+ if((EXTENDED_ACTIONS as readonly string[]).includes(stage))return stage as typeof EXTENDED_ACTIONS[number];
+ if(stage==='smart')return'locate';
+ if(stage==='weapons')return'weapons';
+ if(stage==='hud_info')return'completed';
+ if(stage==='outcomes')return'combat_outcomes';
  if(stage==='export')return'export';
- if(['audit','verify','combat_outcomes','statistics'].includes(stage))return'verify';
- if(['stopping','stopped','error'].includes(stage))return'save';
+ if(stage==='audit')return'verify';
+ if(['cache','stopping','stopped','error'].includes(stage))return'save';
  if(stage==='completed')return'completed';
- if(['probe','fine','lifecycle','unknown'].includes(stage))return'detail';
+ if(['probe','fine'].includes(stage))return'detail';
  return'scan';
 }
 export function frameAt(stage:Stage,elapsedMs:number,reduced=false){
- if(['idle','cache','importing','error','unknown'].includes(stage))return 0;
+ if(['cache','error'].includes(stage))return 0;
  if(stage==='stopped')return 3;
  if(reduced)return stage==='completed'||stage==='stopping'?3:1;
  const once=stage==='completed'||stage==='stopping';
@@ -23,11 +26,11 @@ export function frameAt(stage:Stage,elapsedMs:number,reduced=false){
  for(let i=0;i<FRAME_DURATIONS.length;i++){if(time<FRAME_DURATIONS[i])return i;time-=FRAME_DURATIONS[i];}
  return 3;
 }
-export function assetUrl(_style:MascotStyle,action:BlancaAction,_frame:number,_outline=false){const files={idle:'idle',scan:'01-scan',locate:'02-locate',detail:'03-inspect',weapons:'04-identify',export:'05-export',verify:'06-verify',save:'07-save',completed:'08-finish'};return`./mascots/blanca/playful/${files[action]}.png`;}
+export function assetUrl(_style:MascotStyle,action:BlancaAction,_frame:number,_outline=false){const files:Partial<Record<BlancaAction,string>>={scan:'01-scan',locate:'02-locate',detail:'03-inspect',weapons:'04-identify',export:'05-export',verify:'06-verify',save:'07-save',completed:'08-finish'};return`./mascots/blanca/playful/${files[action]??'extended/'+action}.png`;}
 export const clamp=(value:number)=>Math.max(0,Math.min(1,value));
 const smooth=(value:number)=>{const v=clamp(value);return v*v*(3-2*v);};
 export function puppetTurnState(elapsedMs:number,durationMs=PUPPET_TURN_MS){const t=clamp(elapsedMs/durationMs),p=smooth(t);return{angle:t>=1?0:p<.5?180*p:180*(p-1),swap:p>=.5,done:t>=1};}
-export function actionPosition(action:BlancaAction){return action==='idle'?0:(['scan','locate','detail','weapons','export','verify','save','completed'] as BlancaAction[]).indexOf(action)*4-14;}
+export function actionPosition(action:BlancaAction){const actions:BlancaAction[]=['scan','locate','detail','weapons','export','verify','save','completed',...EXTENDED_ACTIONS];return action==='idle'?0:(actions.indexOf(action)%8)*4-14;}
 export const HOP_MOVE_MS=2200;
 export const HOPS_PER_MOVE=4;
 export function hopState(elapsedMs:number,from:number,to:number,fromY=0,durationMs=HOP_MOVE_MS){

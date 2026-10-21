@@ -1,7 +1,11 @@
 import base64
+import os
 import unittest
 from copy import deepcopy
+from types import SimpleNamespace
 from unittest.mock import patch
+
+import numpy as np
 
 from event_weapon_reader import context_from_observations, recheck_event_weapons, recipe, VERSION
 
@@ -13,6 +17,46 @@ class EventWeaponContextTests(unittest.TestCase):
                 'confidence': .96, 'name_view_agreement': 2,
                 'ammo': {'value': ammo, 'confidence': .99},
                 'weapon_icon': base64.b64encode(b'\xaa' * 336).decode()}
+
+    def test_batch_reuses_counter_reader_and_recipe_without_merging_frame_evidence(self):
+        from combat_statistics import final_counter_reader
+        from engine_pool import clear_pool, pooled_engine
+        class Reader:
+            def __init__(self, backend):self.calls = 0
+            def __call__(self, images):
+                self.calls += 1
+                return [('24', .99) for _ in images], 0.
+        profile = {'layout_status': 'confirmed', 'reference_size': [2560, 1080]}
+        identity = {'path': 'sample.mp4', 'size': 1, 'mtime_ms': 2}
+        event = {'kind': 'knock', 'action': 'knock', 'time': 1., 'ownership': 'self', 'confirmed': True}
+        current = {**event, 'time': 4., 'weapon_context': {
+            'version': VERSION, 'recipe': recipe(profile), 'source': identity,
+            'event': {'kind': 'knock', 'action': 'knock', 'time': 4.}, 'status': 'observed'}}
+        image = np.zeros((20, 30, 3), np.uint8)
+        def observe(second, frame, profile, weapon_reader, numeric_reader):
+            self.assertIs(numeric_reader, shared)
+            self.assertEqual(numeric_reader([frame])[0], [('24', .99)])
+            return self.row(second)
+        clear_pool()
+        self.addCleanup(clear_pool)
+        with patch.dict(os.environ, {'APEX_OCR_POOL': '1', 'APEX_OCR_BACKEND': 'cpu'}), \
+                patch('numeric_reader.NumericReader', Reader):
+            shared = final_counter_reader()
+            shared([image])
+            pooled_engine(('names', 'cpu'), object)
+            with patch('apex_clipper.fingerprint', return_value={**identity, 'mtime_ns': 2_000_000}), \
+                    patch('apex_clipper.probe', return_value=({'format': {'duration': 10.}}, {'width': 2560, 'height': 1080})), \
+                    patch('hud_enrichment.native_frames', return_value=iter([(1., image), (1.12, image)])), \
+                    patch('gpu_ocr_backend.create_ocr_engine', return_value=SimpleNamespace(text_rec=object())), \
+                    patch('weapon_reader.WeaponTextReader', return_value=object()), \
+                    patch('event_weapon_reader._read_observation', side_effect=observe), \
+                    patch('event_weapon_reader.recipe', wraps=recipe) as signature:
+                checked = recheck_event_weapons('sample.mp4', [event, current], profile)
+            signature.assert_called_once_with(profile)
+            self.assertEqual(shared.recognizer.calls, 1)
+            self.assertEqual(shared.stats()['exact_reuse'], 2)
+            self.assertEqual([row['actual_pts'] for row in checked[0]['weapon_context']['evidence']], [1., 1.12])
+            self.assertEqual(checked[1], current)
 
     def test_newly_confirmed_event_rechecks_previously_ineligible_unknown_only(self):
         profile = {'layout_status': 'confirmed', 'reference_size': [2560, 1080]}

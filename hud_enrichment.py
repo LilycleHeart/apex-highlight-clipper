@@ -1,6 +1,7 @@
 """交战边界之外的可选信息识别；同一实现支持原录像与已导出片段。"""
 from pathlib import Path
 from functools import lru_cache
+from contextlib import nullcontext,contextmanager
 import hashlib
 import json
 import os
@@ -19,6 +20,8 @@ from hud_layout import detect_images,VERSION as LAYOUT_VERSION
 from player_names import player_name,consensus_name,canonical_name,name_key
 from name_reader import NameReader,name_value
 from japanese_name_reader import VERSION as NAME_VERSION
+from native_frame_reader import native_frame_session,read_native_frames
+from hud_recovery import persistent_job
 
 VERSION='optional-hud-v11'
 FIELDS=['account','weapons','teammates','hero','rank']
@@ -85,16 +88,7 @@ def stable(observations,key):
 
 
 def native_frames(source,start,end,moments=None):
-    import av
-    with av.open(str(source)) as container:
-        stream=container.streams.video[0];stream.codec_context.thread_count=1
-        seen=set()
-        for second in moments if moments is not None else [start+(end-start)*f for f in [.15,.5,.85]]:
-            check_cancel()
-            container.seek(int(second/stream.time_base),stream=stream,backward=True,any_frame=False)
-            frame=next((f for f in container.decode(stream) if f.pts is not None and float(f.pts*f.time_base)>=second),None)
-            if frame is None or frame.pts in seen:continue
-            seen.add(frame.pts);yield float(frame.pts*frame.time_base),frame.to_ndarray(format='bgr24')
+    yield from read_native_frames(source,moments if moments is not None else [start+(end-start)*f for f in [.15,.5,.85]])
 
 
 def roi(image,profile,box):
@@ -191,6 +185,7 @@ def adaptive_moments(observations,fields,teams,weapons,frame_times,start,end):
     return sorted(times)
 
 
+@native_frame_session()
 def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activity=None):
     fields=list(dict.fromkeys(fields or FIELDS));source=Path(source)
     def notify(message,frames_done=0,frames_total=3):
@@ -509,6 +504,36 @@ def invalidate_changed_fields(previous,identity):
     return info,stale
 
 
+def _pending_visual_fields(recognition,previous,identity,fields,force):
+    from hud_recovery import semantic_current
+    versions=previous.get('field_versions') or {field:previous.get('version') for field in previous.get('requested_fields',[])}
+    def outdated(field):
+        current=semantic_current(recognition,field)
+        return not current if current is not None else versions.get(field)!=field_version(field)
+    return [field for field in fields if force or outdated(field) or field_source_identity(previous,field)!=identity or field not in previous.get('requested_fields',[]) or field_unconfirmed(previous,field)]
+
+
+def _prepare_visual_clip(item,activity):
+    clip,fields,force=item;file=Path(clip.get('output',clip.get('file','')))
+    from hud_recovery import claim
+    claim(file,fields)
+    identity=fingerprint(file);previous,_=invalidate_changed_fields(clip.get('recognition',{}).get('hud_info',{}),identity)
+    versions=previous.get('field_versions') or {field:previous.get('version') for field in previous.get('requested_fields',[])}
+    pending=_pending_visual_fields(clip.get('recognition',{}),previous,identity,fields,force)
+    if not pending:return None
+    options={'on_activity':activity};frozen=previous.get('profile',{})
+    from hud_recovery import profile_reusable
+    if previous.get('profile_source_identity',previous.get('source_identity'))==identity and frozen.get('layout_version')==LAYOUT_VERSION and frozen.get('layout_status')=='confirmed' and profile_reusable(clip.get('recognition',{}),pending):options['profile']=frozen
+    return recognize_video(file,pending,**options)
+
+
+def _prepare_extra_clip(record,activity):
+    from repair_cached_statistics import prepare_repair
+    from hud_recovery import claim
+    claim(record['files'][0],record['fields'])
+    return prepare_repair(record,on_activity=activity)
+
+
 def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=False,on_activity=None):
     """只追加识别元数据，保持所有视频字节、名称与已冻结交战/计数不变。"""
     directory=Path(directory).resolve();path=directory/'export.json';manifest=json.loads(path.read_text('utf-8-sig'))
@@ -524,62 +549,74 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
         file=Path(clip.get('output',clip.get('file',''))).resolve()
         if not file.is_relative_to(video_directory) or file.suffix.lower()!='.mp4' or str(file).casefold() not in recorded:raise ValueError('成片路径不属于对应导出目录')
     name_updates={}
-    for index,clip in enumerate(selected):
-        check_cancel();file=Path(clip.get('output',clip.get('file','')))
-        def activity(details):
-            if on_activity:on_activity({'type':'hud-info-activity','index':index+1,'total':len(selected),'file':str(file),**details})
-        activity({'message':'检查已有识别结果','frames_done':0,'frames_total':0})
-        identity=fingerprint(file)
-        recognition=clip.setdefault('recognition',{});previous=recognition.get('hud_info',{})
-        previous,stale=invalidate_changed_fields(previous,identity)
-        if stale:
-            recognition['hud_info']=previous
-            # 即使新读取失败，也不能继续展示已确认属于旧视频的字段。
-            write_json(path,manifest)
-        versions=previous.get('field_versions') or {field:previous.get('version') for field in previous.get('requested_fields',[])}
-        pending=[field for field in fields if force or versions.get(field)!=field_version(field) or field_source_identity(previous,field)!=identity or field not in previous.get('requested_fields',[]) or field_unconfirmed(previous,field)]
-        if pending:
-            options={'on_activity':activity} if on_activity else {}
-            frozen=previous.get('profile',{})
-            if previous.get('profile_source_identity',previous.get('source_identity'))==identity and frozen.get('layout_version')==LAYOUT_VERSION and frozen.get('layout_status')=='confirmed':options['profile']=frozen
-            detail_only=not force and 'rank' in pending and field_source_identity(previous,'rank')==identity and versions.get('rank')==field_version('rank') and previous.get('field_status',{}).get('rank')=='confirmed' and rank_detail_missing(previous.get('rank'))
-            current=recognize_video(file,pending,**options)
-            if fingerprint(file)!=identity or current.get('source_identity',identity)!=identity:raise ValueError('补充识别期间录像发生变化')
-            if detail_only:
-                fresh=current.get('rank');saved=previous['rank']
-                current['rank']={**saved,'division':fresh['division'],**({'division_evidence':fresh['division_evidence']} if fresh.get('division_evidence') else {})} if fresh and fresh['tier']==saved['tier'] and fresh.get('division') else saved
-                current['field_status']['rank']='confirmed'
-            info={**previous,**{field:current[field] for field in pending}}
-            names=merge_name_observations(previous.get('name_observations',[]),current['name_observations'],pending)
-            info.update(version=VERSION,source_identity=identity,profile=current['profile'],checked_frames=current['checked_frames'],
-                profile_source_identity=dict(identity),
-                name_observations=names,frame_times=current['frame_times'],
-                requested_fields=list(dict.fromkeys(previous.get('requested_fields',[])+pending)),
-                field_status={**previous.get('field_status',{}),**current['field_status']})
-            info['field_versions']={**versions,**{field:field_version(field) for field in pending}}
-            known=set(previous.get('requested_fields',[]))|set(versions)
-            info['field_source_identities']={**{field:field_source_identity(previous,field) for field in FIELDS if field in known},
-                **{field:dict(identity) for field in pending}}
-            info.pop('name_calibration_signatures',None)
-            if 'account' in pending:
-                if current.get('account_visibility_search'):info['account_visibility_search']=current['account_visibility_search']
-                else:info.pop('account_visibility_search',None)
-            if set(pending)&{'hero','weapons','rank'}:
-                if current.get('visual_field_search'):info['visual_field_search']=current['visual_field_search']
-                else:info.pop('visual_field_search',None)
-            if 'hero' in pending:
-                info['hero_observations']=current.get('hero_observations',[])
-                for key in ['hero_portrait_observations','hero_review_conflicts']:
-                    if key in current:info[key]=current[key]
-                    else:info.pop(key,None)
-            if 'rank' in pending:info['rank_observations']=current.get('rank_observations',[])
-            # 新算法的未知结果也须覆盖旧段位回退；当前版本的普通补缺仍保留原语义。
-            authoritative=[field for field in pending if force or field in {'hero','rank'} and versions.get(field)!=field_version(field)]
-            if authoritative:info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+authoritative))
-            name_updates[id(clip)]=set(pending)
-            recognition['hud_info']=info;write_json(path,manifest)
-        else:activity({'message':'所选信息已确认，跳过读取','frames_done':0,'frames_total':0})
-        if on_progress:on_progress(index+1,len(selected),str(file))
+    from hud_read_queue import ClipReadQueue
+    workers=min(3,max(1,int(os.environ.get('APEX_HUD_WORKERS','1'))))
+    queue=ClipReadQueue([(clip,fields,force) for clip in selected],_prepare_visual_clip,workers) if workers>1 or os.environ.get('APEX_ADAPTIVE_HUD')=='1' else nullcontext(None)
+    with queue as prepared:
+        for index,clip in enumerate(selected):
+            check_cancel();file=Path(clip.get('output',clip.get('file','')))
+            from hud_recovery import claim,stamp,committed
+            claim(file,fields)
+            def activity(details):
+                if on_activity:on_activity({'type':'hud-info-activity','index':index+1,'total':len(selected),'file':str(file),**details})
+            activity({'message':'检查已有识别结果','frames_done':0,'frames_total':0})
+            identity=fingerprint(file)
+            recognition=clip.setdefault('recognition',{});previous=recognition.get('hud_info',{})
+            previous,stale=invalidate_changed_fields(previous,identity)
+            if stale:
+                recognition['hud_info']=previous
+                # 即使新读取失败，也不能继续展示已确认属于旧视频的字段。
+                from hud_recovery import active
+                if not active():write_json(path,manifest)
+            versions=previous.get('field_versions') or {field:previous.get('version') for field in previous.get('requested_fields',[])}
+            pending=_pending_visual_fields(recognition,previous,identity,fields,force)
+            if pending:
+                options={'on_activity':activity} if on_activity else {}
+                frozen=previous.get('profile',{})
+                from hud_recovery import profile_reusable
+                if previous.get('profile_source_identity',previous.get('source_identity'))==identity and frozen.get('layout_version')==LAYOUT_VERSION and frozen.get('layout_status')=='confirmed' and profile_reusable(recognition,pending):options['profile']=frozen
+                detail_only=not force and 'rank' in pending and field_source_identity(previous,'rank')==identity and versions.get('rank')==field_version('rank') and previous.get('field_status',{}).get('rank')=='confirmed' and rank_detail_missing(previous.get('rank'))
+                current=prepared.result(index,activity) if prepared else recognize_video(file,pending,**options)
+                if fingerprint(file)!=identity or current.get('source_identity',identity)!=identity:raise ValueError('补充识别期间录像发生变化')
+                if detail_only:
+                    fresh=current.get('rank');saved=previous['rank']
+                    current['rank']={**saved,'division':fresh['division'],**({'division_evidence':fresh['division_evidence']} if fresh.get('division_evidence') else {})} if fresh and fresh['tier']==saved['tier'] and fresh.get('division') else saved
+                    current['field_status']['rank']='confirmed'
+                info={**previous,**{field:current[field] for field in pending}}
+                names=merge_name_observations(previous.get('name_observations',[]),current['name_observations'],pending)
+                info.update(version=VERSION,source_identity=identity,profile=current['profile'],checked_frames=current['checked_frames'],
+                    profile_source_identity=dict(identity),
+                    name_observations=names,frame_times=current['frame_times'],
+                    requested_fields=list(dict.fromkeys(previous.get('requested_fields',[])+pending)),
+                    field_status={**previous.get('field_status',{}),**current['field_status']})
+                info['field_versions']={**versions,**{field:field_version(field) for field in pending}}
+                known=set(previous.get('requested_fields',[]))|set(versions)
+                info['field_source_identities']={**{field:field_source_identity(previous,field) for field in FIELDS if field in known},
+                    **{field:dict(identity) for field in pending}}
+                info.pop('name_calibration_signatures',None)
+                if 'account' in pending:
+                    if current.get('account_visibility_search'):info['account_visibility_search']=current['account_visibility_search']
+                    else:info.pop('account_visibility_search',None)
+                if set(pending)&{'hero','weapons','rank'}:
+                    if current.get('visual_field_search'):info['visual_field_search']=current['visual_field_search']
+                    else:info.pop('visual_field_search',None)
+                if 'hero' in pending:
+                    info['hero_observations']=current.get('hero_observations',[])
+                    for key in ['hero_portrait_observations','hero_review_conflicts']:
+                        if key in current:info[key]=current[key]
+                        else:info.pop(key,None)
+                if 'rank' in pending:info['rank_observations']=current.get('rank_observations',[])
+                # 新算法的未知结果也须覆盖旧段位回退；当前版本的普通补缺仍保留原语义。
+                authoritative=[field for field in pending if force or field in {'hero','rank'} and versions.get(field)!=field_version(field)]
+                if authoritative:info['refreshed_fields']=list(dict.fromkeys(previous.get('refreshed_fields',[])+authoritative))
+                name_updates[id(clip)]=set(pending)
+                recognition['hud_info']=info
+                clip['recognition']=stamp(recognition,pending)
+                write_json(path,manifest)
+            else:activity({'message':'所选信息已确认，跳过读取','frames_done':0,'frames_total':0})
+            committed(file,fields,path,pending)
+            if on_progress:on_progress(index+1,len(selected),str(file))
+            if prepared:prepared.advance(index)
     # 手动重读只使用本次所选片段的姓名证据，旧片段不能把误识别带回来。
     reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected,updates=name_updates,match_keys=recorded_match_keys(manifest,directory))
     write_json(path,manifest)
@@ -588,6 +625,10 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
 
 def _child_python(backend):
     executable=Path(sys.executable).resolve()
+    if backend=='cuda':
+        for candidate in [BASE/'runtime/cuda/python.exe',BASE/'.cuda-venv/Scripts/python.exe']:
+            if candidate.is_file():return str(candidate)
+        raise RuntimeError('未找到 CUDA Python 环境，请选择自动或 CPU')
     if backend=='cpu':
         for candidate in [executable.parent.parent/'cpu'/executable.name,BASE/'.venv/Scripts/python.exe']:
             if candidate.is_file():return str(candidate)
@@ -634,6 +675,7 @@ def _run_hud_child(request,on_progress=None,on_activity=None,*,allow_partial=Fal
             if event.get('type')=='hud-info-progress' and on_progress:
                 on_progress(event['index'],event['total'],event['file'])
             elif event.get('type')=='hud-info-activity' and on_activity:on_activity(event)
+            elif event.get('type')=='hud-info-checkpoint' and on_activity:on_activity({**event,'index':0,'total':0,'file':''})
             elif event.get('type')=='hud-info-done':done=event
         code=process.wait()
         if code==75:
@@ -652,14 +694,16 @@ def _run_hud_child(request,on_progress=None,on_activity=None,*,allow_partial=Fal
         for stream in [process.stdin,process.stdout]:stream.close()
 
 
-def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,on_log=None,*,force=False,on_activity=None):
+def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,on_log=None,*,force=False,on_activity=None,checkpoint=None):
     """GPU 原生崩溃只影响补充子进程；已有成片保留，并用独立 CPU 进程续接。"""
     directory=Path(directory).resolve()
     manifest=json.loads((directory/'export.json').read_text('utf-8-sig'))
     files=files or manifest.get('outputs',[])
     backend=os.environ.get('APEX_OCR_BACKEND','cpu')
+    from performance_options import inherited_resources
     request={'jobs':[{'directory':str(directory),'files':[str(f) for f in files]}],
-        'fields':fields or FIELDS,'backend':backend,'gpu_load':os.environ.get('APEX_GPU_LOAD','low'),'force':force}
+        'fields':fields or FIELDS,'backend':backend,'gpu_load':os.environ.get('APEX_GPU_LOAD','low'),'force':force,
+        **inherited_resources(),**({'checkpoint':checkpoint} if checkpoint else {})}
     from app_cancel import TaskStopped
     try:_run_hud_child(request,on_progress,on_activity)
     except TaskStopped:raise
@@ -673,31 +717,98 @@ def enrich_manifest_isolated(directory,files=None,fields=None,on_progress=None,o
     return json.loads((directory/'export.json').read_text('utf-8-sig'))
 
 
+@contextmanager
+def hud_worker_settings():
+    import cv2
+    threads=cv2.getNumThreads()
+    before={key:os.environ.get(key) for key in ['APEX_HUD_WORKERS','APEX_OCR_POOL','APEX_DECODE_THREADS','APEX_FRAME_CACHE_MB','APEX_OCR_BACKEND','APEX_GPU_LOAD','APEX_TASK_STOP_FILE','APEX_ADAPTIVE_HUD','APEX_SCHEDULE_PRESET']}
+    try:yield
+    finally:
+        cv2.setNumThreads(threads)
+        for key,value in before.items():
+            if value is None:os.environ.pop(key,None)
+            else:os.environ[key]=value
+
+
+@hud_worker_settings()
+@native_frame_session()
+@persistent_job
 def run_jobs(request,direct=False,emit=None):
     emit=emit or (lambda event:print(json.dumps(event,ensure_ascii=False),flush=True))
+    use_policy=bool(request.get('adaptive_schedule','performance_preset' in request))
+    os.environ['APEX_ADAPTIVE_HUD']='1' if use_policy else '0'
+    os.environ['APEX_SCHEDULE_PRESET']=request.get('schedule_preset',request.get('performance_preset','high'))
+    # Settings are frozen in this dedicated process, never hot-swapped by UI IPC.
+    from performance_options import apply_resources,worker_limit
+    if 'performance_preset' in request:
+        request={**request,**apply_resources(request)}
+    elif 'decode_threads' in request or 'frame_cache_mb' in request:
+        request={**request,**apply_resources({**request,'performance_preset':'custom'})}
+    # Capture concurrency once in the controller. Older live controllers send
+    # no cpu_workers, so their later children retain the serial behavior.
+    use_policy=use_policy or os.environ.get('APEX_ADAPTIVE_HUD')=='1'
+    limit=max(1,os.cpu_count() or 1) if use_policy else (2 if request.get('backend','cpu')=='cpu' else 3)
+    if not direct:
+        default=min(limit,max(1,(os.cpu_count() or 4)//4))
+        wanted=request.get('cpu_workers',os.environ.get('APEX_HUD_WORKERS',default))
+        request={**request,'cpu_workers':worker_limit(request.get('backend','cpu'),max(1,int(wanted)))}
+    os.environ['APEX_HUD_WORKERS']=str(min(limit,max(1,int(request.get('cpu_workers',1)))))
+    # Reuse the existing bounded engine pool for sequential extra-field reads,
+    # while preserving an explicit diagnostic opt-out.
+    os.environ.setdefault('APEX_OCR_POOL','1')
     os.environ['APEX_OCR_BACKEND']=request.get('backend','cpu')
     os.environ['APEX_GPU_LOAD']=request.get('gpu_load','low')
     if request.get('stop_file'):os.environ['APEX_TASK_STOP_FILE']=str(request['stop_file'])
     check_cancel()
+    if not request['jobs']:return _run_job_sequence(request,direct,emit)
+    # One isolated process owns the entire batch so model sessions survive
+    # directory/stage boundaries. Checkpoints filter already committed fields
+    # before a CPU fallback; native failures remain isolated from Electron.
+    if not direct:
+        progress=lambda index,total,file:emit({'type':'hud-info-progress','index':index,'total':total,'file':file})
+        fields=set(request.get('fields') or FIELDS)
+        total=sum(len(job['files'])*(bool(set(job.get('fields',fields))&set(FIELDS))+bool(set(job.get('fields',fields))-set(FIELDS))) for job in request['jobs'])
+        emit({'type':'hud-info-start','index':0,'total':total,'message':'准备读取所选信息'})
+        try:
+            result=_run_hud_child(request,progress,emit,allow_partial=True)
+        except TaskStopped:raise
+        except Exception:
+            if request.get('backend','cpu')=='cpu':raise
+            emit({'type':'hud-info-activity','index':0,'total':0,'file':'','message':'GPU 识别中断，保留已保存结果并用 CPU 继续','backend':'cpu'})
+            result=_run_hud_child({**request,'backend':'cpu'},progress,emit,allow_partial=True)
+        emit(result);return result
+    from hud_batch import parallel_groups,run_batch
+    if use_policy and parallel_groups(request):
+        return run_batch(request,emit,lambda group,forward:_run_job_sequence(group,True,forward))
+    return _run_job_sequence(request,direct,emit)
+
+
+def _run_job_sequence(request,direct,emit):
     fields=list(dict.fromkeys(request.get('fields') or FIELDS))
     if any(field not in FIELDS+['statistics','opponents','event_weapons'] for field in fields):raise ValueError('识别字段无效')
     core=[field for field in fields if field in FIELDS];extra=[field for field in fields if field not in FIELDS]
-    errors=[];updated=set();unconfirmed=set();offset=0;phases=bool(core)+bool(extra);total=sum(len(job['files']) for job in request['jobs'])*phases
+    errors=[];updated=set();unconfirmed=set();offset=0
+    total=sum(len(job['files'])*(bool(set(job.get('fields',fields))&set(FIELDS))+bool(set(job.get('fields',fields))-set(FIELDS))) for job in request['jobs'])
     emit({'type':'hud-info-start','index':0,'total':total,'message':'准备读取所选信息'})
     for job in request['jobs']:
         check_cancel()
+        local_fields=job.get('fields',fields)
+        core=[field for field in local_fields if field in FIELDS];extra=[field for field in local_fields if field not in FIELDS]
         count=len(job['files'])
         if core:
             try:
                 enrich=enrich_manifest if direct else enrich_manifest_isolated
                 result=enrich(job['directory'],job['files'],core,
                     lambda index,local_total,file:emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file}),
-                    force=request.get('force',False),on_activity=lambda event:emit({**event,'index':offset+event['index'],'total':total}))
+                    force=request.get('force',False),on_activity=lambda event:emit({**event,'index':offset+event['index'],'total':total}),
+                    **({'checkpoint':request['checkpoint']} if not direct and request.get('checkpoint') else {}))
                 updated.update(job['files']);wanted={str(Path(file).resolve()).casefold() for file in job['files']}
                 for clip in result['clips']:
                     file=clip.get('output',clip.get('file',''))
                     if str(Path(file).resolve()).casefold() in wanted and any(field_unconfirmed(clip.get('recognition',{}).get('hud_info',{}),field) for field in core):unconfirmed.add(file)
             except Exception as error:
+                from hud_recovery import failed
+                for file in job['files']:failed(file,core,error)
                 errors.append({'directory':job['directory'],'message':str(error)})
                 emit({'type':'hud-info-error','index':offset,'total':total,'message':'HUD 信息尚未完成，继续下一项','failures':len(errors)})
             offset+=count
@@ -705,24 +816,42 @@ def run_jobs(request,direct=False,emit=None):
             errors_before=len(errors)
             try:
                 if direct:
-                    from repair_cached_statistics import repair,exported_clips,opponent_needs_review,needs_fields
+                    from repair_cached_statistics import repair,commit_repair,exported_clips,opponent_needs_review,needs_fields
                     directory=Path(job['directory']);statistics=directory/'statistics.json'
                     if not statistics.is_file():raise ValueError('此记录缺少战果统计，无法复核战绩或敌人姓名')
                     original=json.loads(statistics.read_text('utf-8-sig'));clips=exported_clips(directory,original)
-                    for index,file in enumerate(job['files'],1):
-                        check_cancel()
-                        def activity(event):emit({'type':'hud-info-activity','index':offset+index,'total':total,'file':file,'fields':extra,'backend':request.get('backend','cpu'),**event})
-                        activity({'message':'读取成片原生画面，复核战果信息','frames_done':0,'frames_total':0})
-                        try:
-                            result=repair({'directory':str(directory),'files':[file],'fields':extra,'native':True,'force':request.get('force',False),'recheck_existing':request.get('force',False),'recheck_names':'opponents' in extra},on_activity=activity)
-                            updated.add(file)
-                            if result:
-                                selected=next((clip for clip,identity in clips if identity['path'].casefold()==str(Path(file).resolve()).casefold()),None)
-                                bound=selected.get('segment',{}) if selected else {}
-                                fixed=next((segment for segment in result['segments'] if all(abs(segment[key]-bound.get(key,-1))<.001 for key in ['start','end'])),None)
-                                if fixed and (needs_fields(fixed,set(extra)) or 'statistics' in extra and request.get('force',False) and set(fixed.get('native_repaired_fields',[]))!={'kills','assists','damage'}):unconfirmed.add(file)
-                        except Exception as error:errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
-                        emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file})
+                    from hud_read_queue import ClipReadQueue
+                    workers=min(3,max(1,int(os.environ.get('APEX_HUD_WORKERS','1'))))
+                    bounds=[tuple(next((clip.get('segment',{}) for clip,identity in clips if identity['path'].casefold()==str(Path(file).resolve()).casefold()),{}).get(key) for key in ['start','end']) for file in job['files']]
+                    if len(set(bounds))!=len(bounds):workers=1
+                    records=[{'directory':str(directory),'files':[file],'fields':extra,'native':True,'force':request.get('force',False),'recheck_existing':request.get('force',False),'recheck_names':'opponents' in extra} for file in job['files']]
+                    queue=ClipReadQueue(records,_prepare_extra_clip,workers) if workers>1 or os.environ.get('APEX_ADAPTIVE_HUD')=='1' else nullcontext(None)
+                    with queue as prepared_extra:
+                        for index,file in enumerate(job['files'],1):
+                            check_cancel()
+                            from hud_recovery import claim,commit_extra,failed,active as recovery_active
+                            claim(file,extra)
+                            def activity(event):emit({'type':'hud-info-activity','index':offset+index,'total':total,'file':file,'fields':extra,'backend':request.get('backend','cpu'),**event})
+                            activity({'message':'读取成片原生画面，复核战果信息','frames_done':0,'frames_total':0})
+                            try:
+                                computed=()
+                                if prepared_extra or recovery_active():
+                                    item=prepared_extra.result(index-1,activity) if prepared_extra else _prepare_extra_clip(records[index-1],activity)
+                                    result=commit_repair(item,on_activity=activity)
+                                    computed=getattr(item,'computed_fields',())
+                                else:result=repair(records[index-1],on_activity=activity)
+                                updated.add(file)
+                                if result:
+                                    selected=next((clip for clip,identity in clips if identity['path'].casefold()==str(Path(file).resolve()).casefold()),None)
+                                    bound=selected.get('segment',{}) if selected else {}
+                                    fixed=next((segment for segment in result['segments'] if all(abs(segment[key]-bound.get(key,-1))<.001 for key in ['start','end'])),None)
+                                    if fixed and (needs_fields(fixed,set(extra)) or 'statistics' in extra and request.get('force',False) and set(fixed.get('native_repaired_fields',[]))!={'kills','assists','damage'}):unconfirmed.add(file)
+                                commit_extra(directory,file,extra,computed)
+                            except Exception as error:
+                                failed(file,extra,error)
+                                errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
+                            emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file})
+                            if prepared_extra:prepared_extra.advance(index-1)
                 else:
                     payload={**request,'jobs':[job],'fields':extra}
                     progress=lambda index,local_total,file:emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file})

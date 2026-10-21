@@ -10,6 +10,7 @@
 .library-controls .styled-select,.playback-browser-order .styled-select,.playback-browser-order .sort-direction,.is-wide .playback-browser-icon,.clip-library .library-selection-toolbar>button,
 .clip-card .clip-file-actions.clip-action-toolbar.clip-actions-compact .clip-action,.clip-expanded .clip-cover .player-control-row button,.clip-expanded .clip-cover .event-marker,.clip-card .duration{border-radius:var(--radius-information)}
 .settings-fields .styled-select,.calendar-grid>button{border-radius:var(--radius-information)}
+.hud-enrichment-panel>.primary{justify-self:start;align-self:end;width:max-content;max-width:100%;height:36px;min-height:36px;padding:0 16px;font-size:12px;line-height:1.2}
 
 /* Weapon tags share the trailing edge of library card actions. */
 .clips-grid.view-grid .clip-info>.clip-details>.clip-weapons,

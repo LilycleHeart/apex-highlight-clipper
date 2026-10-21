@@ -1,10 +1,11 @@
 import {app,BrowserWindow,dialog,ipcMain,nativeTheme,systemPreferences,protocol,shell,net,screen} from 'electron';
-import {spawn,ChildProcess} from 'node:child_process';
+import {execFile,spawn,ChildProcess} from 'node:child_process';
 import fs from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import os from 'node:os';
+import {normalizePerformance,resolvePerformance} from '../src/performanceOptions';
 import {restoreWindowPlacement,type WindowPlacement} from './windowPlacement';
 import {normalizeTeammateExclusions,changeTeammateExclusion} from '../src/teammateExclusions';
 import {shareFiles} from './qqShare';
@@ -48,7 +49,26 @@ const thumbnails=new ThumbnailStore(path.join(app.getPath('userData'),'thumbnail
 const clipDurations=new Map<string,number>();const clipDirectories=new Map<string,string>();
 const clipTasks=new Map<string,string>();const originalVideos=new Set<string>();
 let hudWorker:ChildProcess|null=null;let hudLaunching=false;let hudStopFile='';let hudStopRequested=false;
-function pythonFor(backend:'cpu'|'dml'='cpu'){const bundled=path.join(project,'runtime',backend,'python.exe');return existsSync(bundled)?bundled:path.join(project,backend==='dml'?'.gpu-venv/Scripts/python.exe':'.venv/Scripts/python.exe');}
+function pythonFor(backend:'cpu'|'dml'|'cuda'='cpu'){const bundled=path.join(project,'runtime',backend,'python.exe');return existsSync(bundled)?bundled:path.join(project,backend==='cuda'?'.cuda-venv/Scripts/python.exe':backend==='dml'?'.gpu-venv/Scripts/python.exe':'.venv/Scripts/python.exe');}
+let cudaHealth:Promise<boolean>|null=null;
+function cudaAvailable():Promise<boolean>{
+ if(!existsSync(pythonFor('cuda')))return Promise.resolve(false);
+ // Provider enumeration can succeed even when cuDNN/CUDA DLLs cannot load.
+ // Probe once per app process with the same adapter used by recognition jobs.
+ return cudaHealth??=new Promise<boolean>(resolve=>{
+  let timeout:ReturnType<typeof setTimeout>|undefined;
+  const probe=execFile(pythonFor('cuda'),['-B','-X','utf8','-c',"import numpy as np; from gpu_ocr_backend import create_ocr_engine; e=create_ocr_engine(backend='cuda',rec_batch_num=1); e.text_rec([np.zeros((32,160,3),dtype=np.uint8)]); print('APEX_CUDA_READY')"],{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1',APEX_GPU_LOAD:'fast'}},(error,stdout)=>{
+   if(timeout)clearTimeout(timeout);
+   resolve(!error&&stdout.trim().split(/\r?\n/).includes('APEX_CUDA_READY'));
+  });
+  timeout=setTimeout(()=>{
+   resolve(false);
+   // A Windows venv launcher may own another Python process; stop both.
+   if(process.platform==='win32'&&probe.pid)execFile('taskkill',['/PID',String(probe.pid),'/T','/F'],{windowsHide:true,timeout:5000},()=>{if(!probe.killed)probe.kill();});
+   else probe.kill();
+  },20000);
+ });
+}
 // Upgrades may preserve source timestamps; never reuse adjacent bytecode from an older kernel.
 function pythonArguments(entry:string,...args:string[]){return ['-B','-X','utf8','-X',`pycache_prefix=${path.join(validationRoot,'unused-bytecode',randomUUID())}`,entry,...args];}
 const development=!app.isPackaged||process.argv.includes('--preview');
@@ -122,7 +142,7 @@ async function imageUrl(p:string){
  let key=imageKeys.get(real);if(!key){key=randomUUID();images.set(key,real);imageKeys.set(real,key);if(images.size>6000){const oldest=images.keys().next().value!;imageKeys.delete(images.get(oldest)!);images.delete(oldest);}}
  return `apex-media://image/${key}`;
 }
-async function taskInfo(p:string):Promise<TaskInfo>{const task=await readJson(p);validateTaskStorage(task,p);const historic={...task,items:task.items.filter((item:any)=>[item.analysis_cache,item.record?.analysis_cache].some(raw=>typeof raw==='string'&&path.isAbsolute(raw)&&![validationRoot,legacyValidationRoot].some(root=>within(path.resolve(raw),root))&&![...taskSampleRoots].some(root=>within(root,path.resolve(raw)))))};for(const root of await recordedSampleDirectories(historic))taskSampleRoots.add(root);allowedTasks.add(normalized(p));allowedPaths.add(normalized(task.directory));for(const item of task.items){allowedPaths.add(normalized(item.source));originalVideos.add(normalized(item.source));diagnostics.alias(item.source,'<video>');diagnostics.alias(path.basename(item.source),'<video>');}return{path:p,directory:task.directory,output:task.request.output||path.dirname(task.directory),finished:task.finished,legacyRule:!task.result_filter_version,samplingWarning:task.request.fps<1?'旧任务低采样率可能漏掉交战；新建任务建议至少1帧/秒':'',options:safeOptions({...defaults,...task.request},true),items:task.items.map((i:any)=>({id:normalized(i.source),path:i.source,name:path.basename(i.source),status:i.status==='error'?'error':i.status==='complete'?'complete':i.status==='running'?'stopped':'pending',missing:!existsSync(i.source),processingSeconds:processingTimes.seconds(p,i.source,historicProcessingSeconds(i)),error:i.record?.error}))};}
+async function taskInfo(p:string):Promise<TaskInfo>{const task=await readJson(p);validateTaskStorage(task,p);const historic={...task,items:task.items.filter((item:any)=>[item.analysis_cache,item.record?.analysis_cache].some(raw=>typeof raw==='string'&&path.isAbsolute(raw)&&![validationRoot,legacyValidationRoot].some(root=>within(path.resolve(raw),root))&&![...taskSampleRoots].some(root=>within(root,path.resolve(raw)))))};for(const root of await recordedSampleDirectories(historic))taskSampleRoots.add(root);allowedTasks.add(normalized(p));allowedPaths.add(normalized(task.directory));for(const item of task.items){allowedPaths.add(normalized(item.source));originalVideos.add(normalized(item.source));diagnostics.alias(item.source,'<video>');diagnostics.alias(path.basename(item.source),'<video>');}return{path:p,directory:task.directory,output:task.request.output||path.dirname(task.directory),finished:task.finished,legacyRule:!task.result_filter_version,samplingWarning:task.request.fps<1?'旧任务低采样率可能漏掉交战；新建任务建议至少1帧/秒':'',options:safeOptions({...defaults,...task.request,...normalizePerformance(task.request)},true),items:task.items.map((i:any)=>({id:normalized(i.source),path:i.source,name:path.basename(i.source),status:i.status==='error'?'error':i.status==='complete'?'complete':i.status==='running'?'stopped':'pending',missing:!existsSync(i.source),processingSeconds:processingTimes.seconds(p,i.source,historicProcessingSeconds(i)),error:i.record?.error}))};}
 async function lastTask(){for(const root of [validationRoot,legacyValidationRoot])try{const record=await readJson(path.join(root,'app-last-task.json'));if(!libraryStore.isIgnored(record.task))return await taskInfo(record.task);}catch{}return libraryStore.recoverLastTask([output,path.join(dataRoot,'tasks')],path.join(validationRoot,'app-last-task.json'),taskInfo);}
 const repairedCounters=new Set<string>();let counterRepair:Promise<void>|null=null;let repairWorker:ChildProcess|null=null;let counterStopFile='';
 async function stopCounterRepair(){const pending=counterRepair;if(!pending)return;const file=counterStopFile;if(file){await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,'stop','utf8');}await pending;}
@@ -168,10 +188,15 @@ async function collectLibrary(){
 }
 async function metadata(file:FileItem){await new Promise<void>(resolve=>{const executable=pythonFor();const proc=spawn(executable,pythonArguments('app_ui_info.py',file.path),{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});let result='';proc.stdout.setEncoding('utf8');proc.stdout.on('data',t=>result+=t);const timeout=setTimeout(()=>proc.kill(),20000);proc.on('error',()=>{clearTimeout(timeout);resolve();});proc.on('close',()=>{clearTimeout(timeout);try{const info=JSON.parse(result.trim());send({type:'metadata',source:file.path,...info} as WorkerEvent);}catch{send({type:'metadata',source:file.path,message:'无法读取录像信息'});}resolve();});});}
 async function imports(paths:unknown):Promise<{files:FileItem[];rejected:string[]}>{if(!Array.isArray(paths)||paths.length>500)throw new Error('录像清单无效');const files:FileItem[]=[];const rejected:string[]=[];const seen=new Set<string>();for(const raw of paths){if(typeof raw!=='string'||!raw)continue;const p=path.resolve(raw);diagnostics.alias(p,'<video>');diagnostics.alias(path.basename(p),'<video>');if(seen.has(normalized(p)))continue;seen.add(normalized(p));try{const stat=await fs.stat(p);if(!stat.isFile()||!videoExtensions.has(path.extname(p).toLowerCase()))throw new Error();allowedPaths.add(normalized(p));files.push({id:normalized(p),path:p,name:path.basename(p),bytes:stat.size,status:'pending'});}catch{rejected.push(path.basename(p));}}let next=0;const pump=async()=>{while(next<files.length)await metadata(files[next++]);};void pump();void pump();return{files,rejected};}
+async function performanceSnapshot(value:Options){
+ const captured=normalizePerformance(value,true);let available=existsSync(pythonFor('dml'));
+ if(captured.backend==='auto'&&available)available=await new Promise<boolean>(resolve=>execFile(pythonFor('dml'),['-B','-c',"import onnxruntime as ort; print('DmlExecutionProvider' in ort.get_available_providers())"],{cwd:project,windowsHide:true,timeout:10000,env:{...process.env,PYTHONUTF8:'1'}},(error,stdout)=>resolve(!error&&stdout.trim()==='True')));
+ return resolvePerformance(captured,available,os.cpus().length,captured.backend==='cuda'?await cudaAvailable():false);
+}
 async function start(payload:any,resume=false){if(clipDeletions.busy)throw new Error('正在回收片段，请稍候再开始任务');if(updating)throw new Error('正在更新软件，请稍后再开始任务');if(worker&&terminal)await workerExit;if(worker||launching||hudWorker||hudLaunching)throw new Error('已有识别任务正在处理');launching=true;stopRequested=false;terminal=false;
- try{await stopCounterRepair();if(maintenanceTimer){clearTimeout(maintenanceTimer);maintenanceTimer=null;}if(maintenance){maintenance.kill();await maintenanceExit;}let effective=safeOptions(payload.options,resume);let request:any;
-  if(resume){if(!allowedTasks.has(normalized(payload.task)))throw new Error('请先选择续接任务');const info=await taskInfo(payload.task);request={resume_task:info.path,backend:effective.backend,gpu_load:effective.gpu_load,pipeline:effective.pipeline};currentTask=info.path;}
-  else{if(!Array.isArray(payload.files)||!payload.files.length||payload.files.some((f:unknown)=>typeof f!=='string'||!allowedPaths.has(normalized(f))))throw new Error('请先导入录像');if(typeof payload.output!=='string'||!path.isAbsolute(payload.output))throw new Error('输出目录无效');options=effective;output=payload.output;await save();request={...effective,files:payload.files,output:payload.output};}
+ try{const chosen=safeOptions(payload.options,resume);if(!resume)options=chosen;await stopCounterRepair();if(maintenanceTimer){clearTimeout(maintenanceTimer);maintenanceTimer=null;}if(maintenance){maintenance.kill();await maintenanceExit;}const effective={...chosen,...await performanceSnapshot(chosen)};let request:any;
+  if(resume){if(!allowedTasks.has(normalized(payload.task)))throw new Error('请先选择续接任务');const info=await taskInfo(payload.task);request={resume_task:info.path,...normalizePerformance(effective),backend:effective.backend,pipeline:effective.pipeline};currentTask=info.path;}
+  else{if(!Array.isArray(payload.files)||!payload.files.length||payload.files.some((f:unknown)=>typeof f!=='string'||!allowedPaths.has(normalized(f))))throw new Error('请先导入录像');if(typeof payload.output!=='string'||!path.isAbsolute(payload.output))throw new Error('输出目录无效');output=payload.output;await save();request={...effective,files:payload.files,output:payload.output};}
   const root=path.join(validationRoot,'app-requests');await fs.mkdir(root,{recursive:true});const id=randomUUID();stopFile=path.join(root,id+'.stop');const requestPath=path.join(root,id+'.json');request.stop_file=stopFile;await fs.writeFile(requestPath,JSON.stringify(request),'utf8');if(stopRequested)await fs.writeFile(stopFile,'stop','utf8');
   const python=pythonFor(effective.backend);if(!existsSync(python))throw new Error('未找到选定设备的 Python 环境');
   const proc=spawn(python,pythonArguments('app_worker.py',requestPath),{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1',PYTHONIOENCODING:'utf-8'}});worker=proc;workerExit=new Promise<void>(resolve=>{resolveWorkerExit=resolve;});
@@ -193,28 +218,41 @@ async function start(payload:any,resume=false){if(clipDeletions.busy)throw new E
 }
 async function stop(){stopRequested=true;if(stopFile)await fs.writeFile(stopFile,'stop','utf8');if(hudWorker||hudLaunching){hudStopRequested=true;if(hudStopFile)await fs.writeFile(hudStopFile,'stop','utf8');}}
 function trusted(event:Electron.IpcMainInvokeEvent){if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)throw new Error('不允许的界面请求');}
-async function enrichHud(files:unknown,fields:unknown,mode:unknown='missing'){
+const hudRecoveryRoot=path.join(app.getPath('userData'),'hud-jobs');
+let activeHudJob='';
+async function recoveryMetadata(extra:Record<string,unknown>={}){
+ const payload={root:hudRecoveryRoot,clips:[...clipDirectories].filter(([file])=>allowedClips.has(file)).map(([file,directory])=>({file,directory})),...extra};
+ return new Promise<any>((resolve,reject)=>{
+  const proc=spawn(pythonFor('cpu'),pythonArguments('hud_recovery_snapshot.py','--stdin'),{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});let text='',error='';
+  proc.stdout?.setEncoding('utf8');proc.stdout?.on('data',chunk=>text+=chunk);proc.stderr?.setEncoding('utf8');proc.stderr?.on('data',chunk=>error=(error+chunk).slice(-2000));
+  proc.once('error',reject);proc.once('close',code=>{if(code!==0){reject(new Error(error||'无法读取识别检查点'));return;}try{const result=JSON.parse(text);if(Array.isArray(result.jobs))result.jobs=result.jobs.map((job:any)=>job.id===activeHudJob&&job.status!=='completed'?{...job,status:'running'}:job);resolve(result);}catch(error){reject(error);}});
+  proc.stdin?.end(JSON.stringify(payload));
+ });
+}
+async function enrichHud(files:unknown,fields:unknown,mode:unknown='missing',recovery:Record<string,unknown>={}){
  if(updating)throw new Error('正在更新软件，请稍后补充信息');
  if(clipDeletions.busy||worker||launching||hudWorker||hudLaunching)throw new Error('请先等待当前处理结束');
  const selectedFiles=safeHudFiles(files,allowedClips,normalized);
  if(!Array.isArray(fields)||!fields.length||fields.some(field=>!['account','weapons','teammates','hero','rank','statistics','opponents','event_weapons'].includes(field)))throw new Error('请选择要补充的HUD信息');
  if(mode!=='missing'&&mode!=='refresh')throw new Error('HUD识别模式无效');
+ const chosen={...options};
  for(const file of selectedFiles){diagnostics.alias(file,'<clip>');diagnostics.alias(path.basename(file),'<clip>');}hudLaunching=true;hudStopRequested=false;let requestPath='';
  try{
+ const snapshot=await performanceSnapshot(chosen);
  if(counterRepair){send({type:'hud-info-start',index:0,total:selectedFiles.length,message:'正在结束后台记录处理'});await stopCounterRepair();}
  if(maintenance){maintenance.kill();await maintenanceExit;}
  if(hudStopRequested)throw new Error('识别已停止');
  const grouped=new Map<string,string[]>();for(const file of selectedFiles){const dir=clipDirectories.get(normalized(file));if(!dir)throw new Error('片段没有对应任务记录');const group=grouped.get(dir);if(group)group.push(file);else grouped.set(dir,[file]);}
  const root=path.join(validationRoot,'app-requests');await fs.mkdir(root,{recursive:true});requestPath=path.join(root,randomUUID()+'.json');hudStopFile=requestPath+'.stop';
- await fs.writeFile(requestPath,JSON.stringify({stop_file:hudStopFile,jobs:[...grouped].map(([directory,files])=>({directory,files})),fields,force:mode==='refresh',backend:options.backend,gpu_load:options.gpu_load}),'utf8');if(hudStopRequested)await fs.writeFile(hudStopFile,'stop','utf8');
+ await fs.writeFile(requestPath,JSON.stringify({stop_file:hudStopFile,jobs:[...grouped].map(([directory,files])=>({directory,files})),fields,force:mode==='refresh',...normalizePerformance(snapshot),backend:snapshot.backend,recovery_root:hudRecoveryRoot,...recovery}),'utf8');if(hudStopRequested)await fs.writeFile(hudStopFile,'stop','utf8');
  send({type:'hud-info-start',index:0,total:selectedFiles.length,message:mode==='refresh'?'准备重新识别':'准备补充未识别信息'});
  return await new Promise<HudEnrichmentResult>((resolve,reject)=>{
-  const proc=spawn(pythonFor(options.backend),pythonArguments('hud_enrichment.py',requestPath),{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});hudWorker=proc;
+  const proc=spawn(pythonFor(snapshot.backend),pythonArguments('hud_enrichment.py',requestPath),{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});hudWorker=proc;
   let done:HudEnrichmentResult|null=null,stderr='';
-  const lines=new JsonLines(event=>{if(event.type==='hud-info-done')done=event as unknown as typeof done;else send(event as unknown as WorkerEvent);},()=>{});
+  const lines=new JsonLines(event=>{if(event.type==='hud-info-checkpoint'&&typeof event.job_id==='string')activeHudJob=event.job_id;if(event.type==='hud-info-done')done=event as unknown as typeof done;else send(event as unknown as WorkerEvent);},()=>{});
   proc.stdout?.on('data',chunk=>lines.push(chunk));proc.stderr?.setEncoding('utf8');proc.stderr?.on('data',chunk=>stderr=(stderr+chunk).slice(-2000));
   proc.once('error',reject);proc.once('close',code=>{lines.end();hudWorker=null;if(code===0&&done)resolve(done);else reject(new Error(code===75?'识别已停止，已读取的信息已保存':stderr||'信息识别中断，可重新继续'));});
- });}finally{hudWorker=null;hudLaunching=false;if(requestPath)await fs.unlink(requestPath).catch(()=>{});if(hudStopFile)await fs.unlink(hudStopFile).catch(()=>{});hudStopFile='';scheduleMaintenance(true);if(closing&&!worker&&!launching){closing=false;if(!win.isDestroyed())win.close();}}
+ });}finally{activeHudJob='';hudWorker=null;hudLaunching=false;if(requestPath)await fs.unlink(requestPath).catch(()=>{});if(hudStopFile)await fs.unlink(hudStopFile).catch(()=>{});hudStopFile='';scheduleMaintenance(true);if(closing&&!worker&&!launching){closing=false;if(!win.isDestroyed())win.close();}}
 }
 function handle(name:string,fn:(...args:any[])=>any){ipcMain.handle(name,async(event,...args)=>{trusted(event);try{return await fn(...args);}catch(error){diagnostics.log('error','ipc:'+name,error instanceof Error?error.message:String(error),{stack:error instanceof Error?error.stack:undefined});throw error;}});}
 
@@ -222,7 +260,7 @@ async function diagnosticTask(){
  const attachments:{name:string;text:string}[]=[];let file=currentTask;
  if(!file)for(const root of [validationRoot,legacyValidationRoot]){try{file=(await readJson(path.join(root,'app-last-task.json'))).task;if(file)break;}catch{}}
  let summary:unknown=null;const traceFiles=[path.join(updateRoot,'install.log')],traceRoots=[validationRoot,legacyValidationRoot,updateRoot];
- try{if(file){const task=await readJson(file);validateTaskStorage(task,file);traceRoots.push(task.directory);traceFiles.push(path.join(task.directory,'error.log'));summary={version:task.version,finished:task.finished,options:safeOptions({...defaults,...task.request},true),items:task.items.slice(0,500).map((item:any,index:number)=>{diagnostics.alias(item.source,`<video-${index+1}>`);diagnostics.alias(path.basename(item.source),`<video-${index+1}>`);const cache=item.analysis_cache||item.record?.analysis_cache;if(['error','running'].includes(item.status)&&typeof cache==='string'&&path.isAbsolute(cache))traceFiles.push(path.join(cache,'error.log'));return{index:index+1,status:item.status,stage:item.stage,error:item.record?.error,outputs:item.record?.outputs?.length||0};})};}}
+ try{if(file){const task=await readJson(file);validateTaskStorage(task,file);traceRoots.push(task.directory);traceFiles.push(path.join(task.directory,'error.log'));summary={version:task.version,finished:task.finished,options:safeOptions({...defaults,...task.request,...normalizePerformance(task.request)},true),items:task.items.slice(0,500).map((item:any,index:number)=>{diagnostics.alias(item.source,`<video-${index+1}>`);diagnostics.alias(path.basename(item.source),`<video-${index+1}>`);const cache=item.analysis_cache||item.record?.analysis_cache;if(['error','running'].includes(item.status)&&typeof cache==='string'&&path.isAbsolute(cache))traceFiles.push(path.join(cache,'error.log'));return{index:index+1,status:item.status,stage:item.stage,error:item.record?.error,outputs:item.record?.outputs?.length||0};})};}}
  catch(error){summary={unavailable:true,error:String(error)};}
  const roots=(await Promise.all(traceRoots.map(root=>fs.realpath(root).catch(()=>'')))).filter(Boolean);
  for(const candidate of [...new Set(traceFiles)].slice(0,11)){try{const stat=await fs.lstat(candidate);if(!stat.isFile()||stat.isSymbolicLink()||Date.now()-stat.mtimeMs>7*86400000)continue;const real=await fs.realpath(candidate);if(!roots.some(root=>within(real,root)))continue;const reader=await fs.open(candidate,'r');try{const size=Math.min(128*1024,stat.size),buffer=Buffer.alloc(size);const{bytesRead}=await reader.read(buffer,0,size,Math.max(0,stat.size-size));attachments.push({name:`errors/error-${attachments.length+1}.log`,text:buffer.subarray(0,bytesRead).toString('utf8')});}finally{await reader.close();}}catch{}}
@@ -235,7 +273,7 @@ app.whenReady().then(async()=>{
  await libraryStore.load();
  await clipDeletions.load();
  await processingTimes.load();
- try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));windowPlacement=restoreWindowPlacement(saved.windowPlacement,screen.getAllDisplays().map(display=>display.workArea),screen.getPrimaryDisplay().workArea);playerAudio=normalizePlayerAudio(saved.playerAudio);excludedTeammates=normalizeTeammateExclusions(saved.excludedTeammates);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences,...normalizeAnimationPreferences(saved.preferences)};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
+ try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));windowPlacement=restoreWindowPlacement(saved.windowPlacement,screen.getAllDisplays().map(display=>display.workArea),screen.getPrimaryDisplay().workArea);playerAudio=normalizePlayerAudio(saved.playerAudio);excludedTeammates=normalizeTeammateExclusions(saved.excludedTeammates);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences,...normalizeAnimationPreferences(saved.preferences)};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,...normalizePerformance(previousOptions),fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
  diagnostics.alias(dataRoot,'<data>');diagnostics.alias(output,'<output>');diagnostics.log('info','startup','设置已载入',{options,theme:preferences.mode});
  protocol.handle('apex-media',async request=>{try{const url=new URL(request.url);if(url.hostname==='video')return videos.respond(request);const p=images.get(url.pathname.slice(1));if(url.hostname!=='image'||!p)return new Response('Not found',{status:404});const data=await fs.readFile(p);return new Response(data,{headers:{'Content-Type':p.endsWith('.png')?'image/png':'image/jpeg','Cache-Control':'private, max-age=60'}});}catch{return new Response('Unavailable',{status:404});}});
  const initial=theme();const dark=preferences.mode==='dark'||(preferences.mode==='system'&&initial.dark);
@@ -256,7 +294,7 @@ app.whenReady().then(async()=>{
  let rendererReports=0,rendererReportWindow=Date.now();
  handle('renderer-diagnostic',(report:unknown)=>{if(!report||typeof report!=='object')return;const{type,message,stack}=report as Record<string,unknown>;if(!['error','action'].includes(String(type))||typeof message!=='string')return;if(Date.now()-rendererReportWindow>60000){rendererReports=0;rendererReportWindow=Date.now();}if(++rendererReports>120)return;diagnostics.log(type==='error'?'error':'info','renderer-'+type,message.slice(0,2000),{stack:typeof stack==='string'?stack.slice(0,8000):undefined});});
  handle('open-diagnostics',async()=>{const info=await diagnostics.info();if(!info.available)throw new Error(info.message||'日志尚未生成');const error=await shell.openPath(diagnostics.directory);if(error)throw new Error(error);});
- handle('export-diagnostics',async()=>{const choice=await dialog.showSaveDialog(win,{title:'导出诊断包',defaultPath:path.join(app.getPath('desktop'),`AHC-diagnostics-v${app.getVersion()}-${new Date().toISOString().slice(0,10)}.zip`),filters:[{name:'诊断包 ZIP',extensions:['zip']}]});if(choice.canceled||!choice.filePath)return null;const file=choice.filePath.endsWith('.zip')?choice.filePath:choice.filePath+'.zip',task=await diagnosticTask();let gpu:unknown;try{const info=await app.getGPUInfo('basic') as Record<string,unknown>;if(Array.isArray(info.gpuDevice))gpu=info.gpuDevice.map(device=>Object.fromEntries(['vendorId','deviceId','driverVendor','driverVersion','deviceString','active'].filter(key=>device[key]!==undefined).map(key=>[key,device[key]])));}catch{}await diagnostics.export(file,{createdAt:new Date().toISOString(),version:app.getVersion(),system:{platform:process.platform,release:os.release(),arch:process.arch,cpu:os.cpus()[0]?.model,logicalCores:os.cpus().length,memoryMiB:Math.round(os.totalmem()/1024**2),versions:process.versions,gpu},options,theme:preferences,task:task.summary,library:{unreadable:unreadableTasks.length},update:{status:updateInfo.status,latestVersion:updateInfo.latestVersion,installState:updateInfo.installState,installMessage:updateInfo.installMessage},runtime:{cpu:existsSync(pythonFor('cpu')),dml:existsSync(pythonFor('dml'))}},task.attachments);return file;});
+ handle('export-diagnostics',async()=>{const choice=await dialog.showSaveDialog(win,{title:'导出诊断包',defaultPath:path.join(app.getPath('desktop'),`AHC-diagnostics-v${app.getVersion()}-${new Date().toISOString().slice(0,10)}.zip`),filters:[{name:'诊断包 ZIP',extensions:['zip']}]});if(choice.canceled||!choice.filePath)return null;const file=choice.filePath.endsWith('.zip')?choice.filePath:choice.filePath+'.zip',task=await diagnosticTask();let gpu:unknown;try{const info=await app.getGPUInfo('basic') as Record<string,unknown>;if(Array.isArray(info.gpuDevice))gpu=info.gpuDevice.map(device=>Object.fromEntries(['vendorId','deviceId','driverVendor','driverVersion','deviceString','active'].filter(key=>device[key]!==undefined).map(key=>[key,device[key]])));}catch{}await diagnostics.export(file,{createdAt:new Date().toISOString(),version:app.getVersion(),system:{platform:process.platform,release:os.release(),arch:process.arch,cpu:os.cpus()[0]?.model,logicalCores:os.cpus().length,memoryMiB:Math.round(os.totalmem()/1024**2),versions:process.versions,gpu},options,theme:preferences,task:task.summary,library:{unreadable:unreadableTasks.length},update:{status:updateInfo.status,latestVersion:updateInfo.latestVersion,installState:updateInfo.installState,installMessage:updateInfo.installMessage},runtime:{cpu:existsSync(pythonFor('cpu')),dml:existsSync(pythonFor('dml')),cuda:existsSync(pythonFor('cuda'))}},task.attachments);return file;});
  handle('open-feedback',()=>shell.openExternal('https://github.com/LilycleHeart/apex-highlight-clipper/issues/new?title='+encodeURIComponent(`[v${app.getVersion()}] 问题反馈`)+'&body='+encodeURIComponent(`软件版本：v${app.getVersion()}\n\n问题现象：\n\n复现步骤：\n1. \n\n请将“剪辑设置 → 诊断与反馈 → 导出诊断包”生成的 ZIP 拖入此处上传。`)));
  let shown=false;const showWindow=()=>{if(shown||win.isDestroyed())return;shown=true;if(placement.maximized)win.maximize();win.show();scheduleUpdate();scheduleMaintenance();};handle('ui-ready',showWindow);setTimeout(showWindow,10000).unref();
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());
@@ -264,7 +302,7 @@ app.whenReady().then(async()=>{
  win.on('close',event=>{if(hudWorker||hudLaunching){event.preventDefault();if(!closing){closing=true;send({type:'close-request',message:'正在停止信息识别，已读结果会保留'});void stop();}return;}if(counterRepair){event.preventDefault();if(!closing){closing=true;void stopCounterRepair().finally(()=>{closing=false;if(!win.isDestroyed())win.close();});}return;}repairWorker?.kill();repairWorker=null;if(worker||launching){event.preventDefault();if(!closing){closing=true;send({type:'close-request',message:'窗口将在断点保存后关闭'});void stop();}}else if(!closeSaveFinished){event.preventDefault();clearTimeout(placementTimer);placementTimer=undefined;rememberPlacement();void save().catch(error=>diagnostics.log('error','window-placement',String(error))).then(()=>flushSaves()).then(()=>{closeSaveFinished=true;if(!win.isDestroyed())win.close();});}});
  const changed=()=>{if(!win.isDestroyed())win.webContents.send('system-theme',theme());};nativeTheme.on('updated',changed);systemPreferences.on('accent-color-changed',changed);systemPreferences.on('color-changed',changed);
  handle('chrome',(color:string,foreground:string)=>{if(!/^#[\da-f]{6}$/i.test(color)||!/^#[\da-f]{6}$/i.test(foreground))throw new Error('窗口配色无效');win.setBackgroundColor(color);});
- handle('bootstrap',async()=>({output,options,preferences,playerAudio,excludedTeammates,theme:theme(),development,lastTask:await lastTask(),backendAvailable:existsSync(pythonFor('dml')),update:updateInfo}));
+ handle('bootstrap',async()=>({output,options,preferences,playerAudio,excludedTeammates,theme:theme(),development,lastTask:await lastTask(),backendAvailable:existsSync(pythonFor('dml')),cudaAvailable:await cudaAvailable(),logicalCores:os.cpus().length,update:updateInfo}));
  handle('check-update',async()=>{await updater.check();await saveChain;return updateInfo;});
  handle('install-update',async()=>{
   if(updating)throw new Error('更新正在进行');
@@ -295,12 +333,33 @@ app.whenReady().then(async()=>{
  handle('teammate-exclusion',(name:unknown,excluded:unknown)=>{const request=teammateWrites.catch(()=>{}).then(async()=>{const previous=excludedTeammates,next=changeTeammateExclusion(previous,name,excluded);if(next!==previous){excludedTeammates=next;try{await save();}catch(error){excludedTeammates=previous;throw error;}}return [...excludedTeammates];});teammateWrites=request;return request;});
  handle('preferences',async(p:ThemePreferences)=>{if(!['system','light','dark'].includes(p.mode)||p.seed!==null&&!/^#[\da-f]{6}$/i.test(p.seed)||typeof p.reduceMotion!=='boolean'||!['flat','sketch'].includes(p.mascotStyle)||typeof p.mascotEnabled!=='boolean')throw new Error('外观选项无效');preferences={...p,...normalizeAnimationPreferences(p)};await save();});
  handle('options',async(o:Options,p:string)=>{options=safeOptions(o);if(typeof p==='string'&&path.isAbsolute(p))output=p;await save();});
+ handle('performance-options',async(value:unknown)=>{options={...options,...normalizePerformance(value,true)};await save();});
  handle('start',p=>start(p));handle('stop',stop);handle('resume',p=>start(p,true));handle('last-task',lastTask);
  handle('task',p=>{if(typeof p!=='string'||!allowedTasks.has(normalized(p)))throw new Error('请先选择任务');return taskInfo(p);});
  handle('choose-task',async()=>{const result=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'任务记录 task.json',extensions:['json']}]});if(result.canceled)return null;const info=await taskInfo(result.filePaths[0]);await libraryStore.remember(info.path,true);return info;});
  handle('results',collectResults);handle('library',collectLibrary);
  handle('ignore-library-errors',async()=>{if(libraryRead)await libraryRead;await libraryStore.ignore(unreadableTasks);return collectLibrary();});
- handle('enrich-hud',enrichHud);
+ handle('enrich-hud',(files,fields,mode)=>enrichHud(files,fields,mode));
+  handle('hud-recovery',()=>recoveryMetadata());
+  handle('resume-hud',async(id:unknown)=>{
+   if(typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id))throw new Error('检查点编号无效');
+   const saved=await recoveryMetadata({action:'load',id});
+   const files=Object.values(saved.clips).map((row:any)=>row.file);
+   return enrichHud(files,saved.request.fields,saved.request.force?'refresh':'missing',{resume_job:id});
+  });
+  handle('upgrade-hud',async(selection:unknown,includeUnknown:unknown=false)=>{
+   if(!Array.isArray(selection)||!selection.length||typeof includeUnknown!=='boolean')throw new Error('请选择待更新的片段字段');
+   const current=await recoveryMetadata(),statuses=new Map<string,any>(current.clips.map((clip:any)=>[normalized(clip.file),clip]));
+   const selected:Record<string,string[]>={};
+   for(const row of selection){
+    if(!row||typeof row.file!=='string'||!Array.isArray(row.fields))throw new Error('待更新字段无效');
+    const clip=statuses.get(normalized(row.file));if(!clip)throw new Error('片段尚未载入');
+    const fields=clip.fields.filter((field:any)=>row.fields.includes(field.field)&&(field.status==='old'||includeUnknown&&field.status==='unknown')).map((field:any)=>field.field);
+    if(fields.length)selected[normalized(row.file)]=[...new Set([...(selected[normalized(row.file)]||[]),...fields])] as string[];
+   }
+   const files=Object.keys(selected),fields=[...new Set(Object.values(selected).flat())];if(!files.length)throw new Error('所选字段已是当前版本，无需重新识别');
+   return enrichHud(files,fields,'refresh',{job_kind:'upgrade',selection:selected});
+  });
  let sharingClips=false;handle('share-clips',async(files:unknown)=>{if(sharingClips)throw new Error('正在打开 QQ 分享，请稍候');sharingClips=true;try{const result=await shareFiles(files,allowedClips,uri=>shell.openExternal(uri));diagnostics.log('info','qq-share','已请求QQ会话选择',{count:result.count,command:result.command});return result;}finally{sharingClips=false;}});
  handle('choose-library-root',async()=>{const selected=await dialog.showOpenDialog(win,{title:'添加历史输出目录',properties:['openDirectory']});if(selected.canceled)return false;await libraryStore.addRoot(selected.filePaths[0]);return true;});
  handle('video-url',file=>videos.url(file));

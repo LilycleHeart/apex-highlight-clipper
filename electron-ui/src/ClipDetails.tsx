@@ -20,6 +20,7 @@ export default function ClipDetails({clip,source,compact=false,summary=true,onFi
  const filterable=(children:ReactNode,filter:ClipDetailFilter|undefined,className='')=>onFilter&&filter?<button type="button" className={`detail-filter ${className}`} data-detail-filter={filter.field} aria-label={`按${filter.label}筛选`} title={`点击筛选：${filter.label}`} onClick={()=>onFilter(filter)}>{children}</button>:<span className={className}>{children}</span>;
  const observed=(n:number|null|undefined,key:'kills'|'assists'|'knockdowns'|'damage')=>n===null||n===undefined?'—':`${(clip.statisticsPartial?.[key]??(key==='assists'||key==='knockdowns'?partial:false))?'≥':''}${n}`;
  return <div className="clip-details">
+   <RecognitionVersionBadge fields={clip.algorithmFields||[]}/>
   {!compact&&<div className="clip-recorded" aria-label="录制日期时间"><span>录制时间</span><time dateTime={recordedAt||undefined}>{day?<>{[day.slice(0,4),day.slice(0,7),day].map((value,index)=><span key={value}>{filterable(index===0?`${value}年`:index===1?`${Number(value.slice(5))}月`:`${Number(value.slice(8))}日`,{field:'date',value,label:dateFilterLabel(value)})}</span>)}<span className="recording-clock">{recordedAt?.match(/[T ](\d{2}:\d{2}(?::\d{2})?)/)?.[1]||''}</span></>:recordingTimeLabel(recordedAt)}</time></div>}
   {summary&&<><dl className="combat-stats" aria-label="本段识别战绩">
    <div><dt title="击杀" aria-label="击杀"><ApexIcon file="stats/kills.svg"/></dt><dd>{observed(clip.kills,'kills')}</dd></div>
@@ -37,3 +38,4 @@ export default function ClipDetails({clip,source,compact=false,summary=true,onFi
  </>}
  </div>;
 }
+import RecognitionVersionBadge from './RecognitionVersionBadge';

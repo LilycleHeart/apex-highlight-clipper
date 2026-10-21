@@ -31,6 +31,15 @@ class JournalTests(unittest.TestCase):
             self.assertTrue(list(Path(temp).glob('*.previous-*')))
 
 class TaskTests(unittest.TestCase):
+    def test_cuda_task_and_resume_preserve_the_selected_backend(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);source=root/'video.mp4';source.write_bytes(b'fixture')
+            with patch.dict(os.environ,{'APEX_DATA_ROOT':str(root/'state'),'APEX_DISABLE_LAST_TASK':'1'}):
+                path,task,request,options=open_task({'files':[str(source)],'output':str(root/'exports'),'backend':'cuda','gap':25})
+                self.assertEqual(request['backend'],'cuda')
+                resumed,_,request,options=open_task({'resume_task':str(path),'backend':'cuda','gap':99})
+                self.assertEqual(resumed,path);self.assertEqual(request['backend'],'cuda');self.assertEqual(options['gap'],25)
+
     def test_new_task_rejects_half_fps_but_old_record_can_resume(self):
         with tempfile.TemporaryDirectory() as temp,patch.dict(os.environ,{'APEX_DISABLE_LAST_TASK':'1'}):
             source=Path(temp)/'video.mp4'; source.write_bytes(b'fixture')

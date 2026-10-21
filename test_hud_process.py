@@ -26,12 +26,16 @@ class HudProcessTests(unittest.TestCase):
     def test_multi_job_progress_is_global_and_activity_survives_child_protocol(self):
         request={'backend':'cpu','fields':['weapons'],'force':True,'jobs':[{'directory':'first','files':['a','b']},{'directory':'second','files':['c']}]}
         events=[]
-        def enrich(directory,files,fields,on_progress,*,force,on_activity):
-            self.assertTrue(force)
-            for index,file in enumerate(files,1):
-                on_activity({'type':'hud-info-activity','index':index,'total':len(files),'file':file,'message':'识别武器','frames_done':1,'frames_total':3})
-                on_progress(index,len(files),file)
-        with patch('hud_enrichment.enrich_manifest_isolated',side_effect=enrich):result=run_jobs(request,emit=events.append)
+        def child(payload,on_progress=None,on_activity=None,**options):
+            self.assertTrue(payload['force'])
+            # The controller hands the whole batch to one child; the child owns
+            # global offsets and reports every file of both directories.
+            self.assertEqual([len(job['files']) for job in payload['jobs']],[2,1])
+            for index,file in enumerate(['a','b','c'],1):
+                on_activity({'type':'hud-info-activity','index':index,'total':3,'file':file,'message':'识别武器','frames_done':1,'frames_total':3})
+                on_progress(index,3,file)
+            return {'type':'hud-info-done','updated':3,'errors':[],'total':3}
+        with patch('hud_enrichment._run_hud_child',side_effect=child):result=run_jobs(request,emit=events.append)
         progress=[e for e in events if e['type']=='hud-info-progress'];activity=[e for e in events if e['type']=='hud-info-activity']
         self.assertEqual([e['index'] for e in progress],[1,2,3]);self.assertTrue(all(e['total']==3 for e in progress+activity))
         self.assertEqual([e['file'] for e in activity],['a','b','c']);self.assertEqual(result['updated'],3)

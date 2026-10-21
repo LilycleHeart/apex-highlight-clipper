@@ -35,7 +35,7 @@ def _event_location(event):
     return {key: event.get(key) for key in ['kind', 'action', 'time']}
 
 
-def weapon_context_current(event, identity, profile):
+def weapon_context_current(event, identity, profile, *, signature=None):
     value = event.get('weapon_context') or {}
     second = event.get('time')
     if (value.get('status') == 'unknown' and value.get('reason') == 'unconfirmed_or_unsupported_event'
@@ -44,7 +44,7 @@ def weapon_context_current(event, identity, profile):
             and not isinstance(second, bool) and math.isfinite(second)):
         # 先前没有读取画面的原因已消失；不能把“当时未确认”当作武器复核结论。
         return False
-    return (value.get('version') == VERSION and value.get('recipe') == recipe(profile)
+    return (value.get('version') == VERSION and value.get('recipe') == (recipe(profile) if signature is None else signature)
             and value.get('source') == identity
             and value.get('event') == _event_location(event)
             and value.get('status') in {'observed', 'unknown'})
@@ -155,11 +155,13 @@ def recheck_event_weapons(source, events, profile, force=False, on_activity=None
     before = fingerprint(source)
     identity = {'path': before['path'], 'size': before['size'], 'mtime_ms': before['mtime_ns'] // 1_000_000}
     results = deepcopy(events)
-    selected = [index for index, event in enumerate(events)
-                if force or not weapon_context_current(event, identity, profile)]
-    if not selected:
+    if not events:
         return results
     signature = recipe(profile)
+    selected = [index for index, event in enumerate(events)
+                if force or not weapon_context_current(event, identity, profile, signature=signature)]
+    if not selected:
+        return results
     eligible = []
     for index in selected:
         event = events[index]
@@ -190,12 +192,15 @@ def recheck_event_weapons(source, events, profile, force=False, on_activity=None
     from engine_pool import pooled_engine
     from gpu_ocr_backend import create_ocr_engine
     from weapon_reader import WeaponTextReader, MODEL_PATH, MODEL_SHA
-    from numeric_reader import NumericReader, METHOD
+    from combat_statistics import final_counter_reader
     from hud_enrichment import native_frames
     backend = os.environ.get('APEX_OCR_BACKEND', 'cpu')
+    # The same three-model reader already handles counters. Keep its bounded,
+    # exact-pixel cache while each observation retains its own decoded PTS.
+    # Refresh it before inserting the weapon reader into the two-entry pool.
+    numeric_reader = final_counter_reader()
     weapon_reader = pooled_engine(('event-weapon-reader', backend, MODEL_SHA),
         lambda: WeaponTextReader(create_ocr_engine(backend=backend, model_path=MODEL_PATH, rec_batch_num=1).text_rec))
-    numeric_reader = pooled_engine(('event-weapon-ammo', backend, METHOD), lambda: NumericReader(backend))
     observations = []
     for second, image in native_frames(source, 0, end, moments):
         check_cancel()

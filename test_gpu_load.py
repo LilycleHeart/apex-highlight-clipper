@@ -10,7 +10,7 @@ import app_worker
 
 class GpuLoadTests(unittest.TestCase):
     def test_desktop_defaults_to_low_and_accepts_all_three_modes(self):
-        self.assertEqual(parse_options({})['gpu_load'],'low')
+        self.assertEqual(parse_options({})['gpu_load'],'fast')
         for mode in ['low','balanced','fast']:
             self.assertEqual(parse_options({'gpu_load':mode})['gpu_load'],mode)
         with self.assertRaises(ValueError): parse_options({'gpu_load':'30%'})

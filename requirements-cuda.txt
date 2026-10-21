@@ -1,0 +1,21 @@
+# Optional NVIDIA runtime; install separately from CPU and DirectML environments.
+# RapidOCR is installed with --no-deps so its CPU ORT requirement cannot replace CUDA.
+onnxruntime-gpu[cuda,cudnn]==1.24.4
+nvidia-cuda-nvrtc-cu12==12.9.86
+nvidia-cuda-runtime-cu12==12.9.79
+nvidia-cufft-cu12==11.4.1.4
+nvidia-curand-cu12==10.3.10.19
+nvidia-cudnn-cu12==9.27.0.42
+nvidia-cublas-cu12==12.9.2.10
+nvidia-nvjitlink-cu12==12.9.86
+numpy==2.4.6
+av==18.1.0
+opencv-python==5.0.0.93
+Pillow==12.3.0
+pyclipper>=1.2.0
+six>=1.15.0
+Shapely!=2.0.4,>=1.7.1
+PyYAML
+tqdm
+Send2Trash==1.8.3
+pywin32==311

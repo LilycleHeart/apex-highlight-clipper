@@ -885,7 +885,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
                 from adaptive_evidence import decode_policy
                 _,video=probe(source)
                 import os
-                use_cuda=cache.get('backend')=='dml' or os.environ.get('APEX_OCR_BACKEND')=='dml'
+                use_cuda=cache.get('backend') in {'dml','cuda'} or os.environ.get('APEX_OCR_BACKEND') in {'dml','cuda'}
                 cuda,threads,_=decode_policy(video,use_cuda)
                 extra=extra_root/f'candidate-{position+1:03d}'
                 sample_with_resume(source,extra,fps,cuda,frame_ranges=ranges_from_indices(missing),**({'cpu_threads':threads} if threads else {}))
@@ -929,7 +929,7 @@ def _inspect_low_frequency(cache,samples,candidates,profile,checkpoint):
     if not pending:
         report={**native,'scan_fps':cache['fps'],'upgrade_fps':None}; write_json(checkpoint,report); return report
     source=Path(cache['source']['path']); _,video=probe(source)
-    cuda,threads,_=decode_policy(video,os.environ.get('APEX_OCR_BACKEND')=='dml')
+    cuda,threads,_=decode_policy(video,os.environ.get('APEX_OCR_BACKEND') in {'dml','cuda'})
     selected=[candidates[i] for i in pending]
     ranges=ranges_from_indices(i for c in selected for i in candidate_indices(c,2))
     token=hashlib.sha256(json.dumps({'source':cache['source'],'bounds':ranges,'native':native['signature']},sort_keys=True).encode()).hexdigest()[:12]

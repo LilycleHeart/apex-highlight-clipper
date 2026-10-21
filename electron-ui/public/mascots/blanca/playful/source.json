@@ -79,6 +79,102 @@
       "width": 1202,
       "height": 1309,
       "frames": 1
+    },
+    {
+      "file": "extended/importing.png",
+      "sha256": "cdfd063abfbb8e2630868b03753708b4df8ee1ec7ea4083e0b28f886cf928f4e",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/statistics.png",
+      "sha256": "2c7c1a3d6e881fed7021dd6913422d02dd22fece90c4661e389450052d95b0f2",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/bisect.png",
+      "sha256": "d64bfe6461ba230e49612c16f9f9992d9ba79bfc925547995bb8bbf9be9601a8",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/rank.png",
+      "sha256": "2e7c6be0e0aa20aeb587c040b9d6f8afcb71d232253983925f0f0fc7789988b8",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/combat_outcomes.png",
+      "sha256": "cc5684d67f12eb1a56cbfb1946e66f10dc3997c6f1d23e2f187f499e5a6aaddd",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/unknown.png",
+      "sha256": "907f4f440f847688faf623a4d474ce1bc9082e33432cc882f370a0c1638c9b4f",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/idle.png",
+      "sha256": "b0227be331c6f6fd43e5e11818d13dd2e0111a2ce222c73c310b6755e9321e12",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/coarse.png",
+      "sha256": "ee07a8c64613dff213718ffe6e5bee65fdcc1476473acb21dde5c65791db2115",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/fallback.png",
+      "sha256": "5c033caa057b947ee87c03aa234314a13c7ff55bd6cfd933fdb0d4483c527cb3",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/sample.png",
+      "sha256": "73b919f96081562b8e4bfcb171ff95695262e9c2a65f065050e18d4693a14172",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/numeric.png",
+      "sha256": "1cb1906f0224407a84086ba6bac0d3413cd4e7397702d3e95a0ee1697ea2884b",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/pipeline.png",
+      "sha256": "b291ed80b8d33cb43a1f6c1ec1c445655e11341628372e5833dec4eaa62776d2",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
+    },
+    {
+      "file": "extended/lifecycle.png",
+      "sha256": "384c3faa89e754e167a4f57b26befb99c6f888064d1fd4c009e27a4efa3fbd19",
+      "width": 1265,
+      "height": 1243,
+      "frames": 4
     }
-  ]
+  ],
+  "extensions": {
+    "source": "User-provided ahc-v3-13-actions-stockings-fix.zip; clothing-corrected four-pose sheets.",
+    "processing": "Original PNG bytes preserved. Full connected silhouettes and detached props >=512 source pixels assigned to their scene, with 4px edge padding; never quarter-cropped. Statistics blocks use scene row/column ownership to avoid a neighboring tail. Pose order: top-left, top-right, bottom-left, bottom-right.",
+    "alignment": "Explicit support-footprint anchors and per-pose character scale; steps and props retain their original relationship to the character."
+  }
 }

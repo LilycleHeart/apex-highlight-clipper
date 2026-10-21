@@ -4,7 +4,23 @@ from pathlib import Path
 import re
 import time
 
+from ocr_cache import ExactTextCache
+
 METHOD='numeric-three-model-v4'
+
+
+class NumericModelCache(ExactTextCache):
+    """固定单图推理的原始模型读数；不同模型不共享票数或几何证据。"""
+    def __init__(self,recognizer):
+        super().__init__(recognizer,capacity=512)
+
+    def __call__(self,images):
+        values,elapsed=super().__call__(images)
+        # 数字分离复核还有 .94/.97 门槛，补齐通用缓存已有的临界值保护。
+        for image,(_,confidence) in zip(images,values):
+            if any(abs(float(confidence)-threshold)<=.002 for threshold in (.94,.97)):
+                self.cache.pop(self.key(image),None)
+        return values,elapsed
 
 
 def agreed_number(reads):
@@ -24,7 +40,7 @@ class NumericReader:
         from gpu_ocr_backend import create_ocr_engine
         from weapon_reader import MODEL_PATH
         from stat_counter_fallback import CounterFallback
-        self.readers=[create_ocr_engine(backend=backend,model_path=model,rec_batch_num=1).text_rec
+        self.readers=[NumericModelCache(create_ocr_engine(backend=backend,model_path=model,rec_batch_num=1).text_rec)
                       for model in [None,MODEL_PATH,Path(__file__).resolve().parent/'models/numeric_rec_en_v4.onnx']]
         self.glyphs=CounterFallback()
 

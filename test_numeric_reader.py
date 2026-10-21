@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
 import numpy as np
-from numeric_reader import agreed_number
+from numeric_reader import NumericModelCache, NumericReader, agreed_number
 
 
 class NumericConsensusTests(unittest.TestCase):
@@ -56,6 +56,45 @@ class NumericConsensusTests(unittest.TestCase):
 
     def test_empty_and_nonnumeric_crops_do_not_invent_zero(self):
         self.assertEqual(agreed_number([('',0),('B',.99),('²',.99)]),('',0.))
+
+    def test_each_model_reuses_identical_proofs_but_refreshes_geometry_evidence(self):
+        calls=[[],[],[]]
+        def model(index):
+            def read(images):
+                calls[index].extend(int(image[0,0,0]) for image in images)
+                return [('70',.99) if not image[0,0,0] else
+                        (['710','710','720'][index],.98) for image in images],0.
+            return SimpleNamespace(text_rec=read)
+        image=np.zeros((20,40,3),np.uint8)
+        proofs=[{'image':np.ones_like(image),'glyph_count':3,'threshold':level,'boxes':[]}
+                for level in [200,220,240]]
+        with patch('gpu_ocr_backend.create_ocr_engine',side_effect=[model(i) for i in range(3)]) as create:
+            reader=NumericReader('cpu')
+        self.assertEqual([call.kwargs['rec_batch_num'] for call in create.call_args_list],[1,1,1])
+        with patch('stat_counter_fallback.separated_digit_views',return_value=proofs):
+            self.assertEqual(reader([image])[0],[('710',.98)])
+        self.assertEqual(calls,[[0,1],[0,1],[0,1]])
+        self.assertEqual(reader.last_digit_reviews[0]['model_reads'],[('710',.98),('710',.98),('720',.98)])
+        with patch('stat_counter_fallback.separated_digit_views',return_value=[{**proofs[0],'threshold':225}]):
+            self.assertEqual(reader([image.copy()])[0],[('710',.98)])
+        self.assertEqual(calls,[[0,1],[0,1],[0,1]])
+        self.assertEqual(reader.last_digit_reviews[0]['model_view_threshold'],225)
+        with patch('stat_counter_fallback.separated_digit_views',return_value=[]):
+            self.assertEqual(reader([np.full_like(image,2)])[0],[('710',.98)])
+        self.assertEqual(calls,[[0,1,2],[0,1,2],[0,1,2]])
+        self.assertEqual(reader.last_digit_reviews,[])
+
+    def test_numeric_review_boundary_confidences_are_inferred_again(self):
+        image=np.zeros((20,40,3),np.uint8)
+        for threshold in [.88,.90,.94,.97]:
+            with self.subTest(threshold=threshold):
+                read=unittest.mock.Mock(side_effect=[
+                    ([('710',threshold-.0001)],0.),
+                    ([('710',threshold+.0001)],0.)])
+                cache=NumericModelCache(read)
+                self.assertEqual(cache([image])[0],[('710',threshold-.0001)])
+                self.assertEqual(cache([image.copy()])[0],[('710',threshold+.0001)])
+                self.assertEqual(read.call_count,2)
 
 
 if __name__=='__main__':unittest.main()

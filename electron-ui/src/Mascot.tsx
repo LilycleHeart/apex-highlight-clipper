@@ -6,7 +6,7 @@ import {getBlancaSprite} from './blancaSprites';
 
 declare global {interface Window {fluidPreview?:{sample(stage:Stage,seconds:number):void;transition(stage:Stage,seconds:number):void;release():void;metrics():{frames:number;meanMs:number;maxMs:number}};blancaPreview?:{visibility():{value:number;target:number;image:number;outline:number}}}}
 type Sprite={style:MascotStyle;stage:Stage;frame:number;walk?:'left'|'right'};
-const staticStages=['idle','cache','importing','stopped','error','unknown'];
+const staticStages=['cache','stopped','error'];
 export default function Mascot({stage,demo=false,style='flat',enabled=true,ready=true,fps=30}:{stage:Stage;demo?:boolean;style?:MascotStyle;enabled?:boolean;ready?:boolean;fps?:number}){
  const [carrier]=useState(()=>{const node=document.createElement('div');node.className='blanca-page-anchor';return node;});
  const root=useRef<HTMLDivElement>(null),puppet=useRef<HTMLDivElement>(null),journey=useRef<HTMLDivElement>(null),first=useRef<HTMLImageElement>(null),second=useRef<HTMLImageElement>(null),outline=useRef<HTMLDivElement>(null),outlineShape=useRef<HTMLDivElement>(null),outlineFilter=useId();

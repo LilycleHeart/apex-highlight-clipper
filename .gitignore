@@ -1,5 +1,6 @@
 .venv/
 .gpu-venv/
+.cuda-venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -77,8 +78,6 @@ electron-ui/.playwright*/
 !/docs/assets/clips-detail.png
 !/docs/assets/clips-grid.png
 !/docs/assets/clips-list.png
-!/docs/assets/dark-color.png
-!/docs/assets/player.png
 !/docs/assets/start.png
 !/docs/assets/statistics.png
 !/docs/architecture.md
@@ -112,3 +111,12 @@ electron-ui/.playwright*/
 !/electron-ui/tests/window-placement.test.cjs
 !/electron-ui/tests/qq-share.test.cjs
 !/electron-ui/tests/teammate-exclusions.test.cjs
+
+!/electron-ui/tests/performance-options.test.cjs
+
+!/electron-ui/tests/recognition-notices.test.cjs
+
+# 宣传片工程为本机制作素材，不入源码库；未使用的角色备选图同样保留本地。
+/video/
+/electron-ui/public/mascots/blanca/minimal/
+/electron-ui/public/brand/title-logo-source.json

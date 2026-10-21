@@ -119,7 +119,7 @@ def inspect_early_round_ends(coarse,samples,checkpoint):
         left=max(0,start-4); right=min(duration,start+8,next_self)
         if right<=left: continue
         folder=checkpoint.parent/(checkpoint.stem+f'-entry-{start:.6f}')
-        cuda,threads,_=decode_policy(video,os.environ.get('APEX_OCR_BACKEND')=='dml')
+        cuda,threads,_=decode_policy(video,os.environ.get('APEX_OCR_BACKEND') in {'dml','cuda'})
         ranges=frame_ranges([[left,right]],duration,2)
         sample_with_resume(source,folder,2,cuda,frame_ranges=ranges,**({'cpu_threads':threads} if threads else {}))
         extra_frames+=sum(b-a+1 for a,b in ranges)

@@ -101,7 +101,7 @@ def open_task(request):
         validate_task(task,path)
         if config_stamp(task['profile'])!=task['config_stamp']: raise ValueError('HUD 配置、模型或枪械目录已变化，请新建任务')
         effective=dict(task['request'])
-        for key in ['backend','gpu_load','pipeline']:
+        for key in ['backend','gpu_load','pipeline','performance_preset','cpu_workers','decode_threads','frame_cache_mb']:
             if key in request: effective[key]=request[key]
         options=parse_options(effective,legacy=True)
         task['request']=effective; task['finished']=False
@@ -133,7 +133,7 @@ def open_task(request):
             'smart_cache_version':'indexed-v2' if options['scan_mode']=='indexed' else 'focused-v6',
             'result_filter_version':RULE_VERSION}
         write_json(path,task)
-    if effective.get('backend') not in ['cpu','dml']: raise ValueError('识别后端不支持')
+    if effective.get('backend') not in ['cpu','dml','cuda']: raise ValueError('识别后端不支持')
     return path,task,effective,options
 
 def save_task(path,task):

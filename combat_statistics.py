@@ -83,8 +83,7 @@ def final_counter_reader():
     from numeric_reader import NumericReader
     from ocr_cache import ExactTextCache
     backend=os.environ.get('APEX_OCR_BACKEND','cpu')
-    engine=pooled_engine(('final-counters-v2',backend),lambda:NumericReader(backend))
-    return ExactTextCache(engine)
+    return pooled_engine(('final-counters-exact-v2',backend),lambda:ExactTextCache(NumericReader(backend)))
 
 def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps=None,initial_samples=None):
     from sample_locations import SampleResolver

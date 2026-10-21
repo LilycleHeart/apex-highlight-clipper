@@ -1,0 +1,14 @@
+.performance-settings{display:grid;gap:16px;min-width:0;margin:20px 0}
+.performance-settings>.performance-preset-field,.performance-settings>label{display:grid;gap:8px;margin:0;font-size:12px;font-weight:550;min-width:0}
+.performance-settings .performance-presets{position:relative;isolation:isolate;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch;box-sizing:border-box;width:100%;height:44px;min-height:44px;margin:0;padding:4px;gap:0;overflow:hidden;border-radius:13px;background:var(--surfaceContainerHighest);color:var(--onSurface)}
+.performance-settings .performance-presets>button{position:relative;z-index:1;box-sizing:border-box;min-width:0;height:36px;min-height:36px;margin:0;padding:0 2px;border-radius:10px;font-size:12px;line-height:1;white-space:nowrap;color:inherit}
+.performance-settings .performance-presets>button[aria-pressed=true]{color:var(--card-accent)}
+.performance-settings .performance-presets>svg.choice-surface{position:absolute;inset:0;z-index:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
+.performance-settings .algorithm-summary{margin:0;gap:12px;min-width:0}
+.settings-fields .performance-settings .styled-select,.performance-settings .number-fields{margin-top:0}
+.performance-settings .number-input{gap:8px}
+.performance-settings .number-input input{flex:1;width:0;min-width:0}
+.performance-settings .number-input>span{flex:none}
+.performance-settings .performance-description{margin:0;color:var(--onSurfaceVariant);font-size:11px;line-height:1.7}
+.performance-runtime{display:grid;gap:6px;padding:12px;border:1px solid var(--outlineVariant);border-radius:12px;font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+.performance-runtime b{font-size:11px}.performance-runtime span{color:var(--onSurfaceVariant)}
