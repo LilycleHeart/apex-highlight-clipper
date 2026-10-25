@@ -18,7 +18,7 @@ class FakeReader:
     overlap=False
     def __init__(self,source,threads=1):
         self.keyframes=list(range(12)); self.source_frames=1200
-        self.width=100; self.height=60; self.closed=False
+        self.width=100; self.height=60; self.closed=False; self.time_origin=Fraction(0)
         self.__class__.instances.append(self)
     def __enter__(self): return self
     def __exit__(self,*args): self.close()
