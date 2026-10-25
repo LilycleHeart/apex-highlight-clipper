@@ -39,7 +39,7 @@ def indexed_coarse_scan(source,job,profile,fps):
             entries=[(e.dts,e.position,e.size) for e in reader.keyframes]
             total=len(entries)
     except (UnsupportedIndexedVideo,IndexError) as error:
-        raise RuntimeError('无法读取此录像的可靠 MP4/H.264 索引；当前需要起始 PTS 为零的 H.264 MP4/MOV 录像：'+str(error)) from error
+        raise RuntimeError('无法读取此录像的可靠视频索引；当前需要起始 PTS 为零的 H.264、HEVC 或 AV1 MP4/MOV 录像：'+str(error)) from error
     import rapidocr_onnxruntime
     model=Path(rapidocr_onnxruntime.__file__).parent/'models/ch_PP-OCRv4_rec_infer.onnx'
     config={'version':'indexed-coarse-v1','source':identity,'profile':profile,'fps':fps,'pyav':version,

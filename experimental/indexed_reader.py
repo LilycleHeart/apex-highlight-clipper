@@ -1,4 +1,4 @@
-"""Read indexed H.264 keyframes without demuxing every intervening video packet.
+"""Read indexed H.264/HEVC/AV1 keyframes without demuxing intervening video packets.
 
 Experimental: no production detection or export rules are changed. A seek must
 land on the exact indexed packet, and the decoded frame must retain its PTS.
@@ -10,6 +10,23 @@ from pathlib import Path
 
 class UnsupportedIndexedVideo(ValueError):
     pass
+
+
+SUPPORTED_CODECS=frozenset({'h264','hevc','av1'})
+SUPPORTED_LABEL='H.264/HEVC/AV1'
+
+
+def indexed_codec_name(stream):
+    """Return the container's format name, never the selected decoder.
+
+    ``codec_context.name`` reports whichever decoder libavcodec opened, so AV1
+    arrives as ``libdav1d`` on this build while HEVC and H.264 keep their format
+    names. ``canonical_name`` stays stable across builds; older PyAV without it
+    falls back to the decoder name.
+    """
+    context=stream.codec_context
+    codec=getattr(context,'codec',None)
+    return str(getattr(codec,'canonical_name',None) or getattr(codec,'name',None) or context.name)
 
 
 @dataclass(frozen=True)
@@ -30,8 +47,9 @@ class IndexedKeyframeReader:
             if 'mov' not in self.container.format.name.split(','):
                 raise UnsupportedIndexedVideo('Prototype currently supports indexed MP4/MOV only')
             self.stream=self.container.streams.video[0]
-            if self.stream.codec_context.name!='h264':
-                raise UnsupportedIndexedVideo('Prototype currently validates H.264 only')
+            self.codec_name=indexed_codec_name(self.stream)
+            if self.codec_name not in SUPPORTED_CODECS:
+                raise UnsupportedIndexedVideo(f'Prototype currently validates {SUPPORTED_LABEL} only, not {self.codec_name}')
             entries=self.stream.index_entries
             if not 0<len(entries)<=2_000_000:
                 raise UnsupportedIndexedVideo('Missing or oversized container index')

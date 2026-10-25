@@ -8,14 +8,17 @@ from unittest.mock import patch
 
 
 class PortableBuildTests(unittest.TestCase):
-    def test_hud_runtime_imports_are_included_in_portable_manifest(self):
+    def test_product_imports_are_included_in_portable_manifest(self):
         import ast
         root=Path(__file__).resolve().parent
         spec=importlib.util.spec_from_file_location('portable_build',root/'scripts/build-portable.py');build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
-        source=ast.parse((root/'hud_enrichment.py').read_text('utf-8'))
-        local={node.module.split('.')[0] for node in ast.walk(source) if isinstance(node,ast.ImportFrom)
-               and node.module and (root/(node.module.split('.')[0]+'.py')).is_file()}
-        self.assertFalse(local-set(build.PRODUCT_MODULES),'HUD runtime modules missing from the portable bundle')
+        missing={}
+        for name in ['hud_enrichment.py','continuous_sampler.py','resume_media.py']:
+            source=ast.parse((root/name).read_text('utf-8'))
+            local={node.module.split('.')[0] for node in ast.walk(source) if isinstance(node,ast.ImportFrom)
+                   and node.module and (root/(node.module.split('.')[0]+'.py')).is_file()}
+            if local-set(build.PRODUCT_MODULES): missing[name]=sorted(local-set(build.PRODUCT_MODULES))
+        self.assertFalse(missing,'产品模块清单缺少随包模块：'+repr(missing))
 
     def test_running_bundle_rejected_before_any_source_or_state_is_changed(self):
         root=Path(__file__).resolve().parent

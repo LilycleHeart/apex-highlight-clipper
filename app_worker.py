@@ -83,6 +83,8 @@ def _run_task(request_path):
     task_path,task,request,options=open_task(incoming)
     gap,pre,post,fps=(options[k] for k in ['gap','pre','post','fps'])
     os.environ['APEX_OCR_BACKEND']=request['backend']; os.environ['APEX_GPU_LOAD']=options['gpu_load']
+    # DirectML 只是推理 provider，AMD/Intel 显卡走 DirectX 解码；CUDA 后端才用 CUDA 解码。
+    os.environ['APEX_HARDWARE_DECODER']={'cuda':'cuda','dml':'d3d11'}.get(request['backend'],'')
     os.environ['APEX_OCR_POOL']='1'
     from performance_options import apply_resources
     apply_resources({**options,'backend':request['backend']})

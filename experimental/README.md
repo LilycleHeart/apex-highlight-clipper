@@ -18,7 +18,7 @@ Read-only experiments, with caller-supplied video paths:
 .\.venv\Scripts\python.exe -m experimental.benchmark_remux "D:\Recordings\example.mp4" --duration 60 --report validation/remux.json
 ```
 
-The reader uses the container index to seek to H.264 keyframe packets. It checks the packet byte position, keyframe flag, decoded PTS and corruption status. Decoder output timestamps are retained rather than pretending these samples form a uniform FPS grid. Only indexed MP4/MOV H.264 is currently supported; unsupported inputs raise explicitly. Each worker owns its own container and decoder.
+The reader uses the container index to seek to H.264/HEVC/AV1 keyframe packets. It checks the packet byte position, keyframe flag, decoded PTS and corruption status. Decoder output timestamps are retained rather than pretending these samples form a uniform FPS grid. Only indexed MP4/MOV H.264, HEVC and AV1 are supported; unsupported inputs raise explicitly. The codec is identified by its canonical format name rather than the decoder implementation, because AV1 is decoded through `libdav1d` on this build. Each worker owns its own container and decoder.
 
 ## Local observations
 

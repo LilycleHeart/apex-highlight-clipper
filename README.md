@@ -90,7 +90,7 @@
 
 <details>
 <summary><b>Q: 对录像格式有什么要求？</b></summary>
-推荐使用 OBS 录制的标准 H.264/H.265 MP4 或 MOV 格式。无损切片依赖视频关键帧索引，如果是无法拖动时间轴的破损流，建议先用 remux 重新封装后再导入。
+推荐使用 OBS 录制的标准 H.264/H.265(HEVC)/AV1 MP4 或 MOV 格式。无损切片依赖视频关键帧索引，如果是无法拖动时间轴的破损流，建议先用 remux 重新封装后再导入。
 </details>
 
 <details>
@@ -120,6 +120,7 @@ npm start
 
 - 开启 GPU 加速调试请运行 `.\setup_gpu.ps1` 搭建独立的 `.gpu-venv`。
 - NVIDIA 显卡可运行 `.\setup_cuda.ps1` 安装独立的 `.cuda-venv`，重开界面后在「性能设置 → 识别设备」选择「GPU · CUDA」。安装会下载 CUDA/cuDNN 运行库；「自动」仍沿用 DirectML/CPU，已有便携包不包含这套可选环境。
+- 「GPU · DirectML」只负责识别推理，画面解码使用显卡的 DirectX 硬解（AMD/Intel 同样适用）；本机不支持时自动退回 CPU 解码，任务不会因此中断。
 - 更多内核架构、测试用例与打包说明，请查阅 [开发说明文档](docs/development.md)。
 
 ---

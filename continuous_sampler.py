@@ -14,6 +14,7 @@ import uuid
 
 from apex_clipper import probe,fingerprint,write_json,tool
 from app_cancel import check_cancel
+from hardware_decode import active as active_decoder,arguments as decoder_arguments
 
 
 def _check(abort_event):
@@ -82,21 +83,21 @@ def _valid_prefix(state,planned,out,total):
     return valid
 
 
-def _command(source,scratch,video,first,count,fps,cuda,cpu_threads):
+def _command(source,scratch,video,first,count,fps,decoder,cpu_threads):
     start=(first-1)/fps
     args=[tool('ffmpeg'),'-hide_banner','-loglevel','warning','-nostdin','-ss',f'{start:.9f}',
           '-t',f'{count/fps+1/fps:.9f}']
-    if not cuda and cpu_threads is not None:
+    if not decoder and cpu_threads is not None:
         args+=['-threads',str(cpu_threads),'-filter_complex_threads',str(cpu_threads)]
-    if cuda:
+    if decoder:
         from gpu_load import get_gpu_policy
         policy=get_gpu_policy()
         if policy['decode_rate']: args+=['-readrate',str(policy['decode_rate'])]
-        args+=['-hwaccel','cuda','-hwaccel_output_format','cuda']
+        args+=decoder_arguments(decoder)
     width,height=video['width'],video['height']
     cx=round(width*.75/2)*2; cy=round(height*5/6/2)*2
     transfer='hwdownload,format=p010le,' if '10' in video.get('pix_fmt','') else 'hwdownload,format=nv12,'
-    graph=f'[0:v:0]fps={fps},'+(transfer if cuda else '')+f'split=2[b][h];[b]scale=1280:-2[body];[h]crop={width-cx}:{height-cy}:{cx}:{cy}[hud]'
+    graph=f'[0:v:0]fps={fps},'+(transfer if decoder else '')+f'split=2[b][h];[b]scale=1280:-2[body];[h]crop={width-cx}:{height-cy}:{cx}:{cy}[hud]'
     jpeg_threads=['-threads:v','1'] if cpu_threads is not None else []
     args+=['-i',str(source),'-filter_complex',graph,'-map','[body]','-frames:v',str(count),'-q:v','2']+jpeg_threads+['-n',str(scratch/'%06d.jpg'),
            '-map','[hud]','-frames:v',str(count),'-q:v','2']+jpeg_threads+['-n',str(scratch/'hud/%06d.jpg')]
@@ -110,6 +111,8 @@ def sample_continuous_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_
         raise ValueError('采样频率和提交块时长必须为正数')
     out=Path(out).resolve(); out.mkdir(parents=True,exist_ok=True); (out/'hud').mkdir(exist_ok=True)
     meta,video=probe(source); duration=float(meta['format']['duration']); identity=fingerprint(source)
+    # 解码加速与识别后端分开：dml 用 DirectX 硬解，cuda 用 CUDA，都不可用时退回 CPU。
+    decoder=active_decoder(source,video,duration) if cuda else None
     info={'source':identity,'fps':fps,'width':1280,'duration':duration}
     total=max(1,math.floor(duration*fps+.5)); chunk_frames=max(1,round(chunk_seconds*fps))
     ranges=frame_ranges if frame_ranges is not None else [[1,total]]
@@ -147,7 +150,7 @@ def sample_continuous_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_
         _check(abort_event)
         run_first=pending[0][0]; run_count=range_last-run_first+1
         scratch=out/'continuous-runs'/uuid.uuid4().hex; (scratch/'hud').mkdir(parents=True)
-        args=_command(source,scratch,video,run_first,run_count,fps,cuda,cpu_threads)
+        args=_command(source,scratch,video,run_first,run_count,fps,decoder,cpu_threads)
         with (scratch/'decode.log').open('w',encoding='utf-8') as log:
             proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=log,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)

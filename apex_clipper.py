@@ -101,19 +101,22 @@ def sample_video(source, out, fps, cuda=False,resume=False):
     if list(out.glob('*.jpg')):
         raise ValueError(f'采样目录存在未确认的帧，请使用新目录或先检查: {out}')
     args = [tool('ffmpeg'), '-hide_banner', '-loglevel', 'warning', '-nostdin']
+    decoder = None
     if cuda:
         from gpu_load import get_gpu_policy
         policy=get_gpu_policy()
         if policy['decode_rate']:
             args += ['-readrate',str(policy['decode_rate'])]
             print(f"GPU 解码节奏：{policy['label']}（最高 {policy['decode_rate']} 倍录像速度）",flush=True)
-        args += ['-hwaccel','cuda','-hwaccel_output_format','cuda']
+        from hardware_decode import active as active_decoder,arguments as decoder_arguments
+        decoder=active_decoder(source,video,duration)
+        if decoder: args += decoder_arguments(decoder)
     hud=out/'hud'; hud.mkdir(exist_ok=True)
     width,height=video['width'],video['height']
     cx=round(width*.75/2)*2; cy=round(height*(5/6)/2)*2
     cw=width-cx; ch=height-cy
     transfer='hwdownload,format=p010le,' if '10' in video.get('pix_fmt','') else 'hwdownload,format=nv12,'
-    thinning=f'fps={fps},'+(transfer if cuda else '')
+    thinning=f'fps={fps},'+(transfer if decoder else '')
     graph=f'[0:v:0]{thinning}split=2[b][h];[b]scale=1280:-2[body];[h]crop={cw}:{ch}:{cx}:{cy}[hud]'
     args += ['-i',str(source),'-filter_complex',graph,
              '-map','[body]','-q:v','2','-n',str(out/'%06d.jpg'),
