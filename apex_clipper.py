@@ -304,6 +304,8 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
     keys=['ammo','damage','kills']
     marker=read_image(str(BASE/profile['counter_marker']),cv2.IMREAD_GRAYSCALE)
     if marker is None: raise ValueError('缺少 HUD 图标模板')
+    from stat_counter_fallback import CounterFallback,KILLS_FALLBACK
+    icon_counters=CounterFallback()
     lifecycle_marker=read_image(str(BASE/profile['downed_marker']),cv2.IMREAD_GRAYSCALE) if optimize and profile.get('downed_marker') else None
     lifecycle_id=lifecycle_signature(profile) if lifecycle_marker is not None else None
     frames=sorted(Path(samples).glob('*.jpg'))
@@ -333,7 +335,7 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
         signature=hashlib.sha256(json.dumps({'version':1,'source':source_identity,'samples':str(Path(samples).resolve()),
             'profile':profile,'fps':fps,'selected':[(p.name,frame_time(p)) for p in expected],
             'marker':hashlib.sha256((BASE/profile['counter_marker']).read_bytes()).hexdigest(),
-            'lifecycle':lifecycle_id},sort_keys=True).encode()).hexdigest()
+            'lifecycle':lifecycle_id,'kills_fallback':KILLS_FALLBACK},sort_keys=True).encode()).hexdigest()
         def valid_row(row,index):
             return index<len(expected) and row.get('frame')==expected[index].name and row.get('time')==frame_time(expected[index]) and all(key in row for key in ['ammo','damage','kills','weapon_icon','inactive_view'])
         if session is not None and session.get('signature')==signature:
@@ -349,10 +351,11 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
             check_cancel()
         before_count=len(rows)
         batch=selected[offset:offset+HUD_BATCH_SIZE]
-        crops=[]; slots=[]; signatures=[]; offsets=[]; inactive=[]; downed_scores=[]
+        crops=[]; slots=[]; signatures=[]; offsets=[]; inactive=[]; downed_scores=[]; kill_icons=[]
         for path in batch:
             frame=read_image(str(path))
             delta,score=counter_offset(frame,profile,marker)
+            kill_icons.append(icon_counters.kills_crop(frame,profile,delta))
             offsets.append((delta,score)); inactive.append(inactive_view(frame))
             if lifecycle_marker is not None: downed_scores.append(downed_score(frame,profile,lifecycle_marker))
             for k in keys:
@@ -381,6 +384,13 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
                 if k!='weapon':
                     row[k]=ammo_number(text,score) if k=='ammo' else numeric(text,score, {'damage':20000,'kills':60}[k], .88)
             rows.append(row)
+        # 固定击杀框没读到时，改用骷髅图标右侧实际数字补读（匹配无参与图标、精简界面时击杀栏会移位）。
+        retry=[(row,icon) for row,icon in zip(rows[before_count:],kill_icons) if row['kills'] is None and icon is not None]
+        if retry:
+            recognized,_=recognizer([icon for _,icon in retry])
+            for (row,_),(text,score) in zip(retry,recognized):
+                value=numeric(text,score,60,.88)
+                if value is not None:row.update(kills=value,kills_text=text,kills_score=float(score),kills_source='icon_anchor')
         if journal: journal.append(rows[before_count:])
         from ui_observer import preview
         preview(batch[-1],rows[-1]['time'])

@@ -144,12 +144,14 @@ def exported_clips(destination,report):
     if manifest.get('metadata_directory') and Path(manifest['metadata_directory']).resolve()!=destination.resolve():return []
     video_root=Path(manifest.get('video_directory',destination)).resolve()
     outputs={str(Path(path).resolve()).casefold() for path in manifest.get('outputs',[]) if isinstance(path,str)}
+    relocated={str(Path(path).resolve()).casefold() for path in manifest.get('relocated_outputs',[]) if isinstance(path,str)}
     clips=[]
     for clip in manifest.get('clips',[]):
         raw=clip.get('output',clip.get('file'))
         if not isinstance(raw,str):continue
         file=Path(raw).resolve()
-        if file.suffix.lower()!='.mp4' or str(file).casefold() not in outputs or not file.is_relative_to(video_root) or not file.is_file():continue
+        inside=file.is_relative_to(video_root) or str(file).casefold() in relocated
+        if file.suffix.lower()!='.mp4' or str(file).casefold() not in outputs or not inside or not file.is_file():continue
         stat=file.stat();identity={'path':str(file),'size':stat.st_size,'mtime_ms':stat.st_mtime_ns//1_000_000}
         clips.append((clip,identity))
     return clips

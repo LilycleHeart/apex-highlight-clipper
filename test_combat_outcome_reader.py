@@ -10,6 +10,18 @@ from app_cancel import TaskStopped
 from combat_outcome_reader import parse_result_line,is_known_dialogue,group_lines,inspect_combat_outcomes,filter_combat_outcomes,_inspect_low_frequency
 
 class ResultGrammarTests(unittest.TestCase):
+    def test_simplified_and_russian_own_result_lines(self):
+        # 文本均取自真实录像的识别输出（简体 4:3 精简界面、俄语 1920x1200 匹配）。
+        self.assertEqual(parse_result_line('助攻，淘汰探路者7850')['action'],'elimination')
+        self.assertEqual(parse_result_line('已消灭')['kind'],'elimination')
+        self.assertEqual(parse_result_line('击倒 疯玛吉300+150')['locale'],'zh-CN')
+        knock=parse_result_line('HOKAYTP3I5SI+150')
+        self.assertEqual((knock['kind'],knock['locale'],knock['target_text']),('knock','ru','P3I5SI'))
+        self.assertEqual(parse_result_line('COAEMCTBNEBH0KAYTEJAM中JIAMH7562+100')['action'],'knock')
+        # 物品名、全队灭队奖励和角色对白都不是本人提示。
+        for text in ['HoKayT-WNT','Нокаут-щит','YHN4TOKEHNEOTPAnA+10O','To6a:Lenb B HOKayTe.']:
+            self.assertIsNone(parse_result_line(text))
+
     def test_whole_line_mean_and_conflicting_crop_cannot_certify_a_mixed_name(self):
         from combat_outcome_reader import native_name_consensus
         def read(frame,name,ctc):

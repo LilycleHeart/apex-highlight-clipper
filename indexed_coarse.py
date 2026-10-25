@@ -43,7 +43,8 @@ def indexed_coarse_scan(source,job,profile,fps):
         raise RuntimeError('无法读取此录像的可靠视频索引；当前需要 H.264、HEVC 或 AV1 的 MP4/MOV 录像：'+str(error)) from error
     import rapidocr_onnxruntime
     model=Path(rapidocr_onnxruntime.__file__).parent/'models/ch_PP-OCRv4_rec_infer.onnx'
-    config={'version':'indexed-coarse-v1','source':identity,'profile':profile,'fps':fps,'pyav':version,
+    from stat_counter_fallback import KILLS_FALLBACK
+    config={'version':'indexed-coarse-v1','source':identity,'profile':profile,'fps':fps,'pyav':version,'kills_fallback':KILLS_FALLBACK,
             'index':entries,'model_sha256':hashlib.sha256(model.read_bytes()).hexdigest(),
             'templates':{key:hashlib.sha256((BASE/profile[key]).read_bytes()).hexdigest() for key in ['counter_marker','downed_marker']}}
     signature=hashlib.sha256(json.dumps(config,sort_keys=True).encode()).hexdigest()

@@ -21,6 +21,8 @@ const api:DesktopAPI={
  resumeHud:id=>ipcRenderer.invoke('resume-hud',id),
  upgradeHud:(selection,includeUnknown)=>ipcRenderer.invoke('upgrade-hud',selection,includeUnknown),
  chooseLibraryRoot:()=>ipcRenderer.invoke('choose-library-root'),
+ addExistingClips:()=>ipcRenderer.invoke('add-existing-clips'),
+ addExistingFolder:()=>ipcRenderer.invoke('add-existing-folder'),
  ready:()=>ipcRenderer.invoke('ui-ready'),chrome:(color,foreground)=>ipcRenderer.invoke('chrome',color,foreground),
  bootstrap:()=>ipcRenderer.invoke('bootstrap'),chooseFiles:()=>ipcRenderer.invoke('choose-files'),chooseFolder:()=>ipcRenderer.invoke('choose-folder'),
  importFiles:files=>ipcRenderer.invoke('import-files',files.map(file=>webUtils.getPathForFile(file))),

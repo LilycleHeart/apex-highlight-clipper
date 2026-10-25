@@ -111,6 +111,8 @@ class HUDFeatures:
         if self.marker is None or self.downed is None:
             raise ValueError('Missing production HUD templates')
         self.feature_hook=feature_hook
+        from stat_counter_fallback import CounterFallback
+        self.icon_counters=CounterFallback()
 
     def prepare(self, frame):
         image=frame.image
@@ -134,6 +136,8 @@ class HUDFeatures:
                     rois[key]=None; continue
                 dx,dy=delta; box=[box[0]+dx,box[1]+dy,box[2]+dx,box[3]+dy]
             rois[key]=crop(image,box,profile['reference_size'])
+        # 仅在固定击杀框读不到时才识别；这里先保留图标定位的小裁片。
+        rois['kills_icon']=self.icon_counters.kills_crop(image,profile,delta)
         if self.feature_hook:
             extra=self.feature_hook(image,dict(row))
             # Reject accidental retention of full arrays by diagnostic callbacks.
@@ -163,6 +167,7 @@ def read_memory_frames(frames, features, recognizer, *, batch_frames=16, stats=N
         for row,rois in prepared:
             positions={}
             for key,roi in rois.items():
+                if key=='kills_icon':continue
                 positions[key]=None if roi is None else len(images)
                 if roi is not None: images.append(roi)
             slots.append(positions)
@@ -177,6 +182,13 @@ def read_memory_frames(frames, features, recognizer, *, batch_frames=16, stats=N
                 row[key+'_text']=text; row[key+'_score']=float(confidence)
                 row[key]=ammo_number(text,confidence) if key=='ammo' else numeric(text,confidence,{'damage':20000,'kills':60}[key],.88)
             rows.append(row)
+        retry=[(row,rois['kills_icon']) for row,rois in prepared if row.get('kills') is None and rois.get('kills_icon') is not None]
+        if retry:
+            started=time.perf_counter(); values,_=recognizer([icon for _,icon in retry])
+            stats['numeric_seconds']+=time.perf_counter()-started
+            for (row,_),(text,confidence) in zip(retry,values):
+                value=numeric(text,confidence,60,.88)
+                if value is not None:row.update(kills=value,kills_text=text,kills_score=float(confidence),kills_source='icon_anchor')
         prepared.clear()
         if on_batch: on_batch(rows[first_new:])
     try:

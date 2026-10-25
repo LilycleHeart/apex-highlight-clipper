@@ -16,11 +16,15 @@ export function validateTaskStorage(task:any,file:string){
  }
 }
 export function videoDirectory(task:any,item:any){return task.version===2?item.video_directory:item.destination;}
+/** 片段库确认过「同一文件被用户移动」后，记录里的 relocated_outputs 允许成片不在原视频目录。 */
+export function isRelocatedOutput(record:any,file:string){return Array.isArray(record?.relocated_outputs)&&record.relocated_outputs.some((p:unknown)=>typeof p==='string'&&path.isAbsolute(p)&&key(p)===key(file));}
 export function isRecordedVideo(task:any,item:any,file:unknown){
  if(typeof file!=='string'||!path.isAbsolute(file))return false;
+ if(!Array.isArray(item.record?.outputs)||!item.record.outputs.some((p:unknown)=>typeof p==='string'&&key(p)===key(file)))return false;
+ if(isRelocatedOutput(item.record,file))return true;
  const directory=videoDirectory(task,item);
  if(task.version===2&&key(path.dirname(file))!==key(directory))return false;
- return inside(file,directory)&&Array.isArray(item.record?.outputs)&&item.record.outputs.some((p:unknown)=>typeof p==='string'&&key(p)===key(file));
+ return inside(file,directory);
 }
 /** Only explicit, matching task caches can grant access to samples from a previous install. */
 export async function recordedSampleDirectories(task:any,liveSample?:string){

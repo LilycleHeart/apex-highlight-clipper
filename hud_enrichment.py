@@ -22,6 +22,7 @@ from name_reader import NameReader,name_value
 from japanese_name_reader import VERSION as NAME_VERSION
 from native_frame_reader import native_frame_session,read_native_frames
 from hud_recovery import persistent_job
+from library_records import IMPORTED_FIELDS,VIDEO_EXTENSIONS
 
 VERSION='optional-hud-v11'
 FIELDS=['account','weapons','teammates','hero','rank']
@@ -545,9 +546,13 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
     selected_paths={str(Path(clip.get('output',clip.get('file',''))).resolve()).casefold() for clip in selected}
     if wanted and selected_paths!=wanted:raise ValueError('所选视频不在对应导出清单中')
     recorded={str(Path(file).resolve()).casefold() for file in manifest.get('outputs',[])}
+    # 用户整理过的成片（或登记的已有片段）由片段库确认后写入 relocated_outputs，可以不在原视频目录内。
+    relocated={str(Path(file).resolve()).casefold() for file in manifest.get('relocated_outputs',[]) if isinstance(file,str)}
+    if manifest.get('mode')=='imported' and set(fields)-set(IMPORTED_FIELDS):raise ValueError('已有片段只能补充画面中的 HUD 信息')
     for clip in selected:
         file=Path(clip.get('output',clip.get('file',''))).resolve()
-        if not file.is_relative_to(video_directory) or file.suffix.lower()!='.mp4' or str(file).casefold() not in recorded:raise ValueError('成片路径不属于对应导出目录')
+        inside=file.is_relative_to(video_directory) or str(file).casefold() in relocated
+        if not inside or file.suffix.lower() not in VIDEO_EXTENSIONS or str(file).casefold() not in recorded:raise ValueError('成片路径不属于对应导出目录')
     name_updates={}
     from hud_read_queue import ClipReadQueue
     workers=min(3,max(1,int(os.environ.get('APEX_HUD_WORKERS','1'))))

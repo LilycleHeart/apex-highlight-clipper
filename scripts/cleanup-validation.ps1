@@ -6,6 +6,8 @@
     [string]$UserData = '',
     [string]$DataRoot = '',
     [ValidateRange(1, 10)][int]$KeepRecent = 3,
+    # 识别画面缓存保留的已完成任务数。软件在每次任务结束后传 0：完成即清，未完成/暂停的断点始终保护。
+    [ValidateRange(0, 10)][int]$KeepCaches = 3,
     [ValidateRange(1, 90)][int]$MaxAgeDays = 7
 )
 $ErrorActionPreference = 'Stop'
@@ -193,7 +195,7 @@ if ($taskScanOK -and -not $SkipImageCache) {
             $valid = -not (Test-Path -LiteralPath (Join-Path $dir.FullName '.images-pruned.json'))
             $jobs += [pscustomobject]@{ Path = $dir.FullName; Used = $used; Protected = $protected; Valid = $valid }
         }
-        $keep = @($jobs | Where-Object Valid | Sort-Object Used -Descending | Select-Object -First $KeepRecent | ForEach-Object Path)
+        $keep = @(if ($KeepCaches -gt 0) { $jobs | Where-Object Valid | Sort-Object Used -Descending | Select-Object -First $KeepCaches | ForEach-Object Path })
         # Older generations may supply the samples of a recent run: keep those dependencies too.
         do {
             $previousCount = $keep.Count
@@ -216,7 +218,7 @@ if ($taskScanOK -and -not $SkipImageCache) {
     }
 }
 [pscustomobject]@{ Applied = [bool]$Apply; Bytes = $deletedBytes; Files = $deletedFiles; Directories = $deletedDirectories;
-    CacheDirectoriesRemoved = $cacheDirectoriesRemoved; KeepRecent = $KeepRecent; TaskScanOK = $taskScanOK; ProtectedSources = $protectedSources.Count } | ConvertTo-Json -Compress
+    CacheDirectoriesRemoved = $cacheDirectoriesRemoved; KeepRecent = $KeepRecent; KeepCaches = $KeepCaches; TaskScanOK = $taskScanOK; ProtectedSources = $protectedSources.Count } | ConvertTo-Json -Compress
 if ($Apply -and $taskScanOK -and -not $SkipImageCache) {
     $retainedCount = @(Get-ChildItem -LiteralPath (Join-Path $validationRoot 'app-cache') -Directory -ErrorAction SilentlyContinue).Count
     @{ completed = [DateTimeOffset]::UtcNow.ToString('o'); cache_count = $retainedCount } | ConvertTo-Json -Compress |

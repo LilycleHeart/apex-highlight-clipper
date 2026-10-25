@@ -63,3 +63,6 @@
 .legend-option-name{display:block;width:100%;padding:4px 2px;font-size:10px;line-height:14px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hero-picker-other{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;padding-top:9px;border-top:1px solid var(--card-line)}
 .hero-picker-other>button>span{font-variant-numeric:tabular-nums;color:var(--card-muted)}
+.empty-clips-secondary{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.empty-clips-secondary>button{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--card-line);border-radius:10px;background:var(--card-tint);color:var(--card-ink);font:inherit;font-size:12px;box-shadow:none}
+.empty-clips-secondary>button:disabled{opacity:.55}

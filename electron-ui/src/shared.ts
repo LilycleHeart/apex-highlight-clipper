@@ -6,7 +6,7 @@ export type State = 'empty'|'ready'|'starting'|'running'|'stopping'|'stopped'|'c
 export type HudField='account'|'weapons'|'teammates'|'hero'|'rank';
 export type HudEnrichmentField=HudField|'statistics'|'opponents'|'event_weapons';
 export interface HudEnrichmentResult {updated:number;errors:{directory:string;message:string}[];unconfirmed?:number}
-export interface Clip {algorithmFields?:readonly import('./algorithmStatus').AlgorithmFieldRecord[]}
+export interface Clip {algorithmFields?:readonly import('./algorithmStatus').AlgorithmFieldRecord[];/** 未经本软件处理、由用户添加的已有片段：只有画面 HUD 信息，移除时文件保留。 */imported?:boolean}
 export interface WorkerEvent {performance_policy?:import('./performanceOptions').PerformanceRuntime}
 export type HudEnrichmentMode='missing'|'refresh';
 export interface Options extends PerformanceOptions {export_layout:'task'|'flat';scan_mode:'smart'|'complete'|'indexed';fps:number;gap:number;pre:number;post:number;delete_source:boolean;pipeline:boolean;hud_info_enabled:boolean;hud_info_fields:HudField[];filter_enabled:boolean;filter_mode:'any'|'all';min_damage:number;min_kills:number;min_assists:number;min_duration:number}
@@ -30,6 +30,8 @@ export interface UpdateInfo {status:'idle'|'checking'|'available'|'up_to_date'|'
 export interface Bootstrap {excludedTeammates:string[];playerAudio:PlayerAudioPreferences;output:string;options:Options;preferences:ThemePreferences;theme:SystemTheme;development:boolean;lastTask:TaskInfo|null;backendAvailable:boolean;cudaAvailable?:boolean;logicalCores:number;update:UpdateInfo}
 export interface ImportResult {files:FileItem[];rejected:string[]}
 export interface LibrarySnapshot {results:Result[];tasks:number;errors:number}
+/** restored：认领到原有记录、恢复战绩与识别信息；added：按未处理过的片段新加入。 */
+export interface AddExistingResult {library:LibrarySnapshot;restored:number;added:number;existing:number;rejected:number;truncated:boolean}
 export type WindowCommand='minimize'|'maximize'|'close';
 export interface WindowState {maximized:boolean}
 export interface DesktopAPI {
@@ -52,6 +54,8 @@ export interface DesktopAPI {
  deleteClip(file:string):Promise<void>;
  ignoreLibraryErrors():Promise<LibrarySnapshot>;
  chooseLibraryRoot():Promise<boolean>;
+ addExistingClips():Promise<AddExistingResult|null>;
+ addExistingFolder():Promise<AddExistingResult|null>;
  ready():Promise<void>;
  chrome(color:string,foreground:string):Promise<void>;
  bootstrap():Promise<Bootstrap>;chooseFiles():Promise<ImportResult>;chooseFolder():Promise<ImportResult>;importFiles(files:File[]):Promise<ImportResult>;

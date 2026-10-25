@@ -29,10 +29,12 @@ export function outcomeTarget(event:{target_text?:unknown;target?:unknown;text?:
  return typeof event.text==='string'&&resultPrefix.test(event.text.normalize('NFKC').trim())?cleanTargetName(event.text):undefined;
 }
 
-type VideoIdentity={path:string;size:number;mtime_ms:number};
+type VideoIdentity={path:string;size:number;mtime_ms:number;aliases?:string[]};
 const weaponContextVersion='event-weapon-context-v1';
 const outcomeIdentity=(event:any)=>`${event.kind}-${event.time}-${event.text||''}-${JSON.stringify(event.prefix_box||event.box||[])}`;
-function sameVideoIdentity(expected:any,actual?:VideoIdentity):boolean{return !!actual&&typeof actual.path==='string'&&!!actual.path&&typeof expected?.path==='string'&&!!expected.path&&Number.isSafeInteger(expected.size)&&expected.size>=0&&Number.isSafeInteger(expected.mtime_ms)&&expected.mtime_ms>=0&&expected.path.toLowerCase().replaceAll('\\','/')===actual.path.toLowerCase().replaceAll('\\','/')&&expected.size===actual.size&&expected.mtime_ms===actual.mtime_ms;}
+// 成片被片段库确认移动后，旧路径记在 moved_from（aliases）；其他路径的证据仍不能借用。
+const samePath=(a:string,b:string)=>a.toLowerCase().replaceAll('\\','/')===b.toLowerCase().replaceAll('\\','/');
+function sameVideoIdentity(expected:any,actual?:VideoIdentity):boolean{return !!actual&&typeof actual.path==='string'&&!!actual.path&&typeof expected?.path==='string'&&!!expected.path&&Number.isSafeInteger(expected.size)&&expected.size>=0&&Number.isSafeInteger(expected.mtime_ms)&&expected.mtime_ms>=0&&[actual.path,...(actual.aliases||[])].some(path=>typeof path==='string'&&samePath(expected.path,path))&&expected.size===actual.size&&expected.mtime_ms===actual.mtime_ms;}
 const finiteBox=(value:any):boolean=>Array.isArray(value)&&value.length===4&&value.every((n:any)=>typeof n==='number'&&Number.isFinite(n))&&value[2]>value[0]&&value[3]>value[1];
 function classificationPrefix(text:unknown):{kind:string;action:string;english:boolean;length:number}|undefined{
  if(typeof text!=='string')return undefined;const value=text.normalize('NFKC').replace(/\s+/g,' ').trim();

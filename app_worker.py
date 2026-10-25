@@ -145,13 +145,14 @@ def _run_task(request_path):
                 if item['source_identity'] is not None and identity!=item['source_identity']: raise ValueError('源录像已变化，不能使用旧任务断点，请新建任务')
                 item['source_identity']=identity; save_task(task_path,task)
                 meta,video=stage('probe','检查录像',0,5,lambda:probe(source))
-                from hud_layout import detect_video
+                from hud_layout import detect_video,DETECTOR_VERSION
                 frozen=item.get('hud_profile')
-                if frozen and frozen.get('reference_size')==[video['width'],video['height']] and frozen.get('layout_status')!='unconfirmed':profile=frozen
+                if frozen and frozen.get('reference_size')==[video['width'],video['height']] and frozen.get('layout_status')!='unconfirmed' and item.get('hud_detector')==DETECTOR_VERSION:profile=frozen
                 else:
+                    # 旧版只按高度缩放，16:10 等比例可能以错误几何「确认」；续接时按当前候选重测。
                     profile=stage('probe','自动适配分辨率与HUD拉伸比例',2,5,
                         lambda:detect_video(source,video,float(meta['format']['duration']),task['profile']))
-                    item['hud_profile']=profile;save_task(task_path,task)
+                    item['hud_profile']=profile;item['hud_detector']=DETECTOR_VERSION;save_task(task_path,task)
                 emit('metadata',source=str(source),width=video['width'],height=video['height'],hud_layout=profile['layout'],hud_layout_status=profile.get('layout_status'))
                 config={'source':identity,'profile':profile,'fps':fps}
                 planner_version=item.get('smart_cache_version',task.get('smart_cache_version','smart-v2'))

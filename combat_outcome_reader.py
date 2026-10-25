@@ -16,8 +16,12 @@ from weapon_reader import new_engine,MODEL_SHA
 KINDS={'knock','assist','elimination'}
 RULE_VERSION='own-center-result-v4'
 PARSER_VERSION='target-name-v15'
+# 没有像素模板的界面语言改用「行首语法 + 相邻帧一致」确认；只改这一阶段的检查点，不使全库字段失效。
+TOAST_GRAMMAR_VERSION='toast-grammar-v1'
+# 只收录有真实录像证据的语言；繁中走像素模板，英文走原有英文语法分支。
+GRAMMAR_LOCALES={'zh-CN','ru'}
 
-TARGET_PREFIX=re.compile(r'^(?:ASSIST[,.:\s]*)?(?:KN[O0]CKED\s*D[O0]WN|ELIMINATED)\s*|^(?:助攻[,，:：\s]*)?(?:[擊击撃擎驛驿]倒|(?:已)?消[滅灭減减])\s*',re.I)
+TARGET_PREFIX=re.compile(r'^(?:ASSIST[,.:\s]*)?(?:KN[O0]CKED\s*D[O0]WN|ELIMINATED)\s*|^(?:助攻[,，:：\s]*)?(?:[擊击撃擎驛驿]倒|(?:已)?消[滅灭減减]|淘汰)\s*',re.I)
 
 
 def read_target_span(image,line,reader,prefix_box=None,*,independent_names=False,tail_review=None):
@@ -181,7 +185,7 @@ def clean_target_name(text,*,allow_rendered_square=False):
     if not isinstance(text,str):return ''
     target=re.sub(r'\s+',' ',unicodedata.normalize('NFKC',text)).strip()
     # 也处理旧缓存曾把完整动作前缀写进 target_text 的情况。
-    prefix=r'^(?:(?:ASSIST|助攻)\s*[,.:，：]*\s*|KN[O0]CK(?:ED)?\s*D[O0]WN\s*|ELIMINAT(?:ED|ION)\s*|(?:已)?[擊击擎驛驿]倒\s*|(?:已)?消[滅灭減减]\s*)'
+    prefix=r'^(?:(?:ASSIST|助攻)\s*[,.:，：]*\s*|KN[O0]CK(?:ED)?\s*D[O0]WN\s*|ELIMINAT(?:ED|ION)\s*|(?:已)?[擊击擎驛驿]倒\s*|(?:已)?消[滅灭減减]\s*|淘汰\s*)'
     for _ in range(3):
         stripped=re.sub(prefix,'',target,flags=re.I)
         if stripped==target:break
@@ -196,10 +200,33 @@ def clean_target_name(text,*,allow_rendered_square=False):
     return target
 
 
+# 俄语界面：默认识别模型不含西里尔字母，会把大写提示读成形近的拉丁字母（НОКАУТ→HOKAYT）。
+# 只认真实录像里出现过的本人提示行首，且区分大小写，避免「Нокаут-щит」等物品名误触发。
+_CYRILLIC_LOOKALIKE=str.maketrans('АВЕКМНОРСТУХЗДИЙЛПЯЬЫ','ABEKMHOPCTYX3AN' 'NANRbb')
+RU_ASSIST_KNOCK=re.compile(r'^C[O0]A[EF][MNH][CG]T[BV][NM][EF]\s*[BV]\s*H[O0]KA[YV]T[EF]\s*')
+RU_KNOCK=re.compile(r'^H[O0]KA[YV]T(?![-—–])\s*')  # 识别常把名字直接连在后面；「-щит」是物品名
+RESULT_CUE=r'擊倒|击倒|消滅|消灭|淘汰|助攻|KNOCK|ELIMINAT|H[O0]KA[YV]T|C[O0]A[EF][MNH][CG]T[BV]'
+
+
+def result_locale(text):
+    """只按行首动作词判断提示语言，用于选择确认方式；不改变事件种类。"""
+    if re.match(r'^(?:ASSIST|KNOCKED DOWN|ELIMINATED)\b',text,re.I):return 'en'
+    if RU_ASSIST_KNOCK.match(text) or RU_KNOCK.match(text):return 'ru'
+    if re.search(r'^(?:助攻\s*[,，:：]?\s*)?(?:擊倒|已消滅)',text):return 'zh-TW'
+    if re.search(r'^(?:助攻\s*[,，:：]?\s*)?(?:击倒|已消灭|淘汰)',text):return 'zh-CN'
+    return 'zh'
+
+
 def parse_result_line(text):
     """只接受本人toast的行首语法；玩家名拼错不影响事件种类。"""
     clean=unicodedata.normalize('NFKC',text).strip()
     clean=re.sub(r'\s+',' ',clean)
+    russian=clean.translate(_CYRILLIC_LOOKALIKE)
+    for kind,action,pattern in [('assist','knock',RU_ASSIST_KNOCK),('knock','knock',RU_KNOCK)]:
+        match=pattern.match(russian)
+        if match:
+            target=clean[match.end():].strip()
+            return {'kind':kind,'action':action,'target_text':clean_target_name(target),'target_raw':target,'text':clean,'locale':'ru'}
     # OCR 常把同形的繁体“擊”读作日文“撃”；仅归一行首动作，不改昵称字符。
     clean=re.sub(r'^(助攻\s*[,，:：]?\s*)?撃倒',lambda match:(match[1] or '')+'擊倒',clean)
     # Apex英文HUD常被OCR连成一词，且DOWN的O会读成0；仅修正行首固定语法。
@@ -219,17 +246,18 @@ def parse_result_line(text):
         action=kind if kind!='assist' else 'unknown'
         if kind=='assist':
             # 只读助攻之后的完整动作前缀；昵称里出现动作词不能改变动作。
-            for observed,syntax in [('knock',r'^(?:[擊击撃擎驛驿]倒|KNOCK(?:ED)? DOWN)\s*'),('elimination',r'^(?:(?:已)?消[滅灭減减]|ELIMINAT(?:ION|ED))\s*')]:
+            # 简体界面的助攻消灭显示为「助攻，淘汰 <名字>」。
+            for observed,syntax in [('knock',r'^(?:[擊击撃擎驛驿]倒|KNOCK(?:ED)? DOWN)\s*'),('elimination',r'^(?:(?:已)?消[滅灭減减]|淘汰|ELIMINAT(?:ION|ED))\s*')]:
                 prefix=re.match(syntax,target,re.I)
                 if prefix:action=observed;target=target[prefix.end():];break
-        return {'kind':kind,'action':action,'target_text':clean_target_name(target),'text':clean}
+        return {'kind':kind,'action':action,'target_text':clean_target_name(target),'target_raw':target,'text':clean,'locale':result_locale(clean)}
     return None
 
 
 def is_known_dialogue(text):
     text=unicodedata.normalize('NFKC',text)
     if ':' in text and not re.match(r'^(?:助攻|ASSIST|已消滅|已消灭|擊倒|击倒|KNOCKED|ELIMINATED)',text,re.IGNORECASE): return True
-    cue=re.search(r'擊倒|击倒|撃倒|消滅|消灭|助攻|KNOCK|ELIMINAT',text,re.IGNORECASE)
+    cue=re.search(RESULT_CUE+r'|撃倒',text,re.IGNORECASE)
     if not cue: return False
     prefix=text[:cue.start()]
     return bool(':' in prefix or re.search(r'我被|你被|被人|I(?: AM| WAS)? |YOU(?: ARE| WERE)? ',prefix,re.IGNORECASE)
@@ -276,6 +304,34 @@ def text_line_gate(image,profile):
     _,_,stats,_=cv2.connectedComponentsWithStats(mask)
     glyphs=[(x,y,w,h) for x,y,w,h,area in stats[1:] if 3<=h<=26 and 1<=w<=30 and 4<=area<=350]
     return any(sum(abs(y+h/2-(yy+hh/2))<=3 for _,yy,_,hh in glyphs)>=8 for _,y,_,h in glyphs)
+
+
+def short_text_hint(image,profile):
+    """「已消灭」这类三四个字的短提示达不到 text_line_gate 的字数；按提示区高度找一排浅色字形。"""
+    region,_=roi_image(image,profile)
+    if not region.size:return False
+    hsv=cv2.cvtColor(region,cv2.COLOR_BGR2HSV)
+    mask=((hsv[:,:,2]>185)&(hsv[:,:,1]<80)).astype(np.uint8)
+    _,_,stats,_=cv2.connectedComponentsWithStats(mask)
+    height=region.shape[0];low=max(4,int(height*.10));high=max(low+2,int(height*.35))
+    glyphs=[(y,h) for x,y,w,h,area in stats[1:] if low<=h<=high and 2<=w<=high*1.5 and area>=6]
+    return any(sum(abs(y+h/2-(yy+hh/2))<=max(3,h*.5) and abs(hh-h)<=max(2,h*.4) for yy,hh in glyphs)>=3 for y,h in glyphs)
+
+
+def same_toast_slot(left,right):
+    """非拉丁名字的识别常逐帧不同；同种提示停在同一行位置即视为同一条。"""
+    a,b=left.get('box'),right.get('box')
+    if not a or not b:return False
+    height=max(1,a[3]-a[1])
+    return abs(a[0]-b[0])<=height*1.5 and abs((a[1]+a[3])/2-(b[1]+b[3])/2)<=height*.6
+
+
+def grammar_confirmable(event):
+    """无像素模板时：必须是行首语法、不是紧随对白的换行；名字读不清时，余下部分也不能像一句字幕。"""
+    if event.get('after_dialogue'):return False
+    if event.get('target_text'):return True
+    raw=(event.get('target_raw') or '').strip()
+    return not raw or len(raw)<=24 and not re.search(r'[。！？!?，,：:；;、]',raw)
 
 
 def group_lines(detections):
@@ -326,7 +382,7 @@ def recognize_frame(image,profile,engine=None,expand_context=False,prefix_matche
         detections.append({'text':text,'confidence':float(confidence),'left':min(xs),'right':max(xs),'top':min(ys),'bottom':max(ys)})
     lines=group_lines(detections); events=[]; ambiguous=[]; dialogue=[]
     if not expand_context and any(line['box'][0]<=roi[0]+4 and not is_known_dialogue(line['text'])
-        and re.search(r'擊倒|击倒|消滅|消灭|助攻|KNOCK|ELIMINAT',line['text'],re.IGNORECASE) for line in lines):
+        and re.search(RESULT_CUE,line['text'],re.IGNORECASE) for line in lines):
         return recognize_frame(image,profile,engine,expand_context=True,prefix_matches=prefix_matches,independent_names=independent_names,tail_review=tail_review)
     for line in lines:
         if is_known_dialogue(line['text']): dialogue.append(line); continue
@@ -343,8 +399,11 @@ def recognize_frame(image,profile,engine=None,expand_context=False,prefix_matche
             if read is not None:line['target_read']=read;parsed=with_target_read(parsed,line)
             if line['confidence']<.80 and parsed.get('target_read_confidence',0)<.90:parsed['target_text']=''
             events.append({**parsed,'confidence':line['prefix_confidence'],'text_confidence':line['confidence'],'box':line['box']})
-        elif re.search(r'擊倒|击倒|消滅|消灭|助攻|KNOCK|ELIMINAT',line['text'],re.IGNORECASE):
+        elif re.search(RESULT_CUE,line['text'],re.IGNORECASE):
             ambiguous.append(line)
+    for event in events:
+        # 紧挨在对白行下方的同色行可能是换行后的字幕，不能当本人提示。
+        event['after_dialogue']=any(0<=event['box'][1]-d['box'][3]<=max(6,(d['box'][3]-d['box'][1])*.8) and abs(event['box'][0]-d['box'][0])<=(d['box'][3]-d['box'][1])*3 for d in dialogue)
     return {'lines':lines,'events':events,'ambiguous_lines':ambiguous,'known_dialogue':dialogue,'context_expanded':expand_context}
 
 
@@ -759,6 +818,14 @@ def _same_line_gate(event,matches):
     return max((m['score'] for m in relevant),default=0.)
 
 
+def calibrated_sample_size(profile):
+    """像素模板在标准界面上按 HUD 缩放；2Hz 采样宽 1280，高度随录像比例。精简界面尚未校准。"""
+    if profile.get('ui_layout')=='compact':return None
+    if not profile.get('layout_version'):return [1280,540]
+    width,height=profile['reference_size']
+    return [1280,round(1280*height/width/2)*2]
+
+
 def _locale_confirmed(cache,observations,profile):
     if not profile.get('calibration',{}).get('require_traditional_ui',True): return True
     traditional=r'[擊滅敵槍衝鋒輕獵獸轉換瑪蘿]'
@@ -788,11 +855,11 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
     checkpoint.parent.mkdir(parents=True,exist_ok=True)
     templates={str(BASE/e['gray']):hashlib.sha256((BASE/e['gray']).read_bytes()).hexdigest() for e in profile.get('prefix_templates',[])}
     signature=hashlib.sha256(json.dumps({'version':RULE_VERSION,'source':identity,'fps':fps,'samples':str(samples.resolve()),
-        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,'stop_after_positive':_stop_after_positive,'reader_version':'toast-lines-v8',
+        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,'stop_after_positive':_stop_after_positive,'reader_version':'toast-lines-v8','grammar':TOAST_GRAMMAR_VERSION,
         'bounds':[(c['start'],c['end']) for c in candidates]},sort_keys=True).encode()).hexdigest()
     if checkpoint.exists():
         saved=json.loads(checkpoint.read_text(encoding='utf-8'))
-        if saved.get('signature')==signature and saved.get('complete') and saved.get('parser_version')==PARSER_VERSION: return saved
+        if saved.get('signature')==signature and saved.get('complete') and saved.get('parser_version')==PARSER_VERSION and saved.get('grammar_version')==TOAST_GRAMMAR_VERSION: return saved
     wanted={i for c in candidates for i in candidate_indices(c,fps)}
     journal=RowJournal(checkpoint.with_suffix('.toast-rows.jsonl'),signature,
         lambda r,index:r.get('index') in wanted and r.get('time')==(r['index']-.5)/fps and r.get('status') in ['negative','ambiguous','excluded_view','self_event'])
@@ -817,7 +884,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
             matches=gate.inspect(image); best=max((m['score'] for m in matches),default=0.)
             item['gate']=matches
             threshold=profile.get('calibration',{}).get('gate_threshold',.65)
-            generic=bool(profile.get('layout_version') and text_line_gate(image,profile))
+            generic=bool(profile.get('layout_version') and (text_line_gate(image,profile) or short_text_hint(image,profile)))
             if best>=threshold or generic:
                 if engine is None: engine=new_engine()
                 result=recognize_frame(image,profile,engine,prefix_matches=matches); ocr_new+=1
@@ -852,6 +919,19 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
                         if any(previous['time']!=item['time'] and abs(previous['time']-item['time'])<=1.1 and
                             any(e['kind']==event['kind'] and same_english_target(e.get('target_text',''),event.get('target_text','')) for e in previous.get('possible_events',[])) for previous in observations.values()):
                             item['events'].append({**potential,'confirmation':'two_frame_english_toast'})
+                        continue
+                    locale=event.get('locale') or (parse_result_line(event['text']) or {}).get('locale')
+                    if locale in GRAMMAR_LOCALES and support<threshold and event['confidence']>=.75 and grammar_confirmable(event):
+                        # 简体、俄语等没有像素模板的界面：行首语法 + 相邻帧同一条提示；或单帧极高置信度且读到名字。
+                        potential={**event,'time':item['time'],'frame':item['frame'],'template_score':support,'ownership':'self','confirmation_basis':'toast_grammar'}
+                        possible.append(potential)
+                        confirmed=any(previous['time']!=item['time'] and abs(previous['time']-item['time'])<=1.1 and
+                            any(other.get('confirmation_basis')=='toast_grammar' and other['kind']==event['kind'] and
+                                (same_english_target(other.get('target_text',''),event.get('target_text','')) or same_toast_slot(other,event))
+                                for other in previous.get('possible_events',[])) for previous in observations.values())
+                        if confirmed:item['events'].append({**potential,'confirmation':'two_frame_toast_grammar'})
+                        elif event['confidence']>=.93 and len(event.get('target_text') or '')>=2:
+                            item['events'].append({**potential,'confirmation':'strong_single_toast_grammar'})
                         continue
                     if event['confidence']>=.85 and support>=threshold:
                         item['events'].append({**event,'time':item['time'],'frame':item['frame'],'template_score':support,'ownership':'self'})
@@ -898,19 +978,24 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
         covered=[observations[i] for i in indices if i in observations]
         uncertain=[r for r in covered if r['status']=='ambiguous']
         calibration=profile.get('calibration',{})
-        supported_style=(_locale_confirmed(cache,observations,profile) and all(r.get('sample_size')==[1280,540] for r in covered))
+        supported_style=(_locale_confirmed(cache,observations,profile) and all(r.get('sample_size')==calibrated_sample_size(profile) for r in covered))
         reliable_absence=(len(covered)==len(indices) and fps>=calibration.get('minimum_fps',2)
                           and calibration.get('negative_decision_enabled',False) and not uncertain and supported_style)
         if found: status='kept'; reason='已确认本人击倒、助攻或消灭提示'
         elif reliable_absence: status='rejected'; reason='完整检查候选后未发现本人击倒、助攻或消灭提示'
         else: status='review'; reason='提示模糊、采样覆盖不足或尚未校准，需复核本人结果'
-        decisions.append({'candidate_index':position,'status':status,'reason':reason,'events':found,
+        counter=None
+        if not found and not _only_existing and 'own_kill' in candidate.get('combat_evidence',{}).get('accepted_reasons',[]):
+            # 本人 HUD 击杀数在交战内确认增长，与界面语言无关；文字提示读不到时用它保留交战，
+            # 但不当成可计数的提示事件。
+            status='kept';reason='本人击杀计数增长（界面语言的结果提示未识别）';counter='own_kill_counter'
+        decisions.append({'candidate_index':position,'status':status,'reason':reason,'events':found,**({'counter_basis':counter} if counter else {}),
             'coverage':{'expected_frames':len(indices),'checked_frames':len(covered),'fps':fps,
                         'ambiguous_frames':[r['frame'] for r in uncertain],'reliable_absence':reliable_absence,
                         'calibrated_style_confirmed':supported_style,
                         'stopped_after_positive':bool(found) and _stop_after_positive}})
         print(f'本人战果提示: {position+1}/{len(candidates)} 段，{status}，新增文字识别 {ocr_new} 帧',flush=True)
-    report={'signature':signature,'version':RULE_VERSION,'parser_version':PARSER_VERSION,'complete':True,'source':identity,
+    report={'signature':signature,'version':RULE_VERSION,'parser_version':PARSER_VERSION,'grammar_version':TOAST_GRAMMAR_VERSION,'complete':True,'source':identity,
         'policy':sorted(KINDS),'decisions':decisions,'stats':{'checked_new_frames':checked_new,'ocr_new_frames':ocr_new,'extra_sample_frames':sampled_new,'restored_frames':len(journal.rows)-checked_new}}
     if fingerprint(source)!=identity: raise ValueError('识别结果提示时源录像发生变化')
     write_json(checkpoint,report)

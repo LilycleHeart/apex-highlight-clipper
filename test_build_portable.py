@@ -13,7 +13,7 @@ class PortableBuildTests(unittest.TestCase):
         root=Path(__file__).resolve().parent
         spec=importlib.util.spec_from_file_location('portable_build',root/'scripts/build-portable.py');build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
         missing={}
-        for name in ['hud_enrichment.py','continuous_sampler.py','resume_media.py']:
+        for name in ['hud_enrichment.py','continuous_sampler.py','resume_media.py','library_records.py']:
             source=ast.parse((root/name).read_text('utf-8'))
             local={node.module.split('.')[0] for node in ast.walk(source) if isinstance(node,ast.ImportFrom)
                    and node.module and (root/(node.module.split('.')[0]+'.py')).is_file()}

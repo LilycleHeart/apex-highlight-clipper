@@ -115,6 +115,37 @@ def separated_digit_views(image):
     return result
 
 
+KILLS_FALLBACK='icon-digit-span-v1'
+
+
+def digit_span(patch):
+    """返回窗口内计数数字的左右边界；跳过贴左缘的图标残边、斜分隔线和右侧白色底块。"""
+    if patch is None or not patch.size:return None
+    gray=cv2.cvtColor(patch,cv2.COLOR_BGR2GRAY);height,width=gray.shape
+    level=max(150,int(np.percentile(gray,99)*.75))
+    _,labels,stats,_=cv2.connectedComponentsWithStats((gray>=level).astype(np.uint8),connectivity=8)
+    glyphs=[];others=[]
+    for index,(x,y,w,h,area) in enumerate(stats[1:],1):
+        if area<3:continue
+        digit=x>0 and .4*height<=h<=.95*height and w<=h*.9 and not (area/(w*h)<.38 and w>=h*.25)
+        if digit:
+            ys,xs=np.where(labels[y:y+h,x:x+w]==index)
+            top=xs[ys<h*.3];bottom=xs[ys>h*.7]
+            # 「/」上端明显比下端靠右；数字 1 基本竖直。
+            digit=not (len(top) and len(bottom) and top.mean()-bottom.mean()>max(1.5,h*.18))
+        (glyphs if digit else others).append((x,x+w,h))
+    if not glyphs:return None
+    glyphs.sort();first=glyphs[0];right=first[1]
+    for x,x2,h in glyphs[1:]:
+        if x-right>first[2]*.5 or abs(h-first[2])>first[2]*.25:break
+        right=x2
+    pad=max(1,round(first[2]*.25))
+    # 留白不能伸进左侧图标残边或右侧分隔线。
+    left_wall=max([x2 for x,x2,_ in others if x2<=first[0]],default=0)
+    right_wall=min([x for x,_,_ in others if x>=right],default=width)
+    return max(left_wall,first[0]-pad),min(right_wall,right+pad)
+
+
 class CounterFallback:
     def __init__(self):
         self.templates={key:read_image(str(BASE/'templates/statistics'/f'{key}-gray.png'),0) for key in ['kills','assists','participation']}
@@ -176,10 +207,23 @@ class CounterFallback:
                 padding=max(1,round(sx*fx));left=a[2];right=min(next_x-padding,left+round(40*sx*fx))
                 if right-left>=3:
                     top=max(0,a[1]-round(2*sy*fy));bottom=min(image.shape[0],a[3]+round(2*sy*fy))
+                    # 图标匹配的右缘会随缩放偏 1~3 像素：从图标中线起找实际数字字形再裁，
+                    # 避免切掉首位数字或带进斜分隔线；找不到字形时保持原裁剪。
+                    start=(a[0]+a[2])//2;end=min(next_x-padding,a[2]+round(48*sx*fx))
+                    span=digit_span(image[top:bottom,start:end]) if end-start>=3 else None
+                    if span:left,right=start+span[0],start+span[1]
                     result[key]=image[top:bottom,left:right].copy()
         box=counter_box(profile,'damage');x1,y1,x2,y2=[round((v+(dx if i%2==0 else dy))*(fx if i%2==0 else fy)) for i,v in enumerate(box)]
         result['damage']=image[y1:y2,x1:x2].copy()
         return result
+
+    def kills_crop(self,image,profile,delta):
+        """按骷髅图标定位的击杀数字裁片（已放大三倍，供数字识别）；没有图标时返回 None。"""
+        if delta is None:return None
+        try:region=self.regions(image,profile,delta).get('kills')
+        except (cv2.error,ValueError,KeyError):return None  # 旧配置或测试配置缺少计分栏锚点时不补读
+        if region is None or not region.size:return None
+        return cv2.resize(region,None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC)
 
     def patches(self,image,profile,delta):
         return {key:digit_view(region) for key,region in self.regions(image,profile,delta).items()}

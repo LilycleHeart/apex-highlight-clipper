@@ -8,6 +8,17 @@ import tempfile
 import json
 
 class CounterTests(unittest.TestCase):
+    def test_digit_span_skips_icon_edge_and_slash(self):
+        from stat_counter_fallback import digit_span
+        patch=np.zeros((30,40,3),np.uint8)
+        patch[5:25,0:3]=255                        # 贴左缘的图标残边
+        patch[6:24,12:20]=255;patch[9:21,14:18]=0   # 数字 0
+        for y in range(4,26):patch[y,36-(y-4)//3]=255  # 斜分隔线
+        left,right=digit_span(patch)
+        self.assertGreaterEqual(left,3);self.assertLessEqual(left,12)
+        self.assertGreaterEqual(right,20);self.assertLess(right,28)
+        self.assertIsNone(digit_span(np.zeros((30,40,3),np.uint8)))
+
     def test_digit_separation_rejects_blank_background_and_keeps_a_text_line(self):
         from stat_counter_fallback import separated_digit_views
         self.assertEqual(separated_digit_views(np.zeros((40,90,3),np.uint8)),[])
