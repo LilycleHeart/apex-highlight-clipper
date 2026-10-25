@@ -48,7 +48,10 @@ class LibraryRecordTests(unittest.TestCase):
 
     def test_moved_clip_keeps_hud_information_and_resume_state(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); task_path, destination, clip, other = self.task_fixture(root)
+            # Windows CI exposes the temp directory through an 8.3 short name
+            # (RUNNER~1); fingerprint() resolves paths, so fixtures and
+            # expectations must use the same resolved form.
+            root = Path(tmp).resolve(); task_path, destination, clip, other = self.task_fixture(root)
             sorted_dir = root / 'output/整理/高光'; sorted_dir.mkdir(parents=True)
             moved = sorted_dir / clip.name; shutil.move(str(clip), str(moved))
             result = library_records.relocate({'tasks': [str(task_path)],
@@ -94,7 +97,9 @@ class LibraryRecordTests(unittest.TestCase):
 
     def test_moved_legacy_task_folder_is_rebased(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); old = root / 'old/任务 B'; videos = old / '录像1'; videos.mkdir(parents=True)
+            # rebase() resolves the task path, so build the fixture from the
+            # resolved temp directory to keep expectations in the same form.
+            root = Path(tmp).resolve(); old = root / 'old/任务 B'; videos = old / '录像1'; videos.mkdir(parents=True)
             clip = videos / 'clip.mp4'; clip.write_bytes(b'clip')
             write(videos / 'export.json', {'outputs': [str(clip)], 'clips': [{'output': str(clip), 'output_identity': fingerprint(clip)}],
                                            'source': {'path': str(root / 'recording.mp4')}})
