@@ -31,10 +31,11 @@ class MemoryFrame:
     keyframe_index: int
     burst_slot: int
     image: np.ndarray = field(repr=False, compare=False)
+    origin: Fraction = Fraction(0)
 
     @property
     def timestamp(self):
-        return self.pts * self.time_base
+        return self.pts * self.time_base - self.origin
 
     @property
     def frame_id(self):
@@ -57,9 +58,9 @@ def iter_indexed_images(source, *, mode='bursts', span=Fraction(1, 8), workers=4
         raise ValueError('Burst span must be in (0,1] seconds')
     stats=stats if stats is not None else {}
     with reader_factory(source,threads=1) as reader:
-        count=len(reader.keyframes)
+        count=len(reader.keyframes); origin=reader.time_origin
         stats.update(keyframes=count, source_index_entries=reader.source_frames,
-                     width=reader.width, height=reader.height)
+                     width=reader.width, height=reader.height, time_origin=float(origin))
     if not 0<=start_index<=count: raise ValueError('Invalid starting keyframe index')
     local=threading.local(); readers=[]; lock=threading.Lock()
     def read(index):
@@ -75,7 +76,7 @@ def iter_indexed_images(source, *, mode='bursts', span=Fraction(1, 8), workers=4
         for slot,frame in enumerate(frames):
             if frame.pts is None or frame.time_base is None:
                 raise ValueError('Authoritative decoder PTS/time_base are required')
-            result.append(MemoryFrame(int(frame.pts),Fraction(frame.time_base),index,slot,reader.body_image(frame)))
+            result.append(MemoryFrame(int(frame.pts),Fraction(frame.time_base),index,slot,reader.body_image(frame),origin))
         return result,packets,time.perf_counter()-started
     pool=ThreadPoolExecutor(max_workers=workers)
     pending=deque(); next_index=start_index; previous=None

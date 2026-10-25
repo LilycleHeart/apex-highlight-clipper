@@ -535,11 +535,14 @@ def keyframes(source):
     # 包标志足够定位随机访问点，无须全片解码。
     data=run([tool('ffprobe'),'-v','error','-select_streams','v:0','-show_packets',
               '-show_entries','packet=pts_time,flags','-of','csv=p=0',source])
+    # Recordings that begin at a nonzero container timestamp (OBS replay buffers,
+    # remuxed MOV files) must share the same first-frame timeline as sampling.
+    meta,_=probe(source); origin=float(meta['format'].get('start_time') or 0)
     keys=[]
     for line in data.splitlines():
         parts=line.split(',')
         if len(parts)>=2 and 'K' in parts[1]:
-            try: keys.append(float(parts[0]))
+            try: keys.append(max(0.,float(parts[0])-origin))
             except ValueError: pass
     keys=sorted(set(keys))
     if not keys: raise ValueError('找不到可用关键帧')

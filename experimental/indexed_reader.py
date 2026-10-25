@@ -62,6 +62,10 @@ class IndexedKeyframeReader:
             if self.stream.start_time is None or self.stream.time_base is None:
                 raise UnsupportedIndexedVideo('Missing authoritative stream timestamps')
             self.time_base=Fraction(self.stream.time_base)
+            # OBS replay buffers and remuxed MOV files can start at a nonzero
+            # container timestamp. Sampling and export use a timeline that
+            # begins at the first frame, so remember the origin once here.
+            self.time_origin=Fraction(self.stream.start_time)*self.time_base
             self.source_frames=len(entries)
             # A replay can begin between keyframes. The seek origin belongs to
             # the first video packet, not the first retained keyframe; using

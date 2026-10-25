@@ -34,12 +34,13 @@ def indexed_coarse_scan(source,job,profile,fps):
     version=_runtime_version()
     try:
         with IndexedKeyframeReader(source,threads=1) as reader:
-            if reader.stream.start_time!=0:
-                raise UnsupportedIndexedVideo('视频起始 PTS 非零，实验模式尚未校准相对时间')
+            # Nonzero container origins are normalized instead of rejected:
+            # sampling, HUD rows and export all use time from the first frame.
+            origin=reader.time_origin
             entries=[(e.dts,e.position,e.size) for e in reader.keyframes]
             total=len(entries)
     except (UnsupportedIndexedVideo,IndexError) as error:
-        raise RuntimeError('无法读取此录像的可靠视频索引；当前需要起始 PTS 为零的 H.264、HEVC 或 AV1 MP4/MOV 录像：'+str(error)) from error
+        raise RuntimeError('无法读取此录像的可靠视频索引；当前需要 H.264、HEVC 或 AV1 的 MP4/MOV 录像：'+str(error)) from error
     import rapidocr_onnxruntime
     model=Path(rapidocr_onnxruntime.__file__).parent/'models/ch_PP-OCRv4_rec_infer.onnx'
     config={'version':'indexed-coarse-v1','source':identity,'profile':profile,'fps':fps,'pyav':version,
@@ -51,7 +52,7 @@ def indexed_coarse_scan(source,job,profile,fps):
     def valid(row,index):
         try:
             return (index<total and row['keyframe_index']==index and row['frame_kind']=='memory' and
-                row['frame'].startswith('memory:') and row['time']==float(row['pts']*Fraction(*row['time_base'])) and
+                row['frame'].startswith('memory:') and row['time']==float(Fraction(row['pts'])*Fraction(*row['time_base'])-origin) and
                 all(key in row for key in ['ammo','damage','kills','weapon_icon','inactive_view','downed','friend_spectate']))
         except (KeyError,TypeError,ValueError,ZeroDivisionError): return False
     journal=RowJournal(folder/'rows.jsonl',signature,valid)

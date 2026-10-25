@@ -46,14 +46,34 @@ class IndexedModeTests(unittest.TestCase):
         with patch.dict('sys.modules',{'av':None}),self.assertRaisesRegex(RuntimeError,'requirements-experimental'):
             _runtime_version()
 
-    def test_nonzero_stream_origin_is_rejected_before_any_sampling(self):
+    def test_stream_origin_is_normalized_instead_of_rejected(self):
+        from fractions import Fraction
         with tempfile.TemporaryDirectory() as temp:
-            source=Path(temp)/'fixture.mp4'; source.write_bytes(b'fixture')
-            with patch('indexed_coarse._runtime_version',return_value='fixture'),patch('indexed_coarse.IndexedKeyframeReader') as reader:
-                reader.return_value.__enter__.return_value.stream.start_time=100
-                with self.assertRaisesRegex(RuntimeError,'PTS'):
-                    indexed_coarse_scan(source,temp,{},2)
-            self.assertFalse((Path(temp)/'indexed-coarse').exists())
+            root=Path(temp); source=root/'fixture.mp4'; source.write_bytes(b'fixture')
+            profile=json.loads((BASE/'profile-ultrawide.json').read_text('utf-8'))
+            class Reader:
+                def __init__(self,*a,**k):
+                    self.keyframes=[SimpleNamespace(dts=1500+i*200,position=i*100,size=100) for i in range(4)]
+                    self.stream=SimpleNamespace(start_time=1500)
+                    self.time_origin=Fraction(15)
+                def __enter__(self): return self
+                def __exit__(self,*a): pass
+            class Features:
+                def __init__(self,*a,**k): pass
+                def prepare(self,frame):
+                    row={'frame':frame.frame_id,'frame_kind':'memory','keyframe_index':frame.keyframe_index,
+                         'pts':frame.pts,'time_base':[1,100],'time':float(frame.timestamp),'weapon_icon':'icon',
+                         'inactive_view':False,'downed':False,'friend_spectate':False}
+                    return row,{key:np.zeros((4,4,3),np.uint8) for key in ['ammo','damage','kills']}
+            class Recognizer:
+                def __call__(self,images): return [('24',.99),('100',.99),('1',.99)]*(len(images)//3),0.
+                def stats(self): return {}
+            def frames(*args,start_index=0,**kwargs):
+                for index in range(start_index,4):
+                    yield MemoryFrame(1500+index*200,Fraction(1,100),index,0,np.zeros((4,4,3),np.uint8),Fraction(15))
+            with patch('indexed_coarse._runtime_version',return_value='fixture'),patch('indexed_coarse.IndexedKeyframeReader',Reader),patch('indexed_coarse.HUDFeatures',Features),patch('indexed_coarse.numeric_recognizer',return_value=Recognizer()),patch('indexed_coarse.iter_indexed_images',side_effect=frames):
+                result=indexed_coarse_scan(source,root,profile,2)
+            self.assertEqual([row['time'] for row in result['rows']],[0.,2.,4.,6.])
 
     def test_dense_hud_remains_final_and_file_coarse_refinement_is_not_used(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -83,6 +103,7 @@ class IndexedCheckpointTests(unittest.TestCase):
                 def __init__(self,*a,**k):
                     self.keyframes=[SimpleNamespace(dts=i*200,position=i*100,size=100) for i in range(20)]
                     self.stream=SimpleNamespace(start_time=0)
+                    self.time_origin=Fraction(0)
                 def __enter__(self): return self
                 def __exit__(self,*a): pass
             class Features:

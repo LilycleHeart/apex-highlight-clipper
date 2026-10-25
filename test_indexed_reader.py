@@ -68,6 +68,21 @@ class IndexedReaderTests(unittest.TestCase):
             np.testing.assert_array_equal(first.to_ndarray(format='bgr24'),reference[first.pts])
             np.testing.assert_array_equal(last.to_ndarray(format='bgr24'),reference[last.pts])
 
+    def test_nonzero_stream_origin_is_normalized_to_first_frame(self):
+        from apex_clipper import keyframes, tool
+        from experimental.indexed_reader import IndexedKeyframeReader
+        from experimental.in_memory_hud import iter_indexed_images
+        path=Path(self.temp.name)/'offset.mp4'
+        subprocess.run([tool('ffmpeg'),'-hide_banner','-loglevel','error','-i',str(self.path),
+            '-c','copy','-output_ts_offset','10',str(path)],check=True,capture_output=True)
+        with IndexedKeyframeReader(path) as reader:
+            self.assertEqual(reader.time_origin,Fraction(10))
+            frame=reader.read_keyframe(0)
+            self.assertEqual(frame.pts*reader.time_base-reader.time_origin,Fraction(0))
+        frames=list(iter_indexed_images(path,mode='keyframes',workers=1,prefetch=1))
+        self.assertEqual([float(f.timestamp) for f in frames],[0.,1.,2.,3.])
+        self.assertEqual(keyframes(path),[0.,1.,2.,3.])
+
     def test_closed_reader_and_invalid_span_are_rejected(self):
         from experimental.indexed_reader import IndexedKeyframeReader
         reader=IndexedKeyframeReader(self.path)
