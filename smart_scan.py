@@ -11,7 +11,7 @@ import uuid
 import cv2
 from image_io import read_image
 from apex_clipper import (BASE,probe,tool,fingerprint,write_json,read_hud,detect_events,icon_similarity,
-                         counter_offset,inactive_view,downed_score,icon_signature)
+                         counter_offset,inactive_view,downed_score,icon_signature,decode_creationflags)
 from resume_media import sample_with_resume
 from app_cancel import check_cancel
 from outcome_reader import friend_view,enrich_outcomes
@@ -32,7 +32,7 @@ def extract(source,directory,profile,keyframes=True,at=None):
     if at is not None: args+=['-frames:v','1']
     args+=['-n',str(directory/'hud/%06d.jpg')]
     with (directory/'decode.log').open('w',encoding='utf-8') as log:
-        proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW)
+        proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=log,creationflags=decode_creationflags())
         try:
             while proc.poll() is None: check_cancel(); time.sleep(.3)
         except BaseException: proc.terminate(); proc.wait(); raise
@@ -211,7 +211,10 @@ def audit_counters(coarse,fine,duration,outcomes=None):
             # 终值必须对齐；起始录像半局的基线沿用细查头部，避免关键帧与0.25s相位差。
             endpoint=observed[-1][key]
             near=[r[key] for r in detail if abs(r['time']-observed[-1]['time'])<=3]
-            baseline=detail[0][key] if detail[0]['time']-start<15 else 0
+            # 片段从半局中间截取时，粗查首帧已经有计数：此时基线取细查首帧，
+            # 否则会把片段开头之前的战果算成必须由本段事件补齐的增量，误触发补查。
+            opening=observed[0][key] or 0
+            baseline=detail[0][key] if detail[0]['time']-start<15 or opening else 0
             expected=max(0,endpoint-baseline)
             detected=sum(e['after']-(e['before'] or 0) for e in events if e['kind']==kind and start<=e['time']<=end)
             checks.append({'field':key,'start':start,'end':end,'coarse_final':endpoint,'detail_final':detail[-1][key],

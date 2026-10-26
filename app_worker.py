@@ -83,8 +83,10 @@ def _run_task(request_path):
     task_path,task,request,options=open_task(incoming)
     gap,pre,post,fps=(options[k] for k in ['gap','pre','post','fps'])
     os.environ['APEX_OCR_BACKEND']=request['backend']; os.environ['APEX_GPU_LOAD']=options['gpu_load']
-    # DirectML 只是推理 provider，AMD/Intel 显卡走 DirectX 解码；CUDA 后端才用 CUDA 解码。
-    os.environ['APEX_HARDWARE_DECODER']={'cuda':'cuda','dml':'d3d11'}.get(request['backend'],'')
+    # 硬解只跟随 CUDA 后端。2560x1080/120fps 实测：d3d11 硬解 547 fps 但只用 0.4 核 CPU，
+    # 同机软解 1151 fps；软解与硬解 120 帧识别逐字段一致。DirectML 后端因此改走软解，
+    # 让 CPU 之外的空闲算力留给推理。4K/5K 素材两者接近打平，需要时可手动设 APEX_HARDWARE_DECODER=d3d11。
+    os.environ['APEX_HARDWARE_DECODER']={'cuda':'cuda'}.get(request['backend'],'')
     os.environ['APEX_OCR_POOL']='1'
     from performance_options import apply_resources
     apply_resources({**options,'backend':request['backend']})

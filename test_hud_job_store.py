@@ -41,6 +41,25 @@ class JobStoreTests(unittest.TestCase):
     def create(self, **kwargs):
         return self.store.create(self.clips, self.registry, **kwargs)['id']
 
+    def test_discard_removes_checkpoint_and_backup(self):
+        job_id = self.create()
+        path = self.root / (job_id + '.json')
+        backup = self.root / (job_id + '.json.bak')
+        backup.write_bytes(path.read_bytes())
+        removed = self.store.discard(job_id)
+        self.assertEqual(set(removed), {path.name, backup.name})
+        self.assertFalse(path.exists())
+        self.assertFalse(backup.exists())
+        self.assertEqual(self.store.list_jobs(unfinished_only=True), [])
+        with self.assertRaises(CorruptCheckpoint):
+            self.store.discard(job_id)
+
+    def test_discard_only_targets_requested_job(self):
+        keep = self.create()
+        drop = self.create()
+        self.store.discard(drop)
+        self.assertEqual([job['id'] for job in self.store.list_jobs(unfinished_only=True)], [keep])
+
     def test_compact_fields_share_complete_audit_without_expanding_on_load(self):
         self.clips.append({**copy.deepcopy(self.clips[0]), 'id': 'clip-b'})
         self.registry['hero']['audit_note'] = 'preserve non-semantic metadata'

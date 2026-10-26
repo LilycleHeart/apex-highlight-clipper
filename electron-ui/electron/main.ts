@@ -15,7 +15,7 @@ import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,S
 import {animationDefaults,normalizeAnimationPreferences} from '../src/animationPreferences';
 import {normalizePlayerAudio,defaultPlayerAudio,type PlayerAudioPreferences} from '../src/audioPreferences';
 import {clipStatistics,recordingTime,applyStatisticsCorrection} from '../src/clipStats';
-import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo} from './updates';
+import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo,RELEASES_API} from './updates';
 import {downloadInstaller,pruneUpdates,installationPaths,pruneLegacyLauncher} from './updateInstaller';
 import {VideoRegistry} from './media';
 import {ClipDeletions} from './clipDeletions';
@@ -85,9 +85,11 @@ let windowPlacement:WindowPlacement|undefined;let placementTimer:ReturnType<type
 let excludedTeammates:string[]=[];let teammateWrites:Promise<unknown>=Promise.resolve();
 let playerAudio:PlayerAudioPreferences={...defaultPlayerAudio};
 let preferences:ThemePreferences={mode:'system',seed:null,reduceMotion:false,mascotStyle:'flat',mascotEnabled:false,...animationDefaults};let options:Options={...defaults};let output=app.isPackaged?path.join(app.getPath('videos'),'Apex Highlight Clipper'):path.join(project,'output');
-let updateInfo:UpdateInfo={status:'idle',currentVersion:app.getVersion(),autoCheck:true};let updateTimer:ReturnType<typeof setTimeout>|null=null;
+// 国内直连 github.com 的安装包下载经常超时；默认走实测延迟最低的加速镜像，
+// 用户仍可在「版本更新 → GitHub 加速」里改成不使用或自定义。
+let updateInfo:UpdateInfo={status:'idle',currentVersion:app.getVersion(),autoCheck:true};let updateMirror='https://gh-proxy.com/';let updateTimer:ReturnType<typeof setTimeout>|null=null;
 function publishUpdate(info:UpdateInfo){diagnostics.log(info.status==='error'?'error':'info','update',info.status,{currentVersion:info.currentVersion,latestVersion:info.latestVersion,message:info.message});updateInfo=info;if(info.status!=='checking')void save().catch(error=>diagnostics.log('error','preferences',String(error)));if(win&&!win.isDestroyed())win.webContents.send('update-status',info);}
-const updater=new UpdateChecker(app.getVersion(),(url,init)=>net.fetch(url,init),()=>updateInfo,publishUpdate);
+const updater=new UpdateChecker(app.getVersion(),(url,init)=>net.fetch(url,init),()=>updateInfo,publishUpdate,()=>updateMirror);
 function scheduleUpdate(){if(updateTimer)clearTimeout(updateTimer);updateTimer=setTimeout(()=>{updateTimer=null;if(shouldAutoCheck(updateInfo))void updater.check().catch(()=>{});},3000);updateTimer.unref();}
 const taskSampleRoots=new Set<string>();
 const allowedPaths=new Set<string>();const allowedTasks=new Set<string>();const images=new Map<string,string>();const imageKeys=new Map<string,string>();
@@ -136,7 +138,7 @@ function scheduleMaintenance(force=false){
   maintenanceExit=new Promise<void>(resolve=>{const finish=()=>{if(maintenance===proc)maintenance=null;resolve();};proc.once('error',finish);proc.once('close',code=>{if(code===0&&result.includes('"Bytes"'))send({type:'log',message:'缓存维护已完成'});finish();});});
  },10000);maintenanceTimer.unref();
 }
-async function save(){const snapshot=JSON.stringify({preferences,options,playerAudio,windowPlacement,excludedTeammates,optionDefaultsVersion:2,output,updatePreferences:{autoCheck:updateInfo.autoCheck},updateCache:updateInfo.status==='checking'?undefined:updateInfo});saveChain=saveChain.catch(()=>{}).then(async()=>{await fs.mkdir(app.getPath('userData'),{recursive:true});const target=path.join(app.getPath('userData'),'preferences.json');await fs.writeFile(target+'.tmp',snapshot,'utf8');await fs.rename(target+'.tmp',target);});return saveChain;}
+async function save(){const snapshot=JSON.stringify({preferences,options,playerAudio,windowPlacement,excludedTeammates,optionDefaultsVersion:2,output,updatePreferences:{autoCheck:updateInfo.autoCheck,mirror:updateMirror},updateCache:updateInfo.status==='checking'?undefined:updateInfo});saveChain=saveChain.catch(()=>{}).then(async()=>{await fs.mkdir(app.getPath('userData'),{recursive:true});const target=path.join(app.getPath('userData'),'preferences.json');await fs.writeFile(target+'.tmp',snapshot,'utf8');await fs.rename(target+'.tmp',target);});return saveChain;}
 async function imageUrl(p:string){
  const real=await fs.realpath(p);if(!['.jpg','.jpeg','.png'].includes(path.extname(real).toLowerCase()))throw new Error('预览格式无效');
  const roots=await Promise.all([validationRoot,legacyValidationRoot,thumbnails.directory,...taskSampleRoots].map(p=>fs.realpath(p).catch(()=>'')));if(!roots.some(root=>root&&within(real,root)))throw new Error('预览路径不属于画面缓存');
@@ -370,13 +372,25 @@ async function start(payload:any,resume=false){if(clipDeletions.busy)throw new E
 async function stop(){stopRequested=true;if(stopFile)await fs.writeFile(stopFile,'stop','utf8');if(hudWorker||hudLaunching){hudStopRequested=true;if(hudStopFile)await fs.writeFile(hudStopFile,'stop','utf8');}}
 function trusted(event:Electron.IpcMainInvokeEvent){if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)throw new Error('不允许的界面请求');}
 const hudRecoveryRoot=path.join(app.getPath('userData'),'hud-jobs');
-let activeHudJob='';
-async function recoveryMetadata(extra:Record<string,unknown>={}){
+let activeHudJob='';let abandoningHud=false;
+// Library/checkpoint refreshes can fire faster than a snapshot finishes. Keep at
+// most one running snapshot plus one queued follow-up (started after every
+// caller that joined it), instead of piling up a Python process per refresh.
+let recoveryRunning:Promise<any>|null=null,recoveryQueued:Promise<any>|null=null;
+const RECOVERY_TIMEOUT_MS=120_000;
+function recoveryMetadata(extra:Record<string,unknown>={}):Promise<any>{
+ if(Object.keys(extra).length)return recoverySnapshot(extra);
+ if(!recoveryRunning){recoveryRunning=recoverySnapshot({}).finally(()=>{recoveryRunning=null;});return recoveryRunning;}
+ if(!recoveryQueued){recoveryQueued=recoveryRunning.catch(()=>undefined).then(()=>{recoveryQueued=null;return recoveryMetadata();});}
+ return recoveryQueued;
+}
+async function recoverySnapshot(extra:Record<string,unknown>){
  const payload={root:hudRecoveryRoot,clips:[...clipDirectories].filter(([file])=>allowedClips.has(file)).map(([file,directory])=>({file,directory})),...extra};
  return new Promise<any>((resolve,reject)=>{
-  const proc=spawn(pythonFor('cpu'),pythonArguments('hud_recovery_snapshot.py','--stdin'),{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});let text='',error='';
+  const proc=spawn(pythonFor('cpu'),pythonArguments('hud_recovery_snapshot.py','--stdin'),{cwd:project,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'}});let text='',error='',timedOut=false;
+  const timer=setTimeout(()=>{timedOut=true;proc.kill();},RECOVERY_TIMEOUT_MS);
   proc.stdout?.setEncoding('utf8');proc.stdout?.on('data',chunk=>text+=chunk);proc.stderr?.setEncoding('utf8');proc.stderr?.on('data',chunk=>error=(error+chunk).slice(-2000));
-  proc.once('error',reject);proc.once('close',code=>{if(code!==0){reject(new Error(error||'无法读取识别检查点'));return;}try{const result=JSON.parse(text);if(Array.isArray(result.jobs))result.jobs=result.jobs.map((job:any)=>job.id===activeHudJob&&job.status!=='completed'?{...job,status:'running'}:job);resolve(result);}catch(error){reject(error);}});
+  proc.once('error',failure=>{clearTimeout(timer);reject(failure);});proc.once('close',code=>{clearTimeout(timer);if(timedOut){reject(new Error('读取识别检查点超时，请稍后刷新'));return;}if(code!==0){reject(new Error(error||'无法读取识别检查点'));return;}try{const result=JSON.parse(text);if(Array.isArray(result.jobs))result.jobs=result.jobs.map((job:any)=>job.id===activeHudJob&&job.status!=='completed'?{...job,status:'running'}:job);resolve(result);}catch(error){reject(error);}});
   proc.stdin?.end(JSON.stringify(payload));
  });
 }
@@ -407,9 +421,55 @@ async function enrichHud(files:unknown,fields:unknown,mode:unknown='missing',rec
   let done:HudEnrichmentResult|null=null,stderr='';
   const lines=new JsonLines(event=>{if(event.type==='hud-info-checkpoint'&&typeof event.job_id==='string')activeHudJob=event.job_id;if(event.type==='hud-info-done')done=event as unknown as typeof done;else send(event as unknown as WorkerEvent);},()=>{});
   proc.stdout?.on('data',chunk=>lines.push(chunk));proc.stderr?.setEncoding('utf8');proc.stderr?.on('data',chunk=>stderr=(stderr+chunk).slice(-2000));
-  proc.once('error',reject);proc.once('close',code=>{lines.end();hudWorker=null;if(code===0&&done)resolve(done);else reject(new Error(code===75?'识别已停止，已读取的信息已保存':stderr||'信息识别中断，可重新继续'));});
+  proc.once('error',reject);proc.once('close',code=>{lines.end();hudWorker=null;if(code===0&&done)resolve(done);else reject(new Error(abandoningHud?'已放弃本次识别，进度记录已删除':code===75?'识别已停止，已读取的信息已保存':stderr||'信息识别中断，可重新继续'));});
  });}finally{activeHudJob='';hudWorker=null;hudLaunching=false;if(requestPath)await fs.unlink(requestPath).catch(()=>{});if(hudStopFile)await fs.unlink(hudStopFile).catch(()=>{});hudStopFile='';scheduleMaintenance(true);if(closing&&!worker&&!launching){closing=false;if(!win.isDestroyed())win.close();}}
 }
+async function abandonHud(id?:unknown){
+ if(clipDeletions.busy||migrating)throw new Error('正在回收或迁移片段，请稍后再放弃');
+ if(id!==undefined&&(typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id)))throw new Error('检查点编号无效');
+ const jobId=typeof id==='string'?id:activeHudJob,worker=hudWorker;
+ if(worker){
+  // 让工作进程先在提交边界停下，再删除检查点；否则它退出时会把进度重新写回去。
+  abandoningHud=true;
+  try{
+   await stop();
+   await new Promise<void>(resolve=>{
+    const timer=setTimeout(()=>{try{worker.kill();}catch{}resolve();},8000);
+    worker.once('close',()=>{clearTimeout(timer);resolve();});
+   });
+  }finally{abandoningHud=false;}
+ }
+ if(!jobId)return {abandoned:''};
+ await recoverySnapshot({action:'abandon',id:jobId});
+ return {abandoned:jobId};
+}
+
+function normalizeMirror(value:unknown){
+ if(typeof value!=='string')throw new Error('更新加速地址无效');
+ const text=value.trim();
+ if(!text)return '';
+ let parsed:URL;
+ try{parsed=new URL(text);}catch{throw new Error('更新加速地址不是合法链接');}
+ if(parsed.protocol!=='https:')throw new Error('更新加速地址必须使用 https');
+ if(parsed.search||parsed.hash||parsed.username||parsed.password)throw new Error('更新加速地址不能带查询参数或账号信息');
+ return parsed.href.endsWith('/')?parsed.href:parsed.href+'/';
+}
+
+/** 用与检查更新相同的请求验证加速前缀是否真的可用。 */
+async function testMirror(value:unknown){
+ const mirror=normalizeMirror(value),endpoint=(mirror||'')+RELEASES_API,started=Date.now();
+ try{
+  const response=await net.fetch(endpoint,{headers:{Accept:'application/vnd.github+json','User-Agent':`Apex-Highlight-Clipper/${app.getVersion()}`},signal:AbortSignal.timeout(12000)});
+  const ms=Date.now()-started;
+  if(!response.ok)return{ok:false,ms,message:`服务返回 ${response.status}`};
+  const raw=await response.text();
+  if(!Array.isArray(JSON.parse(raw)))return{ok:false,ms,message:'返回内容不是版本列表'};
+  return{ok:true,ms,message:'连接正常'};
+ }catch(error){
+  return{ok:false,ms:Date.now()-started,message:error instanceof Error?error.message:'连接失败'};
+ }
+}
+
 function handle(name:string,fn:(...args:any[])=>any){ipcMain.handle(name,async(event,...args)=>{trusted(event);try{return await fn(...args);}catch(error){diagnostics.log('error','ipc:'+name,error instanceof Error?error.message:String(error),{stack:error instanceof Error?error.stack:undefined});throw error;}});}
 
 async function diagnosticTask(){
@@ -429,7 +489,7 @@ app.whenReady().then(async()=>{
  await libraryStore.load();
  await clipDeletions.load();
  await processingTimes.load();
- try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));windowPlacement=restoreWindowPlacement(saved.windowPlacement,screen.getAllDisplays().map(display=>display.workArea),screen.getPrimaryDisplay().workArea);playerAudio=normalizePlayerAudio(saved.playerAudio);excludedTeammates=normalizeTeammateExclusions(saved.excludedTeammates);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);preferences={...preferences,...saved.preferences,...normalizeAnimationPreferences(saved.preferences)};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,...normalizePerformance(previousOptions),fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
+ try{const saved=await readJson(path.join(app.getPath('userData'),'preferences.json'));windowPlacement=restoreWindowPlacement(saved.windowPlacement,screen.getAllDisplays().map(display=>display.workArea),screen.getPrimaryDisplay().workArea);playerAudio=normalizePlayerAudio(saved.playerAudio);excludedTeammates=normalizeTeammateExclusions(saved.excludedTeammates);if(typeof saved.updatePreferences?.autoCheck==='boolean')updateInfo.autoCheck=saved.updatePreferences.autoCheck;if(typeof saved.updatePreferences?.mirror==='string')updateMirror=saved.updatePreferences.mirror;updateInfo=restoreUpdateInfo(saved.updateCache,app.getVersion(),updateInfo.autoCheck);updateInfo={...updateInfo,mirror:updateMirror};preferences={...preferences,...saved.preferences,...normalizeAnimationPreferences(saved.preferences)};const previousOptions={...saved.options};if(!saved.optionDefaultsVersion&&previousOptions.gap===35&&previousOptions.pre===10&&previousOptions.post===15){previousOptions.gap=defaults.gap;previousOptions.pre=defaults.pre;previousOptions.post=defaults.post;}options=safeOptions({...defaults,...previousOptions,...normalizePerformance(previousOptions),fps:saved.options?.fps<1?defaults.fps:saved.options?.fps??defaults.fps});output=saved.output||output;}catch{}
  diagnostics.alias(dataRoot,'<data>');diagnostics.alias(output,'<output>');diagnostics.log('info','startup','设置已载入',{options,theme:preferences.mode});
  protocol.handle('apex-media',async request=>{try{const url=new URL(request.url);if(url.hostname==='video')return videos.respond(request);const p=images.get(url.pathname.slice(1));if(url.hostname!=='image'||!p)return new Response('Not found',{status:404});const data=await fs.readFile(p);return new Response(data,{headers:{'Content-Type':p.endsWith('.png')?'image/png':'image/jpeg','Cache-Control':'private, max-age=60'}});}catch{return new Response('Unavailable',{status:404});}});
  const initial=theme();const dark=preferences.mode==='dark'||(preferences.mode==='system'&&initial.dark);
@@ -460,6 +520,8 @@ app.whenReady().then(async()=>{
  handle('chrome',(color:string,foreground:string)=>{if(!/^#[\da-f]{6}$/i.test(color)||!/^#[\da-f]{6}$/i.test(foreground))throw new Error('窗口配色无效');win.setBackgroundColor(color);});
  handle('bootstrap',async()=>({output,options,preferences,playerAudio,excludedTeammates,theme:theme(),development,lastTask:await lastTask(),backendAvailable:existsSync(pythonFor('dml')),cudaAvailable:await cudaAvailable(),logicalCores:os.cpus().length,update:updateInfo}));
  handle('check-update',async()=>{await updater.check();await saveChain;return updateInfo;});
+ handle('set-update-mirror',async(value:unknown)=>{updateMirror=normalizeMirror(value);publishUpdate({...updateInfo,mirror:updateMirror});await save();return updateInfo;});
+ handle('test-update-mirror',(value:unknown)=>testMirror(value));
  handle('install-update',async()=>{
   if(updating)throw new Error('更新正在进行');
   if(worker||launching||hudWorker||hudLaunching||repairWorker)throw new Error('请先暂停或完成当前任务后更新');
@@ -471,7 +533,7 @@ app.whenReady().then(async()=>{
    const {target,helper}=installationPaths(app.getPath('exe'));
    if(!existsSync(path.join(project,'app_worker.py'))||!existsSync(path.join(project,'runtime/runtime-layout.json'))||!existsSync(helper))throw new Error('无法确定程序安装位置，请使用发布页安装');
    updateAbort=new AbortController();report('downloading',0);
-   const installer=await downloadInstaller(latest.installer,updateRoot,(url,init)=>net.fetch(url,init),percent=>report('downloading',percent),updateAbort.signal);updateAbort=null;
+   const installer=await downloadInstaller(latest.installer,updateRoot,(url,init)=>net.fetch(url,init),percent=>report('downloading',percent),updateAbort.signal,updateMirror);updateAbort=null;
    await flushSaves();const portable=!(await fs.readdir(target)).some(name=>/^unins\d+\.exe$/i.test(name));
    const args=['-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',helper,'-Installer',installer,'-Target',target,'-ParentPid',String(process.pid),...(portable?['-Portable']:[])];
    app.relaunch({execPath:path.join(process.env.SystemRoot||'C:/Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),args});
@@ -511,6 +573,7 @@ app.whenReady().then(async()=>{
  handle('results',collectResults);handle('library',collectLibrary);
  handle('ignore-library-errors',async()=>{if(libraryRead)await libraryRead;await libraryStore.ignore(unreadableTasks);return collectLibrary();});
  handle('enrich-hud',(files,fields,mode)=>enrichHud(files,fields,mode));
+ handle('abandon-hud',(id)=>abandonHud(id));
   handle('hud-recovery',()=>recoveryMetadata());
   handle('resume-hud',async(id:unknown)=>{
    if(typeof id!=='string'||!/^[a-f0-9]{32}$/.test(id))throw new Error('检查点编号无效');

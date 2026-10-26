@@ -535,6 +535,143 @@ def _prepare_extra_clip(record,activity):
     return prepare_repair(record,on_activity=activity)
 
 
+def _mark_shared(info,identity,field,present):
+    """登记复用来源：版本与指纹必须是本片段自己的，否则续接会判定来源不符重读。"""
+    known=set(info.get('requested_fields',[]))|set(info.get('field_status',{}))|set(info.get('field_versions',{}))
+    if 'field_source_identities' not in info:
+        info['field_source_identities']={key:info.get('source_identity') for key in known}
+    info['field_source_identities'][field]=dict(identity)
+    info.setdefault('field_status',{})[field]='confirmed' if present else 'unknown'
+    info.setdefault('field_versions',{})[field]=field_version(field)
+    info['requested_fields']=list(dict.fromkeys(info.get('requested_fields',[])+[field]))
+
+
+def _adopt_shared_field(info,identity,field,value):
+    """把同局另一个片段的已确认结果写成本片段的确认结果。
+
+    片段是独立文件，来源标识必须换成自己的指纹，否则续接时会判定来源不符而重读。
+    空结果不标成确认：不同片段画面不同，某段读不到不代表整局都没有。
+    """
+    import copy
+    info[field]=copy.deepcopy(value)
+    _mark_shared(info,identity,field,bool(value))
+
+
+def _self_confirmed(info,field,identity):
+    """只认本片段自己读出来的确认值，借来的值不能再当投票。"""
+    return (info.get('field_status',{}).get(field)=='confirmed' and bool(info.get(field))
+            and field_source_identity(info,field)==identity
+            and info.get('field_versions',{}).get(field)==field_version(field))
+
+
+def _name_consensus(values,minimum=2):
+    names=[value for value in values if isinstance(value,dict) and value.get('name')]
+    if len(names)<minimum:return None
+    if len({name_key(value['name']) for value in names})!=1:return None
+    return consensus_name(names,minimum=minimum,same_player=True)
+
+
+def _adopt_teammates(info,identity,resolved):
+    """按槽位合并：只补齐缺失槽位，已有结果不覆盖。"""
+    import copy
+    existing={value.get('slot'):value for value in info.get('teammates',[]) if isinstance(value,dict)}
+    for slot,value in resolved.items():existing.setdefault(slot,copy.deepcopy(value))
+    info['teammates']=[existing[slot] for slot in sorted(existing,key=lambda slot:(slot is None,slot))]
+    _mark_shared(info,identity,'teammates',bool(info['teammates']))
+
+
+def _read_shared_fields(row,fields,activity=None):
+    """就地读取指定字段并写回该片段，同时从待读列表里移除，避免同一片段重复读取。"""
+    clip,identity,info,missing=row
+    file=Path(clip.get('output',clip.get('file','')))
+    try:current=recognize_video(file,list(fields),on_activity=activity)
+    except Exception:return False
+    if fingerprint(file)!=identity:raise ValueError('补充识别期间录像发生变化')
+    for field in fields:
+        value=current.get(field)
+        if value:_adopt_shared_field(info,identity,field,value)
+        else:info.setdefault('field_status',{})[field]='unknown'
+        if field in missing:missing.remove(field)
+    return True
+
+
+def share_match_name_fields(manifest,selected,fields,force,write):
+    """兼容入口：名字字段复用统一由 share_match_fields 处理。"""
+    return share_match_fields(manifest,selected,fields,force,write)
+
+
+def share_match_fields(manifest,selected,fields,force,write,activity=None):
+    """同一局里不变的信息只识别一次：首段一次读完所有待补字段，其余片段沿用。
+
+    hero 与 rank 每局不会变，直接复用。account 与 teammates 只有在同局至少两个片段
+    独立读到同一个名字时才复用——跨局识别一旦漏检会把两局并成一局，名字复用会把错误
+    放大；首轮先读两段攒票，所以同一次运行也能省。名字复用不复制 name_observations，
+    事后仍由 reconcile_manifest_names 按全局证据收敛。force（手动重读）保持逐段识别。
+    """
+    wanted=[field for field in ('hero','rank','account','teammates') if field in fields]
+    if force or not wanted:return 0
+    groups={}
+    for clip in selected:
+        key=clip.get('recognition',{}).get('match_key')
+        if key:groups.setdefault(key,[]).append(clip)
+    shared=0
+    for clips in groups.values():
+        if len(clips)<2:continue
+        rows=[]
+        for clip in clips:
+            file=Path(clip.get('output',clip.get('file','')))
+            try:identity=fingerprint(file)
+            except OSError:continue
+            info=clip.setdefault('recognition',{}).setdefault('hud_info',{})
+            missing=_pending_visual_fields(clip.get('recognition',{}),info,identity,wanted,False)
+            rows.append((clip,identity,info,[field for field in wanted if field in missing]))
+        if not rows:continue
+        # 先让首段一次读完它缺的字段，避免每个字段各自重复读基础帧。
+        if rows[0][3]:_read_shared_fields(rows[0],list(rows[0][3]),activity);write()
+        for field in wanted:
+            donors=[row for row in rows if _self_confirmed(row[2],field,row[1])]
+            receivers=[row for row in rows if field in row[3]]
+            if not receivers:continue
+            if field in {'hero','rank'}:
+                if not donors:continue
+                value=donors[0][2][field]
+                for row in receivers:
+                    _adopt_shared_field(row[2],row[1],field,value);shared+=1
+                    row[3].remove(field)
+                write()
+                continue
+            # 名字需要两票；只有一票时继续读下一段凑票。
+            voters=list(donors)
+            queue=list(receivers)
+            while len(voters)<2 and queue:
+                row=queue.pop(0)
+                _read_shared_fields(row,[field],activity)
+                if _self_confirmed(row[2],field,row[1]):voters.append(row)
+                if field not in row[3]:receivers.remove(row)
+            if field=='account':
+                value=_name_consensus([info['account'] for _,_,info,_ in voters])
+                if value is not None:
+                    for row in receivers:
+                        _adopt_shared_field(row[2],row[1],'account',value);shared+=1
+                        row[3].remove('account')
+                    write()
+                continue
+            by_slot={}
+            for _,_,info,_ in voters:
+                for value in info.get('teammates',[]):
+                    if isinstance(value,dict):by_slot.setdefault(value.get('slot'),[]).append(value)
+            resolved={}
+            for slot,values in by_slot.items():
+                value=_name_consensus(values)
+                if value is not None:resolved[slot]=value
+            if resolved:
+                for row in receivers:
+                    _adopt_teammates(row[2],row[1],resolved);shared+=1
+                    row[3].remove('teammates')
+                write()
+    return shared
+
+
 def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=False,on_activity=None):
     """只追加识别元数据，保持所有视频字节、名称与已冻结交战/计数不变。"""
     directory=Path(directory).resolve();path=directory/'export.json';manifest=json.loads(path.read_text('utf-8-sig'))
@@ -554,6 +691,7 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
         inside=file.is_relative_to(video_directory) or str(file).casefold() in relocated
         if not inside or file.suffix.lower() not in VIDEO_EXTENSIONS or str(file).casefold() not in recorded:raise ValueError('成片路径不属于对应导出目录')
     name_updates={}
+    share_match_fields(manifest,selected,fields,force,lambda:write_json(path,manifest),on_activity)
     from hud_read_queue import ClipReadQueue
     workers=min(3,max(1,int(os.environ.get('APEX_HUD_WORKERS','1'))))
     queue=ClipReadQueue([(clip,fields,force) for clip in selected],_prepare_visual_clip,workers) if workers>1 or os.environ.get('APEX_ADAPTIVE_HUD')=='1' else nullcontext(None)
@@ -881,3 +1019,4 @@ if __name__=='__main__':
     except TaskStopped:
         print(json.dumps({'type':'hud-info-stopped','message':'识别已停止，已读取的信息已保存'},ensure_ascii=False),flush=True)
         raise SystemExit(75)
+

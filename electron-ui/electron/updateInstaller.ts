@@ -26,7 +26,7 @@ export async function pruneUpdates(root:string,protectedName=''){
  files.sort((a,b)=>b.time-a.time);
  for(const [i,file]of files.entries())if(file.name.endsWith('.part')?Date.now()-file.time>86400000:i>=2||Date.now()-file.time>7*86400000)await fs.unlink(file.file).catch(()=>{});
 }
-export async function downloadInstaller(asset:InstallerAsset,root:string,fetcher:(url:string,init:RequestInit)=>Promise<Response>,onProgress:(percent:number)=>void,signal?:AbortSignal){
+export async function downloadInstaller(asset:InstallerAsset,root:string,fetcher:(url:string,init:RequestInit)=>Promise<Response>,onProgress:(percent:number)=>void,signal?:AbortSignal,mirror=''){
  if(!pattern.test(asset.name)||asset.name!==`Apex-Clipper-${asset.version}-Setup-x64.exe`||!/^\d+\.\d+\.\d+$/.test(asset.version)||! /^[a-f0-9]{64}$/.test(asset.sha256)||!Number.isSafeInteger(asset.bytes)||asset.bytes<=0||asset.bytes>1024**3||asset.url!==`https://github.com/LilycleHeart/apex-highlight-clipper/releases/download/v${asset.version}/${asset.name}`)throw new Error('安装包信息无效，请重新检查更新');
  await fs.mkdir(root,{recursive:true});
  const lockFile=path.join(root,'download.lock'),token=randomUUID();
@@ -47,7 +47,7 @@ export async function downloadInstaller(asset:InstallerAsset,root:string,fetcher
  await fs.unlink(partial).catch(()=>{});
  let file:Awaited<ReturnType<typeof fs.open>>|undefined,reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
  try{
-  const response=await fetcher(asset.url,{signal});if(!response.ok||!response.body)throw new Error('无法下载安装包，请稍后重试');
+  const response=await fetcher(mirror?mirror+asset.url:asset.url,{signal});if(!response.ok||!response.body)throw new Error('无法下载安装包，请稍后重试');
   reader=response.body.getReader();file=await fs.open(partial,'wx');const hash=createHash('sha256');let bytes=0,last=-1;
   while(true){const result=await reader.read();if(result.done)break;signal?.throwIfAborted();bytes+=result.value.byteLength;if(bytes>asset.bytes)throw new Error('安装包大小不匹配');hash.update(result.value);await file.writeFile(result.value);const percent=Math.floor(bytes/asset.bytes*100);if(percent!==last){last=percent;onProgress(percent);}}
   await file.close();file=undefined;if(bytes!==asset.bytes||hash.digest('hex')!==asset.sha256)throw new Error('安装包校验失败，请重新下载');await fs.rename(partial,target);return target;

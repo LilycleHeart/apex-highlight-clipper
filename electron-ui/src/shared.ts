@@ -26,7 +26,17 @@ export interface Result {source:string;status:string;outputs:string[];directory:
 export interface TaskInfo {path:string;directory:string;output:string;finished:boolean;options:Options;items:FileItem[];legacyRule:boolean;samplingWarning:string}
 export interface WorkerEvent {type:string;file?:string;fields?:HudEnrichmentField[];frames_done?:number;frames_total?:number;backend?:string;updated?:number;errors?:{directory:string;message:string}[];processing_seconds?:number;skipped?:boolean;stage?:Stage;progress?:number;message?:string;index?:number;total?:number;source?:string;directory?:string;task_path?:string;timestamp_seconds?:number;sample_path?:string;imageUrl?:string;cached?:boolean;failures?:number;clips?:number;result?:Result;elapsed_seconds?:number;hidden?:boolean;legacy_rule?:string|null;result_filter_rule?:string;result_filter_version?:string|null;rejected_count?:number;review_count?:number;result_filter_summary?:FilterSummary;sampling_warning?:string|null;results?:Result[]}
 export interface InstallerAsset {version:string;name:string;url:string;bytes:number;sha256:string}
-export interface UpdateInfo {status:'idle'|'checking'|'available'|'up_to_date'|'no_release'|'error';currentVersion:string;latestVersion?:string;releaseTag?:string;releaseName?:string;releaseNotes?:string;publishedAt?:string;checkedAt?:string;message?:string;autoCheck:boolean;installer?:InstallerAsset;installState?:'downloading'|'installing'|'error';installProgress?:number;installMessage?:string}
+/** 内置的 GitHub 加速前缀；空字符串表示直连。 */
+export const GITHUB_MIRRORS:Array<{value:string;label:string}>=[
+ {value:'',label:'不使用加速'},
+ {value:'https://edgeone.gh-proxy.com/',label:'edgeone.gh-proxy.com'},
+ {value:'https://hk.gh-proxy.com/',label:'hk.gh-proxy.com'},
+ {value:'https://gh-proxy.com/',label:'gh-proxy.com'},
+ {value:'https://gh.dpik.top/',label:'gh.dpik.top（仅下载）'},
+ {value:'https://ghfast.top/',label:'ghfast.top（仅下载）'},
+];
+
+export interface UpdateInfo {status:'idle'|'checking'|'available'|'up_to_date'|'no_release'|'error';currentVersion:string;latestVersion?:string;releaseTag?:string;releaseName?:string;releaseNotes?:string;publishedAt?:string;checkedAt?:string;message?:string;autoCheck:boolean;installer?:InstallerAsset;installState?:'downloading'|'installing'|'error';installProgress?:number;installMessage?:string;mirror?:string}
 export interface Bootstrap {excludedTeammates:string[];playerAudio:PlayerAudioPreferences;output:string;options:Options;preferences:ThemePreferences;theme:SystemTheme;development:boolean;lastTask:TaskInfo|null;backendAvailable:boolean;cudaAvailable?:boolean;logicalCores:number;update:UpdateInfo}
 export interface ImportResult {files:FileItem[];rejected:string[]}
 export interface LibrarySnapshot {results:Result[];tasks:number;errors:number}
@@ -49,6 +59,9 @@ export interface DesktopAPI {
  enrichHud(files:string[],fields:HudEnrichmentField[],mode?:HudEnrichmentMode):Promise<HudEnrichmentResult>;
   hudRecovery():Promise<{clips:import('./algorithmStatus').ClipAlgorithmStatus[];jobs:import('./algorithmStatus').RecognitionRecoveryJob[]}>;
   resumeHud(id:string):Promise<HudEnrichmentResult>;
+  abandonHud(id?:string):Promise<{abandoned:string}>;
+  setUpdateMirror(mirror:string):Promise<UpdateInfo>;
+  testUpdateMirror(mirror:string):Promise<{ok:boolean;ms:number;message:string}>;
   upgradeHud(selection:import('./algorithmStatus').UpgradeSelection[],includeUnknown:boolean):Promise<HudEnrichmentResult>;
  library():Promise<LibrarySnapshot>;
  deleteClip(file:string):Promise<void>;

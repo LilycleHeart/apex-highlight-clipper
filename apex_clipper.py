@@ -39,6 +39,20 @@ def write_json(path, value):
             time.sleep(.05*(attempt+1))
 
 
+def decode_creationflags():
+    """解码子进程的创建标志。
+
+    Windows 会把默认优先级的 ffmpeg 线程当作后台工作，集中调度到 E 核：同一条
+    30 秒素材的生产采样命令，默认优先级 865 fps（7.0 核），ABOVE_NORMAL 999 fps，
+    HIGH 1167 fps（9.3 核）。只提升子进程调度优先级；命令行、采样点、输出与识别
+    结果都不变（软解与硬解 120 帧逐字段对照为 0 处差异）。
+    """
+    flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    if os.name == 'nt':
+        flags |= getattr(subprocess, 'HIGH_PRIORITY_CLASS', 0x00000080)
+    return flags
+
+
 def tool(name):
     suffix = '.exe' if os.name == 'nt' else ''
     candidates = []
@@ -124,7 +138,7 @@ def sample_video(source, out, fps, cuda=False,resume=False):
     log_path=out/'decode.log'
     with log_path.open('w', encoding='utf-8') as log:
         proc=subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=log,
-                              creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+                              creationflags=decode_creationflags())
         try:
             while proc.poll() is None:
                 count=sum(1 for _ in out.glob('*.jpg'))
@@ -428,13 +442,24 @@ def detect_events(rows):
         for i,value in confirmed.items():
             t=rows[i]['time']
             if previous is not None and value>previous and value-previous<=max_step and t-previous_t<=20:
-                events.append({'time':t,'kind':kind,'before':previous,'after':value,'evidence':'own_'+key+'_counter'})
+                step=value-previous
+                if kind=='kill' and step>1:
+                    # 双杀/三杀可能落在同一个采样间隔里；逐杀记录，保持增量总和与 HUD 一致，
+                    # 否则“1→3”只算一次击杀，和计分累计对不上。
+                    for index in range(step):
+                        events.append({'time':t,'kind':kind,'before':previous+index,'after':previous+index+1,
+                                       'evidence':'own_'+key+'_counter'})
+                else:
+                    events.append({'time':t,'kind':kind,'before':previous,'after':value,'evidence':'own_'+key+'_counter'})
             if previous is not None and t-previous_t>20:
                 # 新局第一次数值可能与上一局相等或更大，不能仅靠数值下降辨识。
                 between=[r for r in rows if previous_t<r['time']<t]
                 if value>0 and any(r.get('round_ended',False) for r in between):
                     reborn.append({'time':t,'kind':kind,'before':0,'after':value,'evidence':'new_round_counter'})
-            if previous is None or value>=previous or t-previous_t>20:
+            # 超过单步上限的跳变按误读处理：既不记事件，也不能写进 previous。
+            # 否则一次误读把基线抬到虚高值，后续真实跳变会因为“小于 previous”被永久压掉，
+            # 计分核对就会一直少于 HUD 增量。
+            if previous is None or t-previous_t>20 or (value>=previous and value-previous<=max_step):
                 previous=value; previous_t=t
     # 枪械切换可能造成弹药减少；要求相同枪名或连续多次下降。
     candidates=[]

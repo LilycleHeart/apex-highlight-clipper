@@ -13,7 +13,7 @@ def digest(value): return hashlib.sha256(json.dumps(value,sort_keys=True,ensure_
 def file_digest(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def sample_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_checkpoint=None,abort_event=None,frame_ranges=None,cpu_threads=None):
-    from apex_clipper import probe,fingerprint,write_json,tool
+    from apex_clipper import probe,fingerprint,write_json,tool,decode_creationflags
     from app_cancel import check_cancel
     out=Path(out).resolve(); out.mkdir(parents=True,exist_ok=True); hud=out/'hud'; hud.mkdir(exist_ok=True)
     meta,video=probe(source); duration=float(meta['format']['duration'])
@@ -86,7 +86,7 @@ def sample_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_checkpoint=
                '-map','[hud]','-frames:v',str(count),'-q:v','2']+jpeg_threads+['-n',str(scratch/'hud/%06d.jpg')]
         with (scratch/'decode.log').open('w',encoding='utf-8') as log:
             proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=log,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+                creationflags=decode_creationflags())
             try:
                 last_progress=0.
                 while proc.poll() is None:

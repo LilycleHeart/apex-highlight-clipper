@@ -12,7 +12,7 @@ import subprocess
 import time
 import uuid
 
-from apex_clipper import probe,fingerprint,write_json,tool
+from apex_clipper import probe,fingerprint,write_json,tool,decode_creationflags
 from app_cancel import check_cancel
 from hardware_decode import active as active_decoder,arguments as decoder_arguments
 
@@ -58,8 +58,13 @@ def _publish_block(scratch,out,run_first,first,count):
             # Never rename a file managed by the running decoder. The .part
             # suffix is also invisible to existing *.jpg readers.
             partial=target.with_name('.'+target.name+'.'+uuid.uuid4().hex+'.part')
-            with partial.open('xb') as stream:
-                stream.write(content)
+            # 同分区用硬链接代替再写一份：块关闭后源文件不会再被解码器修改，
+            # 内容已在上面的读取中校验过；跨卷或不支持硬链接时回退到复制。
+            try:
+                os.link(origin,partial)
+            except OSError:
+                with partial.open('xb') as stream:
+                    stream.write(content)
             _replace_with_retry(partial,target)
             files.append({'path':str(relative),'sha256':hashlib.sha256(content).hexdigest()})
     return {'first':first,'count':count,'files':files}
@@ -153,7 +158,7 @@ def sample_continuous_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_
         args=_command(source,scratch,video,run_first,run_count,fps,decoder,cpu_threads)
         with (scratch/'decode.log').open('w',encoding='utf-8') as log:
             proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=log,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+                creationflags=decode_creationflags())
             position=0; last_progress=0.
             try:
                 while True:

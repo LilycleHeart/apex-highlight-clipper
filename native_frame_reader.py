@@ -19,13 +19,17 @@ FORWARD_WINDOW=1.
 
 
 class NativeFrameReader:
-    def __init__(self,source):
+    def __init__(self,source,threads=None):
         import av
         self.container=av.open(str(source))
         self.stream=self.container.streams.video[0]
         from performance_options import native_resources
         settings=native_resources()
-        self.stream.codec_context.thread_count=settings['decode_threads']
+        self.stream.codec_context.thread_count=threads or settings['decode_threads']
+        # Single-slice H.264/HEVC frames gain nothing from slice threads. Frame
+        # threads decode bit-identical PTS/pixels; only the single synchronous
+        # pipeline reader asks for them, not the parallel HUD clip readers.
+        if threads and threads>1:self.stream.codec_context.thread_type='FRAME'
         self.max_frame_bytes=settings['frame_cache_mb']*1024*1024
         self.iterator=None;self.last_time=None
         self.frames=OrderedDict();self.frame_bytes=0
@@ -91,7 +95,7 @@ class NativeFrameReader:
 
 
 class _Session:
-    def __init__(self):self.identity=None;self.reader=None
+    def __init__(self,threads=None):self.identity=None;self.reader=None;self.threads=threads
 
     def close(self):
         if self.reader is not None:self.reader.close()
@@ -102,17 +106,21 @@ class _Session:
         identity=(str(path),stat.st_size,stat.st_mtime_ns,stat.st_ino)
         if identity!=self.identity:
             self.close()
-            self.reader=NativeFrameReader(path);self.identity=identity
+            self.reader=NativeFrameReader(path,self.threads);self.identity=identity
         return self.reader
 
 
 @contextmanager
-def native_frame_session():
-    """Nested calls share at most one decoder and 64 MiB of selected frames."""
+def native_frame_session(threads=None):
+    """Nested calls share at most one decoder and 64 MiB of selected frames.
+
+    ``threads`` applies only when this call opens the session; nested calls keep
+    the outer decoder settings.
+    """
     if _SESSION.get() is not None:
         yield
         return
-    session=_Session();token=_SESSION.set(session)
+    session=_Session(threads);token=_SESSION.set(session)
     try:yield
     finally:
         try:session.close()

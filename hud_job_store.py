@@ -266,6 +266,25 @@ class JobStore:
         with self._locked():
             return copy.deepcopy(self._load(job_id))
 
+    def discard(self, job_id):
+        """放弃未完成任务：删除主检查点与备份，之后不再出现在“继续上次进度”里。
+
+        已写入片段的结果不受影响，丢弃的只是“还剩哪些字段没读”的进度记录。
+        运行中的任务必须先停止工作进程，否则它会在锁释放后重新写回检查点。
+        """
+        path = self._path(job_id)
+        removed = []
+        with self._locked():
+            for target in (path, path.with_suffix('.json.bak')):
+                try:
+                    target.unlink()
+                    removed.append(target.name)
+                except FileNotFoundError:
+                    pass
+        if not removed:
+            raise CorruptCheckpoint('任务已不存在或已被删除')
+        return removed
+
     def list_jobs(self, *, unfinished_only=False, snapshot=False):
         # UI snapshots hold the writer lock only while copying each file's bytes.
         # Mutating callers retain the existing transaction-wide lock.

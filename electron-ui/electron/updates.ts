@@ -46,14 +46,14 @@ export function restoreUpdateInfo(cache:any,currentVersion:string,autoCheck:bool
 /** 主进程统一请求；重复点击与启动检查共享一次网络请求。 */
 export class UpdateChecker{
  private pending:Promise<UpdateInfo>|null=null;
- constructor(private version:string,private fetcher:(url:string,init:RequestInit)=>Promise<Response>,private read:()=>UpdateInfo,private publish:(info:UpdateInfo)=>void){}
+ constructor(private version:string,private fetcher:(url:string,init:RequestInit)=>Promise<Response>,private read:()=>UpdateInfo,private publish:(info:UpdateInfo)=>void,private mirror:()=>string=()=>''){}
  check(){
   if(this.pending)return this.pending;
   const run=async()=>{
    this.publish({...this.read(),status:'checking',message:undefined});
    let info:Omit<UpdateInfo,'autoCheck'>;
    try{
-    const response=await this.fetcher(RELEASES_API,{headers:{Accept:'application/vnd.github+json','User-Agent':`Apex-Highlight-Clipper/${this.version}`},signal:AbortSignal.timeout(15000)});
+    const response=await this.fetcher(this.mirror()?this.mirror()+RELEASES_API:RELEASES_API,{headers:{Accept:'application/vnd.github+json','User-Agent':`Apex-Highlight-Clipper/${this.version}`},signal:AbortSignal.timeout(15000)});
     if(response.status===403||response.status===429)throw new Error('更新服务暂时限制请求，请稍后重试');
     if(!response.ok)throw new Error('更新服务暂时不可用，请稍后重试');
     const raw=await response.text();if(raw.length>2*1024*1024)throw new Error('更新信息过大，请稍后重试');

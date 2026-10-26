@@ -9,3 +9,14 @@
 .diagnostics-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px}
 .diagnostics-actions .secondary{font-size:11px;padding:11px 13px}
 .diagnostics-saved{color:var(--card-accent)}
+
+.update-mirror{display:grid;gap:8px;padding:12px 14px;border-radius:14px;background:var(--surfaceContainerHighest)}
+.update-mirror-head{display:grid;gap:2px}
+.update-mirror-head b{font-size:12px;font-weight:600;color:var(--onSurface)}
+.update-mirror-head span{font-size:10px;line-height:1.7;color:var(--onSurfaceVariant)}
+.update-mirror-custom{display:flex;gap:8px}
+.update-mirror-custom input{flex:1;min-width:0;height:32px;padding:0 10px;border-radius:9px;border:1px solid var(--outlineVariant);background:var(--surface);color:var(--onSurface);font-size:11px}
+.update-mirror-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.update-mirror-ok{font-size:10px;color:var(--primary)}
+.update-mirror-fail{font-size:10px;color:var(--error)}
+.update-mirror small{font-size:10px;line-height:1.7;color:var(--onSurfaceVariant)}

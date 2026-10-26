@@ -12,10 +12,10 @@ export interface AlgorithmUpgradeNoticeProps {
  /** Busy includes any recognition job, even one unrelated to this selection. */
  busy?:boolean;disabled?:boolean;
  onStart:(selection:UpgradeSelection[],options:{includeUnknown:boolean;mode:'upgrade'})=>void|Promise<void>;
- onResume:(id:string)=>void|Promise<void>;onCancel?:(id:string)=>void|Promise<void>;
+ onResume:(id:string)=>void|Promise<void>;onCancel?:(id:string)=>void|Promise<void>;onAbandon?:(id:string)=>void|Promise<void>;
  onDismissRecovery?:(id:string)=>void;
 }
-export default function AlgorithmUpgradeNotice({clips,unfinishedJob,busy=false,disabled=false,onStart,onResume,onCancel,onDismissRecovery}:AlgorithmUpgradeNoticeProps){
+export default function AlgorithmUpgradeNotice({clips,unfinishedJob,busy=false,disabled=false,onStart,onResume,onCancel,onAbandon,onDismissRecovery}:AlgorithmUpgradeNoticeProps){
  const [includeUnknown,setIncludeUnknown]=useState(false),summary=algorithmUpgradeSummary(clips),selection=selectAlgorithmUpgrade(clips,includeUnknown);
  const [ignored,setIgnored]=useState<string[]>(()=>{try{const saved:unknown=JSON.parse(localStorage.getItem('ahc-ignored-algorithm-notices')||'[]');return Array.isArray(saved)?saved.filter((key):key is string=>typeof key==='string'):[];}catch{return[];}}),noticeKey=algorithmNoticeKey(clips),dismissed=ignored.includes(noticeKey);
  function ignore(){const next=[...ignored.filter(key=>key!==noticeKey),noticeKey].slice(-16);setIgnored(next);try{localStorage.setItem('ahc-ignored-algorithm-notices',JSON.stringify(next));}catch{/* Still dismiss for this session. */}}
@@ -25,9 +25,9 @@ export default function AlgorithmUpgradeNotice({clips,unfinishedJob,busy=false,d
  const unfinished=unfinishedJob&&unfinishedJob.status!=='completed'?unfinishedJob:null;
  // Unknown history requires a separate opt-in and is never called outdated.
  if(!summary.oldCount&&!summary.unknownCount&&!unfinished)return null;
- if(unfinished?.compatible||unfinished?.status==='running')return <HudRecoveryNotice job={unfinished} disabled={disabled||busy&&unfinished.status!=='running'} onResume={onResume} onCancel={onCancel} onDismiss={onDismissRecovery}/>;
+ if(unfinished?.compatible||unfinished?.status==='running')return <HudRecoveryNotice job={unfinished} disabled={disabled||busy&&unfinished.status!=='running'} onResume={onResume} onCancel={onCancel} onAbandon={onAbandon} onDismiss={onDismissRecovery}/>;
  return <div className="recognition-notices">
-  {unfinished&&<HudRecoveryNotice job={unfinished} disabled={disabled||busy} onResume={onResume} onCancel={onCancel} onDismiss={onDismissRecovery}/>}
+  {unfinished&&<HudRecoveryNotice job={unfinished} disabled={disabled||busy} onResume={onResume} onCancel={onCancel} onAbandon={onAbandon} onDismiss={onDismissRecovery}/>}
   {!dismissed&&(summary.oldCount>0||summary.unknownCount>0)&&<section className="recognition-notice algorithm-upgrade-notice" aria-label="算法更新提示" aria-busy={action.pending}>
    <span className="recognition-notice-symbol"><RefreshCw size={19}/></span>
    <div className="recognition-notice-copy"><div className="recognition-notice-heading"><b>{summary.oldCount?`${summary.oldCount} 段可更新识别算法`:`${summary.unknownCount} 段未记录算法版本`}</b><InfoTip label="算法更新说明" text={`本次 ${selection.length} 段，字段：${selectedLabels.join('、')}。只重算版本过期${includeUnknown?'或版本未知':''}的字段，当前字段跳过；应用版本和性能设置变化不会触发此提示。${summary.unknownCount?'历史未记录版本的结果单独计数，可选择一起识别。':''}新结果成功保存前保留原结果。`}/></div>

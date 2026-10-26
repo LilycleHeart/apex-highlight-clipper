@@ -400,6 +400,14 @@ def reconciled_counts(endpoint,events,coverage,settlement=None):
 
 def collect_statistics(cache,samples,segments,profile,checkpoint):
     """筛选完成后才调用。只补齐保留区间；断点和原数字缓存互不覆盖。"""
+    # 端点、末队结算与姓名复核逐个时刻读原生帧：共用一个解码器顺序续读，
+    # 不再每个时刻重开容器从关键帧单线程重解；外层已有会话时沿用外层设置。
+    from native_frame_reader import native_frame_session
+    from performance_options import pipeline_decode_threads
+    with native_frame_session(threads=pipeline_decode_threads()):
+        return _collect_statistics(cache,samples,segments,profile,checkpoint)
+
+def _collect_statistics(cache,samples,segments,profile,checkpoint):
     checkpoint=Path(checkpoint);checkpoint.parent.mkdir(parents=True,exist_ok=True)
     from stat_counter_fallback import counter_recipe
     token=hashlib.sha256(json.dumps({'version':VERSION,'counter_recipe':counter_recipe(),'source':cache['source'],'fps':cache['fps'],

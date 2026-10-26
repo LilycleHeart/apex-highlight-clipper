@@ -51,6 +51,13 @@ def inherited_resources():
     return values
 
 
+def pipeline_decode_threads(cores=None):
+    """One synchronous main-pipeline reader; the low preset stays single-threaded."""
+    if os.environ.get('APEX_SCHEDULE_PRESET')=='low':return 1
+    logical=max(1,cores if cores is not None else os.cpu_count() or 1)
+    return min(LIMITS['decode_threads'][1],logical)
+
+
 def native_resources():
     """Read bounded defaults once when opening a decoder, including legacy calls."""
     values={}

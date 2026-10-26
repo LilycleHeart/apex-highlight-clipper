@@ -11,6 +11,8 @@ from hud_recovery import clip_id
 def snapshot(request):
     registry = current_registry(); store = JobStore(request['root'])
     allowed = {clip_id(row['file']): row for row in request.get('clips', [])}
+    if request.get('action') == 'abandon':
+        return {'abandoned': request['id'], 'removed': store.discard(request['id'])}
     if request.get('action') == 'load':
         job = store.load(request['id'])
         if any(key not in allowed for key in job['clips']):
@@ -20,10 +22,15 @@ def snapshot(request):
     for key, row in allowed.items():
         directory = row['directory']
         if directory not in manifests:
-            try: manifests[directory] = json.loads((Path(directory) / 'export.json').read_text('utf-8-sig'))
-            except (OSError, ValueError): manifests[directory] = {}
-        saved = next((item for item in manifests[directory].get('clips', [])
-            if clip_id(item.get('output', item.get('file', ''))) == key), {})
+            try: manifest = json.loads((Path(directory) / 'export.json').read_text('utf-8-sig'))
+            except (OSError, ValueError): manifest = {}
+            # Resolve each manifest path once. Scanning per clip re-resolved every
+            # path of a large export N times (minutes for a 500-clip task).
+            index = {}
+            for item in manifest.get('clips', []):
+                index.setdefault(clip_id(item.get('output', item.get('file', ''))), item)
+            manifests[directory] = index
+        saved = manifests[directory].get(key, {})
         recognition = saved.get('recognition', {})
         status = classify_fields({**recognition.get('hud_info', {}), **recognition}, FIELDS, registry)
         fields = []
