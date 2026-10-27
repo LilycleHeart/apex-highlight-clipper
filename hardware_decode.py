@@ -16,8 +16,19 @@ import subprocess
 import tempfile
 
 DECODERS={'cuda':['-hwaccel','cuda','-hwaccel_output_format','cuda'],
-          'd3d11':['-hwaccel','d3d11va','-hwaccel_output_format','d3d11']}
+          'd3d11':['-hwaccel','d3d11va','-hwaccel_output_format','d3d11'],
+          # AV1 软解（libaom）不认高 level 码流（seq_level_idx=23），只能用厂商解码器。
+          'av1_cuvid':['-c:v','av1_cuvid'],
+          'av1_qsv':['-c:v','av1_qsv'],
+          'av1_amf':['-c:v','av1_amf']}
+# hwaccel 解码留在显存，滤镜前必须 hwdownload；厂商解码器直接输出内存帧。
+GPU_MEMORY={'cuda','d3d11'}
+AV1_CANDIDATES=['av1_cuvid','av1_qsv','av1_amf','d3d11']
 _PROBED={}
+
+
+def gpu_memory(decoder):
+    return decoder in GPU_MEMORY
 
 
 def requested():
@@ -32,6 +43,9 @@ def arguments(decoder):
 
 def active(source,video,duration):
     """本机确实可用的硬件解码器；不可用时返回 None，采样改走 CPU 解码。"""
+    # AV1 的软件解码对高 level 码流会整段失败，因此优先找任一可用的硬件解码器。
+    if str(video.get('codec_name') or '').lower()=='av1':
+        return _active_av1(source,video,duration)
     decoder=requested()
     if not decoder: return None
     if decoder=='d3d11' and os.name!='nt': return None
@@ -46,11 +60,30 @@ def active(source,video,duration):
     return decoder if _PROBED[key] else None
 
 
+def _active_av1(source,video,duration):
+    from pathlib import Path
+    try: stat=Path(source).stat()
+    except OSError: return None
+    key=('av1',str(Path(source).resolve()),stat.st_size,stat.st_mtime_ns,
+         video.get('width'),video.get('height'),video.get('pix_fmt'))
+    if key not in _PROBED:
+        chosen=None
+        for decoder in AV1_CANDIDATES:
+            if decoder=='d3d11' and os.name!='nt': continue
+            if _decodes(source,video,duration,decoder):
+                chosen=decoder;break
+        _PROBED[key]=chosen
+        print(f'AV1 录像使用硬件解码：{chosen}' if chosen else
+              '提示：本机没有可用的 AV1 硬件解码器，AV1 录像可能无法读取',flush=True)
+    return _PROBED[key]
+
+
 def _probe_command(source,video,duration,decoder,folder):
     from apex_clipper import tool
     width,height=video['width'],video['height']
     cx=round(width*.75/2)*2; cy=round(height*5/6/2)*2
     transfer='hwdownload,format=p010le,' if '10' in video.get('pix_fmt','') else 'hwdownload,format=nv12,'
+    if not gpu_memory(decoder): transfer=''
     graph=(f'[0:v:0]fps=2,{transfer}split=2[b][h];[b]scale=1280:-2[body];'
            f'[h]crop={width-cx}:{height-cy}:{cx}:{cy}[hud]')
     start=max(0.,min(float(duration)/2,float(duration)-2))

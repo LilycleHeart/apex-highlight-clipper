@@ -46,6 +46,38 @@ class LibraryRecordTests(unittest.TestCase):
         write(root / 'data/tasks/a/task.json', task)
         return root / 'data/tasks/a/task.json', destination, clip, other
 
+    def test_import_restores_recorded_clip_by_content_fingerprint(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.task_fixture(root)
+            manifest_path = root / 'data/tasks/a/items/1/export.json'
+            manifest = json.loads(manifest_path.read_text('utf-8'))
+            clip = manifest['clips'][0]
+            moved = root / 'elsewhere' / 'moved copy.mp4'
+            moved.parent.mkdir(parents=True)
+            shutil.copy2(clip['output'], moved)
+            manifest['clips'][0]['content_hash'] = library_records.clip_fingerprint(moved)
+            write(manifest_path, manifest)
+            result = library_records.import_clips({'data_root': str(root / 'data'), 'files': [str(moved)]})
+            self.assertEqual(result['restored'], [str(moved)])
+            self.assertEqual(result['added'], [])
+            saved = json.loads(manifest_path.read_text('utf-8'))
+            self.assertEqual(saved['clips'][0]['output'], str(moved))
+            self.assertEqual(saved['clips'][0]['recognition']['hud_info']['account']['name'], 'SAMPLE')
+            self.assertFalse((root / 'data/imported/export.json').is_file())
+
+    def test_import_keeps_unknown_video_as_imported(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.task_fixture(root)
+            stranger = root / 'elsewhere' / 'stranger.mp4'
+            stranger.parent.mkdir(parents=True)
+            stranger.write_bytes(b'unrelated clip bytes')
+            with patch('library_records.probe', return_value=({'format': {'duration': '12'}}, {'width': 1920, 'height': 1080})):
+                result = library_records.import_clips({'data_root': str(root / 'data'), 'files': [str(stranger)]})
+            self.assertEqual(result['restored'], [])
+            self.assertEqual(result['added'], [str(stranger)])
+
     def test_moved_clip_keeps_hud_information_and_resume_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             # Windows CI exposes the temp directory through an 8.3 short name

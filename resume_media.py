@@ -61,7 +61,7 @@ def sample_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_checkpoint=
     completed_count=sum(block['count'] for block in valid)
     if valid: print(f'采样续接：保留 {completed_count} 帧',flush=True)
     if valid and on_checkpoint: on_checkpoint(state)
-    from hardware_decode import active as active_decoder,arguments as decoder_arguments
+    from hardware_decode import active as active_decoder,arguments as decoder_arguments,gpu_memory as decoder_gpu_memory
     # 解码加速与识别后端分开：dml 用 DirectX 硬解，cuda 用 CUDA，都不可用时退回 CPU。
     decoder=active_decoder(source,video,duration) if cuda else None
     # 只写当前未提交块；时间边界对齐采样网格，保持全片 fps 滤镜的取样相位。
@@ -80,7 +80,7 @@ def sample_with_resume(source,out,fps,cuda=False,chunk_seconds=30,on_checkpoint=
             args+=decoder_arguments(decoder)
         width,height=video['width'],video['height']; cx=round(width*.75/2)*2; cy=round(height*5/6/2)*2
         transfer='hwdownload,format=p010le,' if '10' in video.get('pix_fmt','') else 'hwdownload,format=nv12,'
-        graph=f"[0:v:0]fps={fps},"+(transfer if decoder else '')+f"split=2[b][h];[b]scale=1280:-2[body];[h]crop={width-cx}:{height-cy}:{cx}:{cy}[hud]"
+        graph=f"[0:v:0]fps={fps},"+(transfer if decoder and decoder_gpu_memory(decoder) else '')+f"split=2[b][h];[b]scale=1280:-2[body];[h]crop={width-cx}:{height-cy}:{cx}:{cy}[hud]"
         jpeg_threads=['-threads:v','1'] if cpu_threads is not None else []
         args+=['-i',str(source),'-filter_complex',graph,'-map','[body]','-frames:v',str(count),'-q:v','2']+jpeg_threads+['-n',str(scratch/'%06d.jpg'),
                '-map','[hud]','-frames:v',str(count),'-q:v','2']+jpeg_threads+['-n',str(scratch/'hud/%06d.jpg')]

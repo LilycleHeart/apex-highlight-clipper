@@ -3,6 +3,7 @@
 只改写识别记录里指向成片的路径与文件身份；不移动、不删除、不改写任何视频。
 由桌面主进程在没有识别任务运行时调用；所有写入原子替换，首次改写前保留备份。
 """
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,6 +38,51 @@ def media_stat(path):
     stat = Path(path).stat()
     return {'size': stat.st_size, 'mtime_ns': stat.st_mtime_ns, 'mtime_ms': stat.st_mtime_ns // 1_000_000}
 
+
+def clip_fingerprint(path, block=256 * 1024):
+    """大小 + 头尾各 256KB 的 SHA-256。
+
+    移动、改名、复制都不改变内容；重新编码或剪辑会变，因此可以安全地用来
+    判断「这个文件是不是某条整理记录里的那段成片」。
+    """
+    path = Path(path)
+    stat = path.stat()
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        head = stream.read(block)
+        digest.update(head)
+        if stat.st_size > block * 2:
+            stream.seek(-block, os.SEEK_END)
+            digest.update(stream.read(block))
+    return {'size': stat.st_size, 'content': digest.hexdigest()}
+
+
+def fingerprint_of(clip):
+    """记录里已有的内容指纹；旧记录没有时返回 None。"""
+    value = clip.get('content_hash') or clip.get('content_fingerprint')
+    if isinstance(value, dict) and isinstance(value.get('content'), str) and len(value['content']) == 64:
+        return value
+    return None
+
+
+def tasks_index(root):
+    """扫描所有整理清单，建立 content_hash -> (manifest 路径, clip) 索引。"""
+    index = {}
+    tasks = Path(root) / 'tasks'
+    if not tasks.is_dir():
+        return index
+    for manifest_path in tasks.rglob('export.json'):
+        try:
+            manifest = load(manifest_path)
+        except (OSError, ValueError):
+            continue
+        if manifest.get('mode') == 'imported' or manifest.get('source') is None:
+            continue
+        for clip in manifest.get('clips', []):
+            value = fingerprint_of(clip)
+            if value:
+                index.setdefault(value['content'], []).append((manifest_path, clip))
+    return index
 
 def rewrite(value, moves, stats):
     """把指向旧成片的路径换成新路径；成片身份同时更新时间，大小不符时保持原样不认领。"""
@@ -207,9 +253,14 @@ def load_imported(root):
 
 
 def import_clips(request):
-    """登记未经本软件处理的片段；只读视频信息，不复制、不改名。"""
+    """登记未经本软件处理的片段；只读视频信息，不复制、不改名。
+
+    添加前先用内容指纹查一遍整理记录：命中说明这段成片本来就是本软件整理的，
+    认回原记录（保留识别与统计），不再登记成导入片段。
+    """
     directory, path, manifest = load_imported(request['data_root'])
-    known = {key(item) for item in manifest['outputs']}; added = []; rejected = []
+    known = {key(item) for item in manifest['outputs']}; added = []; rejected = []; restored = []
+    index = tasks_index(request['data_root'])
     # 自动扫描时超长的视频多半是原录像；记住它的大小和时间，未变化就不再重复读取。
     limit = request.get('max_duration'); skipped = manifest.setdefault('skipped_long', [])
     skipped_keys = {(item.get('path_key'), item.get('size'), item.get('mtime_ns')) for item in skipped if isinstance(item, dict)}
@@ -222,6 +273,28 @@ def import_clips(request):
         stat = media_stat(file)
         if limit and (key(file), stat['size'], stat['mtime_ns']) in skipped_keys:
             rejected.append({'file': str(file), 'reason': '超过自动加入的时长上限', 'skipped': True}); continue
+        # 认回只需要文件内容，不必先解码；这样移动/复制过的成片即使暂时读不出时长也能归位。
+        content = clip_fingerprint(file)
+        matches = index.get(content['content']) or []
+        if matches:
+            target_dir = str(file.parent).casefold()
+            def distance(pair):
+                old_dir = str(Path(pair[1].get('output') or '').parent).casefold()
+                return 0 if old_dir == target_dir else 1
+            manifest_path, clip = sorted(matches, key=distance)[0]
+            try:
+                saved = load(manifest_path)
+            except (OSError, ValueError):
+                saved = None
+            if saved is not None and isinstance(clip.get('output'), str):
+                moves = {key(clip['output']): str(file)}
+                stats = {key(str(file)): media_stat(file)}
+                updated, applied = relocated_manifest(saved, moves, stats)
+                if applied:
+                    save(manifest_path, updated)
+                    restored.append(str(file))
+                    known.add(key(str(file)))
+                    continue
         try:
             metadata, video = probe(file); duration = float(metadata['format']['duration'])
         except Exception as error:
@@ -233,12 +306,13 @@ def import_clips(request):
             rejected.append({'file': str(file), 'reason': '超过自动加入的时长上限', 'skipped': True}); continue
         identity = fingerprint(file)
         manifest['clips'].append({'output': str(file), 'segment': {'start': 0., 'end': duration}, 'summary': {},
-                                  'metadata': metadata, 'output_identity': identity, 'recognition': {}, 'imported': True})
+                                  'metadata': metadata, 'output_identity': identity, 'recognition': {},
+                                  'content_hash': content, 'imported': True})
         manifest['outputs'].append(str(file)); manifest['relocated_outputs'].append(str(file))
         known.add(key(file)); added.append(str(file))
     if added or len(skipped) != len(skipped_keys):
         directory.mkdir(parents=True, exist_ok=True); write_json(path, manifest)
-    return {'added': added, 'rejected': rejected, 'manifest': str(path)}
+    return {'added': added, 'restored': restored, 'rejected': rejected, 'manifest': str(path)}
 
 
 def remove_imported(request):

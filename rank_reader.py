@@ -20,6 +20,25 @@ def empty_badge_region(roi):
     edges=float(np.count_nonzero(cv2.Canny(gray,40,100)))/gray.size
     return {'contrast':round(contrast,3),'edge_fraction':round(edges,4)} if contrast<24 and edges<.02 else None
 
+_MODE_CLOCK=None
+
+def mode_clock_evidence(roi):
+    """右上角出现模式时钟（控制/混战等），说明这不是大逃杀排位画面。
+
+    只在已确认布局的本人 HUD 区域里比对，阈值保持偏低但要求形状高度一致，
+    避免把排位徽章的外环误判成时钟。
+    """
+    global _MODE_CLOCK
+    if _MODE_CLOCK is None:
+        path=BASE/'assets/modes/mode-clock.png'
+        _MODE_CLOCK=read_image(str(path),cv2.IMREAD_COLOR) if path.is_file() else False
+    template=_MODE_CLOCK
+    if template is False or roi.size==0:return None
+    th,tw=template.shape[:2]
+    if roi.shape[0]<th or roi.shape[1]<tw:return None
+    _,score,_,point=cv2.minMaxLoc(cv2.matchTemplate(roi,template,cv2.TM_CCOEFF_NORMED))
+    return {'score':round(float(score),3),'point':[int(point[0]),int(point[1])]} if score>=.62 else None
+
 def palette_matches(template,patch):
     """同形徽章仍需符合其调色板；颜色证据不足时继续使用形状门槛。"""
     reference=cv2.cvtColor(template,cv2.COLOR_BGR2HSV);observed=cv2.cvtColor(patch,cv2.COLOR_BGR2HSV)
@@ -59,6 +78,12 @@ class RankReader:
             roi=image[:round(h*.091),round(w*.953):]
         if not roi.size:return None
         native=roi
+        # 其他模式（控制/混战等）在段位位置放的是模式时钟，没有段位可读；
+        # 先认出这个标志，避免把「该模式本来就没有段位」报成识别失败。
+        clock=mode_clock_evidence(native) if profile and profile.get('layout_status')=='confirmed' else None
+        if clock is not None:
+            return {'tier':None,'name':None,'division':None,'confidence':clock['score'],
+                    'method':'mode_clock_detected','mode':'other','evidence':clock}
         # 用户规则：已校准的本人 HUD 右上角没有图标时归为匹配。
         # 仍由调用者按不同原生帧形成共识；布局未确认不能从空白画面猜模式。
         absence=empty_badge_region(native) if profile and profile.get('layout_status')=='confirmed' else None

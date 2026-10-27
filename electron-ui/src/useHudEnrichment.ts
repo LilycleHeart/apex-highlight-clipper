@@ -9,7 +9,7 @@ const errorText=(error:unknown)=>String(error).replace(/^Error:\s*/,'').replace(
 
 /** The app owns this session; page unmounts must not end its event subscription. */
 export default function useHudEnrichment(action:(files:string[],fields:HudEnrichmentField[],mode:HudEnrichmentMode)=>Promise<HudEnrichmentResult>){
- const [job,setJob]=useState<HudJob|null>(null),[panelOpen,setPanelOpen]=useState(false),[fields,setFields]=useState<HudEnrichmentField[]>(hudFields.map(field=>field.key)),[scope,setScope]=useState<'visible'|'selected'>('visible'),[mode,setMode]=useState<HudEnrichmentMode>('missing');
+ const [job,setJob]=useState<HudJob|null>(null),[panelOpen,setPanelOpen]=useState(false),[fields,setFields]=useState<HudEnrichmentField[]>([...hudFields.map(field=>field.key),'statistics' as HudEnrichmentField]),[scope,setScope]=useState<'visible'|'selected'>('visible'),[mode,setMode]=useState<HudEnrichmentMode>('missing');
  const active=useRef<number|null>(null),sequence=useRef(0),handler=useRef(action);handler.current=action;
  useEffect(()=>window.apex?.onEvent(event=>{
   const id=active.current;if(id===null||!event.type.startsWith('hud-info-'))return;

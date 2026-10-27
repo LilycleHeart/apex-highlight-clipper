@@ -14,7 +14,7 @@ import uuid
 
 from apex_clipper import probe,fingerprint,write_json,tool,decode_creationflags
 from app_cancel import check_cancel
-from hardware_decode import active as active_decoder,arguments as decoder_arguments
+from hardware_decode import active as active_decoder,arguments as decoder_arguments,gpu_memory as decoder_gpu_memory
 
 
 def _check(abort_event):
@@ -102,7 +102,7 @@ def _command(source,scratch,video,first,count,fps,decoder,cpu_threads):
     width,height=video['width'],video['height']
     cx=round(width*.75/2)*2; cy=round(height*5/6/2)*2
     transfer='hwdownload,format=p010le,' if '10' in video.get('pix_fmt','') else 'hwdownload,format=nv12,'
-    graph=f'[0:v:0]fps={fps},'+(transfer if decoder else '')+f'split=2[b][h];[b]scale=1280:-2[body];[h]crop={width-cx}:{height-cy}:{cx}:{cy}[hud]'
+    graph=f'[0:v:0]fps={fps},'+(transfer if decoder and decoder_gpu_memory(decoder) else '')+f'split=2[b][h];[b]scale=1280:-2[body];[h]crop={width-cx}:{height-cy}:{cx}:{cy}[hud]'
     jpeg_threads=['-threads:v','1'] if cpu_threads is not None else []
     args+=['-i',str(source),'-filter_complex',graph,'-map','[body]','-frames:v',str(count),'-q:v','2']+jpeg_threads+['-n',str(scratch/'%06d.jpg'),
            '-map','[hud]','-frames:v',str(count),'-q:v','2']+jpeg_threads+['-n',str(scratch/'hud/%06d.jpg')]

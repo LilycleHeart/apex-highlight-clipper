@@ -24,8 +24,9 @@ def records(request, registry):
             fields = selected.get(clip_id(file), job.get('fields', request.get('fields') or FIELDS))
             if fields:
                 extra=set(fields)&{'statistics','opponents','event_weapons'};inputs={}
-                if extra:
-                    source=Path(job['directory'])/'statistics.json'
+                # 导入的成片没有 statistics.json：战绩数字改由成片画面重新统计，不需要输入身份。
+                source=Path(job['directory'])/'statistics.json'
+                if extra and source.is_file():
                     manifest=json.loads((source.parent/'export.json').read_text('utf-8-sig'))
                     clip=next(row for row in manifest['clips'] if clip_id(row.get('output',row.get('file','')))==clip_id(file))
                     identity={**commit_receipt(source),'segment':clip['segment']}

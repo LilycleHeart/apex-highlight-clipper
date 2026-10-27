@@ -186,7 +186,7 @@ async function collectResults(p:string,repair=true):Promise<Result[]>{
 let libraryRead:Promise<{results:Result[];tasks:number;errors:number}>|null=null;
 let unreadableTasks:string[]=[];
 const importedRoot=path.join(dataRoot,'imported'),importedManifest=path.join(importedRoot,'export.json');
-const importedClips=new Set<string>();const importedFields=new Set(['account','weapons','teammates','hero','rank']);
+const importedClips=new Set<string>();const importedFields=new Set(['account','weapons','teammates','hero','rank','statistics']);
 /** 片段库记录的改写统一交给 Python（保持文件时间戳等大整数精确）；不移动、不删除任何视频。 */
 function libraryRecords(command:Record<string,unknown>):Promise<any>{
  return new Promise((resolve,reject)=>{
@@ -248,7 +248,7 @@ function maintainLibrary(options:{autoImport:boolean;explicit?:string[]}):Promis
    await libraryStore.unhide(toImport.filter(file=>explicit.has(normalized(file))));
    // 自动扫描时跳过超长视频（多半是原录像）；用户手动选择的片段不受限。
    for(let i=0;i<toImport.length;i+=50){const batch=toImport.slice(i,i+50),manual=batch.filter(file=>explicit.has(normalized(file))),auto=batch.filter(file=>!explicit.has(normalized(file)));
-    for(const [files,limit] of [[manual,undefined],[auto,1800]] as const){if(!files.length)continue;try{const result=await libraryRecords({command:'import',data_root:dataRoot,files,max_duration:limit});imported+=result.added.length;rejected+=result.rejected.filter((row:any)=>!row.skipped).length;}catch(error){diagnostics.log('warning','library','已有片段登记失败',{error:String(error)});}}
+    for(const [files,limit] of [[manual,undefined],[auto,1800]] as const){if(!files.length)continue;try{const result=await libraryRecords({command:'import',data_root:dataRoot,files,max_duration:limit});imported+=result.added.length;moved+=Array.isArray(result.restored)?result.restored.length:0;rejected+=result.rejected.filter((row:any)=>!row.skipped).length;}catch(error){diagnostics.log('warning','library','已有片段登记失败',{error:String(error)});}}
    }
   }
   return {moved,imported,rejected};
@@ -265,7 +265,7 @@ async function collectImported():Promise<Result|null>{
   allowedPaths.add(normalized(target));allowedClips.add(normalized(target));importedClips.add(normalized(target));clipDirectories.set(normalized(target),importedRoot);clipTasks.delete(normalized(target));
   const duration=Number(c.metadata?.format?.duration)||Number(c.segment?.end)||0;clipDurations.set(normalized(target),duration);
   const {matchKey:_matchKey,...statistics}=clipStatistics(c,[],{},{path:target,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)});
-  result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,...statistics,kills:null,damage:null,assists:null,knockdowns:null});
+  const importedCounts=(c.statistics&&c.statistics.counts)||{};const importedEvidence=((c.statistics&&c.statistics.events)||[]).filter((e:any)=>e&&Number.isFinite(e.time)&&['knock','assist','elimination'].includes(e.kind)).map((e:any)=>({kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:e.target}));result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,...statistics,kills:importedCounts.kills??null,damage:importedCounts.damage??null,assists:importedCounts.assists??null,knockdowns:importedCounts.knockdowns??null,evidence:importedEvidence});
  }
  return result.clips.length?result:null;
 }
@@ -411,7 +411,7 @@ async function enrichHud(files:unknown,fields:unknown,mode:unknown='missing',rec
  // 未经本软件处理的已有片段没有原录像和交战分析，只读取画面中的 HUD 信息。
  const visual=(list:unknown[])=>list.filter(field=>importedFields.has(String(field)));
  const jobs=[...grouped].map(([directory,files])=>normalized(directory)===normalized(importedRoot)?{directory,files,fields:visual(fields)}:{directory,files}).filter(job=>!('fields' in job)||job.fields!.length);
- if(!jobs.length)throw new Error('已有片段只能补充账号、队友、武器、英雄和段位');
+ if(!jobs.length)throw new Error('已有片段只能补充账号、队友、武器、英雄、段位和战绩数字');
  if(recovery.selection&&typeof recovery.selection==='object')recovery={...recovery,selection:Object.fromEntries(Object.entries(recovery.selection as Record<string,unknown[]>).map(([file,list])=>[file,importedClips.has(normalized(file))?visual(list):list]).filter(([,list])=>(list as unknown[]).length))};
  const root=path.join(validationRoot,'app-requests');await fs.mkdir(root,{recursive:true});requestPath=path.join(root,randomUUID()+'.json');hudStopFile=requestPath+'.stop';
  await fs.writeFile(requestPath,JSON.stringify({stop_file:hudStopFile,jobs,fields,force:mode==='refresh',...normalizePerformance(snapshot),backend:snapshot.backend,recovery_root:hudRecoveryRoot,...recovery}),'utf8');if(hudStopRequested)await fs.writeFile(hudStopFile,'stop','utf8');

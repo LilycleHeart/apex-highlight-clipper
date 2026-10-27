@@ -17,10 +17,10 @@ export function ClipSelection({file,name}:{file:string;name:string}){
  const actions=useContext(ClipActionsContext);if(!actions?.selectionMode)return null;
  return <label className="clip-selection" title={name}><input type="checkbox" aria-label={`选择片段 ${name}`} checked={actions.checked.has(file)} disabled={actions.sharing} onChange={()=>actions.onCheck(file)}/><span>{actions.checked.has(file)?'已选':'选择'}</span></label>;
 }
-export function ClipActionButtons({file,name,labels='all'}:{file:string;name:string;labels?:'all'|'share'|'none'}){
+export function ClipActionButtons({file,name,labels='all',imported=false}:{file:string;name:string;labels?:'all'|'share'|'none';imported?:boolean}){
  const actions=useContext(ClipActionsContext),anchor=useRef<HTMLButtonElement>(null),panel=useRef<HTMLDivElement>(null);
  const task=actions?.enrichment?.kind==='single'&&actions.enrichment.files.includes(file)?actions.enrichment:null;
- const [open,setOpen]=useState(false),[fields,setFields]=useState<HudEnrichmentField[]>(()=>task?.fields||hudFields.map(field=>field.key)),[message,setMessage]=useState(''),[failed,setFailed]=useState(false),[position,setPosition]=useState({left:0,top:0});
+ const [open,setOpen]=useState(false),[fields,setFields]=useState<HudEnrichmentField[]>(()=>task?.fields||(imported?[...hudFields.map(field=>field.key),'statistics' as HudEnrichmentField]:hudFields.map(field=>field.key))),[message,setMessage]=useState(''),[failed,setFailed]=useState(false),[position,setPosition]=useState({left:0,top:0});
  const present=useMotionPresence(open,panel),running=actions?.recognizing===file;
  const taskMessage=task?(task.error||task.progress.message)+(task.running&&task.progress.framesTotal?` · 画面 ${task.progress.framesDone}/${task.progress.framesTotal}`:''):'';
  const displayMessage=running?taskMessage:message||taskMessage,displayFailed=failed||!!task?.error;

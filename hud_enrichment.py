@@ -373,6 +373,14 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
     if visual_search:result['visual_field_search']=visual_search
     for field in ['account','hero','rank']:
         if field in fields:result[field]=stable(observations,field)
+    if 'rank' in fields:
+        # 控制/混战等模式在段位位置显示的是时钟，本来就没有段位；多帧一致时
+        # 明确记成「其他模式」，避免报告成「未识别段位」。
+        clocks=[row['rank'] for row in observations if (row.get('rank') or {}).get('mode')=='other']
+        if len(clocks)>=2 and not result['rank']:
+            result['rank']={'tier':None,'name':'其他模式','division':None,'mode':'other',
+                            'confidence':max(float(c.get('confidence') or 0) for c in clocks),
+                            'method':'mode_clock_consensus','votes':len(clocks)}
     def detail_activity(details):notify(details['message'],details.get('frames_done',0),details.get('frames_total',0))
     if 'hero' in fields and not result['hero']:
         from hero_portrait_reader import confirm_video_portrait
@@ -386,7 +394,7 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
         result['hero_portrait_observations']=portrait['observations']
         if conflicts:result['hero_review_conflicts']=conflicts
         result['frame_times']=sorted(set(result['frame_times'])|{row['time'] for row in portrait['observations']});result['checked_frames']=len(result['frame_times'])
-    if 'rank' in fields and rank_detail_missing(result['rank']):
+    if 'rank' in fields and rank_detail_missing(result['rank']) and (result['rank'] or {}).get('mode')!='other':
         result['rank']=rank_reader.confirm_division(source,profile,result['rank'],observations,start,end,on_activity=detail_activity)
         result['frame_times']=sorted(set(result['frame_times'])|{row['time'] for row in result['rank'].get('division_evidence',[])});result['checked_frames']=len(result['frame_times'])
     if 'rank' in fields:result['rank_observations']=[{'time':row['time'],'rank':row['rank']} for row in observations if 'rank' in row]
@@ -961,7 +969,27 @@ def _run_job_sequence(request,direct,emit):
                 if direct:
                     from repair_cached_statistics import repair,commit_repair,exported_clips,opponent_needs_review,needs_fields
                     directory=Path(job['directory']);statistics=directory/'statistics.json'
-                    if not statistics.is_file():raise ValueError('此记录缺少战果统计，无法复核战绩或敌人姓名')
+                    if not statistics.is_file():
+                        # 导入的成片没有任务统计：把成片本身当源视频补片段级统计（不导出）。
+                        from imported_statistics import build_statistics, apply_to_manifest
+                        for index,file in enumerate(job['files'],1):
+                            check_cancel()
+                            from hud_recovery import claim,commit_extra,failed as mark_failed
+                            claim(file,extra)
+                            def activity(event):
+                                emit({'type':'hud-info-activity','index':offset+index,'total':total,'file':file,
+                                      'fields':extra,'backend':request.get('backend','cpu'),**event})
+                            try:
+                                activity({'message':'采样成片并读取计分栏','frames_done':0,'frames_total':0})
+                                result=build_statistics(file,on_activity=activity)
+                                apply_to_manifest(directory/'export.json',file,result)
+                                updated.add(file);commit_extra(directory,file,extra,())
+                            except Exception as error:
+                                mark_failed(file,extra,error)
+                                errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
+                            emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file})
+                        offset+=count
+                        continue
                     original=json.loads(statistics.read_text('utf-8-sig'));clips=exported_clips(directory,original)
                     from hud_read_queue import ClipReadQueue
                     workers=min(3,max(1,int(os.environ.get('APEX_HUD_WORKERS','1'))))

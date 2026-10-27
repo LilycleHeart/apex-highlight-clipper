@@ -57,7 +57,17 @@ def unique_toasts(events):
             tracks.append({**event,'last_seen':event['time'],'frames':[event.get('frame','')],'observations':1,
                 '_name_reads':[{'name':event.get('target_text',''),'confidence':event.get('target_read_confidence',event.get('text_confidence',event.get('confidence',0))),'frame':event.get('frame','')}]})
     for event in tracks:
-        event['confirmed']=len([f for f in event['frames'] if f])>=2
+        # 击倒提示通常只显示半秒，2Hz 采样可能只抓到一帧；目标名复核时已经按原生帧
+        # 读过同一提示，这些帧同样能证明提示确实持续出现，一并计入确认。
+        native_frames={value.get('frame') for value in (event.get('native_action_evidence') or [])
+                       if isinstance(value,dict) and value.get('frame')}
+        votes=len([f for f in event['frames'] if f])+len(native_frames)
+        # 纯「击倒 +150」没有目标名，也不产生原生动作帧，而游戏里只闪约半秒，
+        # 2Hz 采样常常只抓到一帧。这类明确动作词用单帧高置信度补确认，并留下标记。
+        single=votes<2 and event.get('kind') in {'knock','elimination'} and max(
+            float(event.get('confidence') or 0),float(event.get('text_confidence') or 0))>=.9
+        event['confirmed']=votes>=2 or single
+        if single:event['single_frame_confirmed']=True
         reads={}
         for value in event.pop('_name_reads'):
             frame=value['frame']
