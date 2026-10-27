@@ -176,7 +176,7 @@ async function collectResults(p:string,repair=true):Promise<Result[]>{
     allowedClips.add(normalized(target));clipTasks.set(normalized(target),p);clipDirectories.set(normalized(target),item.destination);const start=Number(c.segment.start),end=Number(c.segment.end);clipDurations.set(normalized(target),Number(c.metadata?.format?.duration)||end-start);const rate=record.parameters?.fps||2;const targetTime=(start+end)/2;
     const inside=frames.filter(f=>{const t=(Number(path.parse(f).name)-.5)/rate;return t>=start&&t<=end;});const frame=inside.sort((a,b)=>Math.abs((Number(path.parse(a).name)-.5)/rate-targetTime)-Math.abs((Number(path.parse(b).name)-.5)/rate-targetTime))[0];let thumbnail:string|undefined;
     if(frame)try{thumbnail=await imageUrl(path.join(samples,frame));}catch{}
-    result.clips.push({media:mediaGeometry(c.metadata),taskPath:p,source:item.source,exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(item.source)||recordingTime(path.basename(target)),duration:Number(c.metadata?.format?.duration)||end-start,start,end,...clipStatistics(c,candidates,analysis,{path:realTarget,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)}),thumbnail});
+    (result.clips as any[]).push({media:mediaGeometry(c.metadata),fieldStatus:((c.recognition||{}).hud_info||{}).field_status,taskPath:p,source:item.source,exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(item.source)||recordingTime(path.basename(target)),duration:Number(c.metadata?.format?.duration)||end-start,start,end,...clipStatistics(c,candidates,analysis,{path:realTarget,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)}),thumbnail});
    }
   }catch{}
   allowedPaths.add(normalized(item.destination));results.push(result);
@@ -265,7 +265,7 @@ async function collectImported():Promise<Result|null>{
   allowedPaths.add(normalized(target));allowedClips.add(normalized(target));importedClips.add(normalized(target));clipDirectories.set(normalized(target),importedRoot);clipTasks.delete(normalized(target));
   const duration=Number(c.metadata?.format?.duration)||Number(c.segment?.end)||0;clipDurations.set(normalized(target),duration);
   const {matchKey:_matchKey,...statistics}=clipStatistics(c,[],{},{path:target,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)});
-  const importedCounts=(c.statistics&&c.statistics.counts)||{};const importedEvidence=((c.statistics&&c.statistics.events)||[]).filter((e:any)=>e&&Number.isFinite(e.time)&&['knock','assist','elimination'].includes(e.kind)).map((e:any)=>({kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:e.target}));result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,...statistics,kills:importedCounts.kills??null,damage:importedCounts.damage??null,assists:importedCounts.assists??null,knockdowns:importedCounts.knockdowns??null,evidence:importedEvidence});
+  const importedCounts=(c.statistics&&c.statistics.counts)||{};const importedFieldsStatus=((c.recognition||{}).hud_info||{}).field_status;const importedEvidence=((c.statistics&&c.statistics.events)||[]).filter((e:any)=>e&&Number.isFinite(e.time)&&['knock','assist','elimination'].includes(e.kind)).map((e:any)=>({kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:e.target}));result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,fieldStatus:importedFieldsStatus,...statistics,kills:importedCounts.kills??null,damage:importedCounts.damage??null,assists:importedCounts.assists??null,knockdowns:importedCounts.knockdowns??null,evidence:importedEvidence});
  }
  return result.clips.length?result:null;
 }
@@ -597,6 +597,79 @@ app.whenReady().then(async()=>{
  let sharingClips=false;handle('share-clips',async(files:unknown)=>{if(sharingClips)throw new Error('正在打开 QQ 分享，请稍候');sharingClips=true;try{const result=await shareFiles(files,allowedClips,uri=>shell.openExternal(uri));diagnostics.log('info','qq-share','已请求QQ会话选择',{count:result.count,command:result.command});return result;}finally{sharingClips=false;}});
  handle('choose-library-root',async()=>{const selected=await dialog.showOpenDialog(win,{title:'添加历史输出目录',properties:['openDirectory']});if(selected.canceled)return false;await libraryStore.addRoot(selected.filePaths[0]);return true;});
  handle('video-url',file=>videos.url(file));
+ type ClipCollectionRow={id:string;name:string;createdAt:string;files:string[];synced:boolean};
+let collectionsCache:ClipCollectionRow[]|null=null;
+const collectionsFile=()=>path.join(dataRoot,'collections.json');
+async function loadCollections():Promise<ClipCollectionRow[]>{
+ if(collectionsCache)return collectionsCache;
+ try{const data=await readJson(collectionsFile());const list=Array.isArray(data?.collections)?data.collections:[];
+  collectionsCache=list.filter((row:any)=>row&&typeof row.id==='string'&&typeof row.name==='string'&&Array.isArray(row.files))
+   .map((row:any)=>({id:row.id,name:row.name,createdAt:typeof row.createdAt==='string'?row.createdAt:new Date().toISOString(),
+     files:row.files.filter((file:unknown):file is string=>typeof file==='string'),synced:!!row.synced}));}
+ catch{collectionsCache=[];}
+ return collectionsCache ?? [];
+}
+async function saveCollections(list:ClipCollectionRow[]){
+ collectionsCache=list;
+ await fs.mkdir(dataRoot,{recursive:true});
+ await fs.writeFile(collectionsFile(),JSON.stringify({version:1,collections:list},null,2),'utf8');
+}
+function safeCollectionName(value:unknown){
+ if(typeof value!=='string')throw new Error('收藏夹名称无效');
+ const name=value.trim().replace(/[\\/:*?"<>|]/g,'_');
+ if(!name)throw new Error('收藏夹名称不能为空');
+ if(name.length>40)throw new Error('收藏夹名称过长');
+ return name;
+}
+async function addToCollection(files:unknown,name:unknown,syncFolder:unknown){
+ if(!Array.isArray(files)||!files.length)throw new Error('请选择要收藏的片段');
+ if(libraryBusy())throw new Error('请先等待当前处理结束');
+ const list=files.filter((file):file is string=>typeof file==='string'&&existsSync(file));
+ if(!list.length)throw new Error('所选片段不存在');
+ const folder=safeCollectionName(name);
+ const collections=await loadCollections();
+ let row=collections.find(item=>item.name===folder);
+ if(!row){row={id:randomUUID(),name:folder,createdAt:new Date().toISOString(),files:[],synced:!!syncFolder};collections.push(row);}
+ row.synced=row.synced||!!syncFolder;
+ let moved=0;const finalPaths:string[]=[];
+ if(syncFolder){
+  const wants=list.map(file=>({from:file,to:path.join(path.dirname(file),folder,path.basename(file))}))
+    .filter(pair=>normalized(pair.from)!==normalized(pair.to));
+  for(const pair of wants){
+   if(existsSync(pair.to)){finalPaths.push(pair.to);continue;}
+   await fs.mkdir(path.dirname(pair.to),{recursive:true});
+   await fs.rename(pair.from,pair.to);
+   moved++;finalPaths.push(pair.to);
+  }
+ }else{finalPaths.push(...list);}
+ row.files=[...new Set([...row.files,...finalPaths])];
+ await saveCollections(collections);
+ if(moved)await maintainLibrary({autoImport:false});
+ return {collection:row,moved};
+}
+async function removeFromCollection(id:unknown,files:unknown){
+ const collections=await loadCollections();
+ const collection=collections.find(item=>item.id===id);
+ if(!collection)throw new Error('收藏夹不存在');
+ const wanted=Array.isArray(files)?new Set(files.filter((file):file is string=>typeof file==='string').map(normalized)):null;
+ const before=collection.files.length;
+ collection.files=wanted?collection.files.filter(file=>!wanted.has(normalized(file))):[];
+ await saveCollections(collections);
+ return {collection,removed:before-collection.files.length};
+}
+async function deleteCollection(id:unknown){
+ const collections=await loadCollections();
+ const index=collections.findIndex(item=>item.id===id);
+ if(index<0)throw new Error('收藏夹不存在');
+ const [removed]=collections.splice(index,1);
+ await saveCollections(collections);
+ return {removed:removed.files.length};
+}
+handle('list-collections',()=>loadCollections());
+ handle('add-to-collection',(files,name,syncFolder)=>addToCollection(files,name,syncFolder));
+ handle('remove-from-collection',(id,files)=>removeFromCollection(id,files));
+ handle('delete-collection',(id)=>deleteCollection(id));
+ handle('remove-imported',async(files:unknown)=>{if(!Array.isArray(files)||!files.length)throw new Error('请选择要移出的片段');if(libraryBusy())throw new Error('请先等待当前处理结束');const list=files.filter((item):item is string=>typeof item==='string'&&importedClips.has(normalized(item)));if(!list.length)throw new Error('所选片段不在导入记录里');await libraryRecords({command:'remove-imported',data_root:dataRoot,files:list});return {removed:list.length};});
  handle('delete-clip',async(file:string)=>{
   if(typeof file==='string'&&importedClips.has(normalized(file))){
    // 已有片段不是本软件生成的文件：只移出片段库，视频保留在原处。

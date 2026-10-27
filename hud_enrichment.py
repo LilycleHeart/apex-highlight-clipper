@@ -982,12 +982,26 @@ def _run_job_sequence(request,direct,emit):
                             with emit_lock:
                                 emit({'type':'hud-info-activity','index':offset+done['value'],'total':total,
                                       'file':file,'fields':extra,'backend':request.get('backend','cpu'),**event})
+                        stored={}
+                        def stored_profile(file):
+                            key=str(directory)
+                            if key not in stored:
+                                try:
+                                    data=json.loads((directory/'export.json').read_text('utf-8-sig'))
+                                    stored[key]={str(Path(row.get('output','')).resolve()).casefold():
+                                                 ((row.get('recognition') or {}).get('hud_info') or {}).get('profile')
+                                                 for row in data.get('clips',[]) if row.get('output')}
+                                except (OSError,ValueError):
+                                    stored[key]={}
+                            return stored[key].get(str(Path(file).resolve()).casefold())
                         def build(file):
                             check_cancel();claim(file,extra)
                             report(file,{'message':'采样成片并读取计分栏','frames_done':0,'frames_total':0})
-                            return build_statistics(file,on_activity=lambda event:report(file,event))
+                            return build_statistics(file,profile=stored_profile(file),
+                                                    on_activity=lambda event:report(file,event))
                         results={}
-                        with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='imported-stat') as pool:
+                        from engine_pool import init_worker_pool
+                        with ThreadPoolExecutor(max_workers=workers,initializer=init_worker_pool,thread_name_prefix='imported-stat') as pool:
                             futures={pool.submit(build,file):file for file in job['files']}
                             for future in as_completed(futures):
                                 file=futures[future]

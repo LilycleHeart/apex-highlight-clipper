@@ -3,13 +3,13 @@ import type {HudEnrichmentField,HudEnrichmentMode,HudEnrichmentResult} from './s
 import {hudFields} from './HudSettings';
 
 export interface HudProgress {unit?:'step'|'field';completed:number;total:number;current:number;file:string;message:string;framesDone:number;framesTotal:number;fields:HudEnrichmentField[];backend:string;failures:number}
-export interface HudJob {id:number;kind:'batch'|'single';files:string[];fields:HudEnrichmentField[];mode:HudEnrichmentMode;running:boolean;status:'running'|'completed'|'review'|'failed'|'stopped';progress:HudProgress;error:string}
+export interface HudJob {id:number;startedAt?:number;kind:'batch'|'single';files:string[];fields:HudEnrichmentField[];mode:HudEnrichmentMode;running:boolean;status:'running'|'completed'|'review'|'failed'|'stopped';progress:HudProgress;error:string}
 export const emptyHudProgress:HudProgress={completed:0,total:0,current:0,file:'',message:'',framesDone:0,framesTotal:0,fields:[],backend:'',failures:0};
 const errorText=(error:unknown)=>String(error).replace(/^Error:\s*/,'').replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/,'');
 
 /** The app owns this session; page unmounts must not end its event subscription. */
 export default function useHudEnrichment(action:(files:string[],fields:HudEnrichmentField[],mode:HudEnrichmentMode)=>Promise<HudEnrichmentResult>){
- const [job,setJob]=useState<HudJob|null>(null),[panelOpen,setPanelOpen]=useState(false),[fields,setFields]=useState<HudEnrichmentField[]>([...hudFields.map(field=>field.key),'statistics' as HudEnrichmentField]),[scope,setScope]=useState<'visible'|'selected'>('visible'),[mode,setMode]=useState<HudEnrichmentMode>('missing');
+ const [job,setJob]=useState<HudJob|null>(null),[panelOpen,setPanelOpen]=useState(false),[fields,setFields]=useState<HudEnrichmentField[]>([...hudFields.map(field=>field.key),'statistics' as HudEnrichmentField]),[scope,setScope]=useState<string>('visible'),[mode,setMode]=useState<HudEnrichmentMode>('missing');
  const active=useRef<number|null>(null),sequence=useRef(0),handler=useRef(action);handler.current=action;
  useEffect(()=>window.apex?.onEvent(event=>{
   const id=active.current;if(id===null||!event.type.startsWith('hud-info-'))return;
@@ -41,7 +41,7 @@ export default function useHudEnrichment(action:(files:string[],fields:HudEnrich
   if(active.current!==null)throw new Error('已有信息识别任务正在处理，请先等待完成或停止');
   if(!files.length||!requested.length)throw new Error('请选择片段及需要识别的信息');
   const id=++sequence.current;active.current=id;
-  setJob({id,kind,files:[...files],fields:[...requested],mode:requestedMode,running:true,status:'running',progress:{...emptyHudProgress,total:files.length,fields:[...requested],message:requestedMode==='refresh'?'准备重新识别':'准备补充识别'},error:''});
+  setJob({id,startedAt:Date.now(),kind,files:[...files],fields:[...requested],mode:requestedMode,running:true,status:'running',progress:{...emptyHudProgress,total:files.length,fields:[...requested],message:requestedMode==='refresh'?'准备重新识别':'准备补充识别'},error:''});
   if(kind==='batch')setPanelOpen(true);
   try{
    const result=await(execute?execute():handler.current(files,requested,requestedMode));

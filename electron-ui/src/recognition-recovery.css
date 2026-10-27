@@ -50,3 +50,12 @@ html[data-reduced=true] .recognition-notice-symbol.is-running>svg{animation:none
 .hud-run-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;grid-column:1/-1;color:var(--card-muted);font-size:11px}
 .hud-run-summary>span:first-child{padding:5px 9px;border-radius:10px;background:var(--card-tint);color:var(--card-accent)}
 .hud-run-summary>small{margin-left:auto;font-size:10px}
+
+
+.recognition-pill{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:999px;border:1px solid var(--outlineVariant);background:var(--surfaceContainerHigh);color:var(--onSurface);font-size:11px;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.recognition-pill:hover{border-color:var(--primary);background:var(--surfaceContainerHighest)}
+.recognition-pill-label{font-weight:600;color:var(--onSurface)}
+.recognition-pill-count{color:var(--onSurfaceVariant)}
+.recognition-pill-percent{font-variant-numeric:tabular-nums;color:var(--primary)}
+.recognition-pill-time{color:var(--onSurfaceVariant);font-variant-numeric:tabular-nums}
+.recognition-pill-open{display:inline-flex;align-items:center;gap:2px;color:var(--primary);margin-left:2px}

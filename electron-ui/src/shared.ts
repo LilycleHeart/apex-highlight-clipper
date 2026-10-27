@@ -6,7 +6,9 @@ export type State = 'empty'|'ready'|'starting'|'running'|'stopping'|'stopped'|'c
 export type HudField='account'|'weapons'|'teammates'|'hero'|'rank';
 export type HudEnrichmentField=HudField|'statistics'|'opponents'|'event_weapons';
 export interface HudEnrichmentResult {updated:number;errors:{directory:string;message:string}[];unconfirmed?:number}
-export interface Clip {algorithmFields?:readonly import('./algorithmStatus').AlgorithmFieldRecord[];/** 未经本软件处理、由用户添加的已有片段：只有画面 HUD 信息，移除时文件保留。 */imported?:boolean}
+export interface ClipCollection {id:string;name:string;createdAt:string;files:string[];synced:boolean}
+
+export interface Clip {algorithmFields?:readonly import('./algorithmStatus').AlgorithmFieldRecord[];/** 未经本软件处理、由用户添加的已有片段：只有画面 HUD 信息，移除时文件保留。 */imported?:boolean;fieldStatus?:Partial<Record<string,'confirmed'|'unknown'>>}
 export interface WorkerEvent {performance_policy?:import('./performanceOptions').PerformanceRuntime}
 export type HudEnrichmentMode='missing'|'refresh';
 export interface Options extends PerformanceOptions {export_layout:'task'|'flat';scan_mode:'smart'|'complete'|'indexed';fps:number;gap:number;pre:number;post:number;delete_source:boolean;pipeline:boolean;hud_info_enabled:boolean;hud_info_fields:HudField[];filter_enabled:boolean;filter_mode:'any'|'all';min_damage:number;min_kills:number;min_assists:number;min_duration:number}
@@ -65,6 +67,11 @@ export interface DesktopAPI {
   upgradeHud(selection:import('./algorithmStatus').UpgradeSelection[],includeUnknown:boolean):Promise<HudEnrichmentResult>;
  library():Promise<LibrarySnapshot>;
  deleteClip(file:string):Promise<void>;
+  removeImported(files:string[]):Promise<{removed:number}>;
+  listCollections():Promise<ClipCollection[]>;
+  addToCollection(files:string[],name:string,syncFolder:boolean):Promise<{collection:ClipCollection;moved:number}>;
+  removeFromCollection(id:string,files:string[]):Promise<{collection:ClipCollection}>;
+  deleteCollection(id:string):Promise<{removed:number}>;
  ignoreLibraryErrors():Promise<LibrarySnapshot>;
  chooseLibraryRoot():Promise<boolean>;
  addExistingClips():Promise<AddExistingResult|null>;

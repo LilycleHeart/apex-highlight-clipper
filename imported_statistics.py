@@ -22,6 +22,8 @@ def build_statistics(source, profile=None, on_activity=None):
     source = Path(source)
     meta, video = probe(source)
     duration = float(meta['format']['duration'])
+    if profile and list(profile.get('reference_size') or []) != [video['width'], video['height']]:
+        profile = None
     profile = profile or detect_video(source, video, duration, BASE_PROFILE)
     work = Path(tempfile.mkdtemp(prefix='ahc-imported-stat-'))
     try:
