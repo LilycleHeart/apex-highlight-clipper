@@ -55,16 +55,24 @@ def build_statistics(source, profile=None, on_activity=None):
 
 
 def apply_to_manifest(manifest_path, source, statistics):
-    """把片段级统计写回导入清单里对应的那一条记录。"""
+    return apply_many(manifest_path, {source: statistics})
+
+
+def apply_many(manifest_path, results):
+    """一次写回多条片段的统计，避免每段都重读写整个导入清单。"""
+    if not results:
+        return 0
     manifest_path = Path(manifest_path)
     manifest = json.loads(manifest_path.read_text('utf-8-sig'))
-    target = str(Path(source).resolve()).casefold()
+    wanted = {str(Path(source).resolve()).casefold(): value for source, value in results.items()}
     changed = 0
     for clip in manifest.get('clips', []):
         output = clip.get('output')
-        if isinstance(output, str) and str(Path(output).resolve()).casefold() == target:
-            clip['statistics'] = statistics
-            changed += 1
+        if isinstance(output, str):
+            value = wanted.get(str(Path(output).resolve()).casefold())
+            if value is not None:
+                clip['statistics'] = value
+                changed += 1
     if changed:
         from apex_clipper import write_json
         write_json(manifest_path, manifest)

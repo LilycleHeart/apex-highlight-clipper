@@ -971,23 +971,36 @@ def _run_job_sequence(request,direct,emit):
                     directory=Path(job['directory']);statistics=directory/'statistics.json'
                     if not statistics.is_file():
                         # 导入的成片没有任务统计：把成片本身当源视频补片段级统计（不导出）。
-                        from imported_statistics import build_statistics, apply_to_manifest
-                        for index,file in enumerate(job['files'],1):
-                            check_cancel()
-                            from hud_recovery import claim,commit_extra,failed as mark_failed
-                            claim(file,extra)
-                            def activity(event):
-                                emit({'type':'hud-info-activity','index':offset+index,'total':total,'file':file,
-                                      'fields':extra,'backend':request.get('backend','cpu'),**event})
-                            try:
-                                activity({'message':'采样成片并读取计分栏','frames_done':0,'frames_total':0})
-                                result=build_statistics(file,on_activity=activity)
-                                apply_to_manifest(directory/'export.json',file,result)
-                                updated.add(file);commit_extra(directory,file,extra,())
-                            except Exception as error:
-                                mark_failed(file,extra,error)
-                                errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
-                            emit({'type':'hud-info-progress','index':offset+index,'total':total,'file':file})
+                        # 同一目录常常有上百段，必须组内并行，否则只剩一条串行流。
+                        from imported_statistics import build_statistics, apply_many
+                        from concurrent.futures import ThreadPoolExecutor,as_completed
+                        import threading
+                        from hud_recovery import claim,commit_extra,failed as mark_failed
+                        workers=min(6,max(1,int(os.environ.get('APEX_HUD_WORKERS','3'))))
+                        emit_lock=threading.Lock();progress={'index':0};done={'value':0}
+                        def report(file,event):
+                            with emit_lock:
+                                emit({'type':'hud-info-activity','index':offset+done['value'],'total':total,
+                                      'file':file,'fields':extra,'backend':request.get('backend','cpu'),**event})
+                        def build(file):
+                            check_cancel();claim(file,extra)
+                            report(file,{'message':'采样成片并读取计分栏','frames_done':0,'frames_total':0})
+                            return build_statistics(file,on_activity=lambda event:report(file,event))
+                        results={}
+                        with ThreadPoolExecutor(max_workers=workers,thread_name_prefix='imported-stat') as pool:
+                            futures={pool.submit(build,file):file for file in job['files']}
+                            for future in as_completed(futures):
+                                file=futures[future]
+                                try:
+                                    results[file]=future.result()
+                                    updated.add(file);commit_extra(directory,file,extra,())
+                                except Exception as error:
+                                    mark_failed(file,extra,error)
+                                    errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
+                                with emit_lock:
+                                    done['value']+=1
+                                    emit({'type':'hud-info-progress','index':offset+done['value'],'total':total,'file':file})
+                        apply_many(directory/'export.json',results)
                         offset+=count
                         continue
                     original=json.loads(statistics.read_text('utf-8-sig'));clips=exported_clips(directory,original)
