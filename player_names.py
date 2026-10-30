@@ -38,9 +38,13 @@ def player_name(text,*,allow_rendered_square=False):
     name = strip_clan_tag(re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', text))).strip(' ()（）♫♪◀▶□')
     key = name_key(name)
     # 固定昵称框也可能是纯数字账号；不要只保留被 OCR 错读出字母的版本。
-    if not 2 <= len(name) <= 40 or not (any(c.isalpha() for c in name) or re.fullmatch(r'\d{5,20}',name)):
+    # 也允许数字夹着符号的账号（如 811<3）；单纯数字仍要求足够长，避免把计数读成名字。
+    if not 2 <= len(name) <= 40 or not (any(c.isalpha() for c in name) or re.fullmatch(r'\d{5,20}',name) or re.fullmatch(r'\d+(?:[<>]+\d+)+',name) and len(name)>=4):
         return ''
-    if re.search(r'[\x00-\x1f\ufffd<>:=+!?！？。]', name) or '□' in name and not allow_rendered_square:
+    if re.search(r'[\x00-\x1f\ufffd:=+!?！？。]', name) or '□' in name and not allow_rendered_square:
+        return ''
+    # 昵称中间的 < > 是真实字符（如 811<3）；位于首尾或贴着空格时更像图标、箭头误读。
+    if re.search(r'(?<!\w)[<>]|[<>](?!\w)', name):
         return ''
     if key.upper() in {'MAXLEVEL', 'DEATHBOXRECOVERY', 'RECOVERBANNER', 'SPECTATING', 'DAMAGEINFLICTED', 'KNOCKEDDOWN', 'ELIMINATED', 'ASSIST'}:
         return ''

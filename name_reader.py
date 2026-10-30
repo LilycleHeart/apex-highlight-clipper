@@ -150,6 +150,26 @@ class NameReader:
                 value=name_value(reads[offset*2:offset*2+2])
                 if value and value['confidence']>=.85:
                     results[index]=review_latin_glyphs(views[index*3+1:index*3+3],reader,self.recognizer,{**value,'reader':'latin_name'})
+        # 一两个字符的短名缺少上下文，多语言模型常把 TI 读成 π/T；改由英文名模型读加边距放大的
+        # 原图，两种放大倍数须读出同一合法拼写，跨帧共识仍由调用方完成。
+        short=[index for index,value in enumerate(results) if value is None and patches[index].size and patches[index].shape[1]<=patches[index].shape[0]*3]
+        if short:
+            from target_name_reader import model_available,LATIN_MODEL_PATH
+            if model_available(latin=True):
+                from engine_pool import pooled_engine
+                from gpu_ocr_backend import create_ocr_engine
+                backend=os.environ.get('APEX_OCR_BACKEND','cpu')
+                reader=pooled_engine(('short-player-names-v1',backend),lambda:create_ocr_engine(backend=backend,model_path=LATIN_MODEL_PATH,rec_batch_num=1)).text_rec
+                crops=[]
+                for index in short:
+                    patch=patches[index];background=tuple(int(c) for c in np.median(patch.reshape(-1,3),axis=0))
+                    padded=cv2.copyMakeBorder(patch,2,2,2,2,cv2.BORDER_CONSTANT,value=background)
+                    crops.extend(cv2.resize(padded,None,fx=factor,fy=factor,interpolation=cv2.INTER_CUBIC) for factor in [2,4])
+                reads=reader(crops)[0]
+                for offset,index in enumerate(short):
+                    pair=reads[offset*2:offset*2+2];names={player_name(text) for text,_ in pair}
+                    if len(names)==1 and next(iter(names)) and all(confidence>=.85 for _,confidence in pair):
+                        results[index]={'name':next(iter(names)),'confidence':float(min(c for _,c in pair)),'view_agreement':2,'reader':'short_latin_name'}
         from japanese_name_reader import has_kana,JapaneseNameReader
         for index,value in enumerate(results):
             if value and has_kana(value['name']):

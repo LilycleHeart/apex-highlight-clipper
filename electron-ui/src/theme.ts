@@ -5,7 +5,7 @@ const cache=new Map<string,Record<string,string>>();
 let applied='';
 export function applyTheme(prefs:ThemePreferences,system:SystemTheme){
  try{
-  const seed=prefs.seed||'#1676ff',dark=prefs.mode==='dark'||prefs.mode==='system'&&system.dark,key=seed+':'+dark;
+  const seed=prefs.seed||'#38bdf8',dark=prefs.mode==='dark'||prefs.mode==='system'&&system.dark,key=seed+':'+dark;
   let tokens=cache.get(key);
   if(!tokens){
    const scheme=new SchemeVibrant(Hct.fromInt(argbFromHex(seed)),dark,0,'2021','phone');

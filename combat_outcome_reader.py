@@ -15,6 +15,8 @@ from weapon_reader import new_engine,MODEL_SHA
 
 KINDS={'knock','assist','elimination'}
 RULE_VERSION='own-center-result-v4'
+# 本人提示的帧级确认规则；只影响统计/敌人名识别版本，不改变任务级筛选规则版本。
+CONFIRMATION_VERSION='prefix-confirmation-v2'
 PARSER_VERSION='target-name-v15'
 # 没有像素模板的界面语言改用「行首语法 + 相邻帧一致」确认；只改这一阶段的检查点，不使全库字段失效。
 TOAST_GRAMMAR_VERSION='toast-grammar-v1'
@@ -855,7 +857,7 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
     checkpoint.parent.mkdir(parents=True,exist_ok=True)
     templates={str(BASE/e['gray']):hashlib.sha256((BASE/e['gray']).read_bytes()).hexdigest() for e in profile.get('prefix_templates',[])}
     signature=hashlib.sha256(json.dumps({'version':RULE_VERSION,'source':identity,'fps':fps,'samples':str(samples.resolve()),
-        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,'stop_after_positive':_stop_after_positive,'reader_version':'toast-lines-v8','grammar':TOAST_GRAMMAR_VERSION,
+        'profile':profile,'templates':templates,'model':MODEL_SHA,'only_existing':_only_existing,'stop_after_positive':_stop_after_positive,'reader_version':'toast-lines-v8','grammar':TOAST_GRAMMAR_VERSION,'confirmation':CONFIRMATION_VERSION,
         'bounds':[(c['start'],c['end']) for c in candidates]},sort_keys=True).encode()).hexdigest()
     if checkpoint.exists():
         saved=json.loads(checkpoint.read_text(encoding='utf-8'))
@@ -935,11 +937,13 @@ def inspect_combat_outcomes(cache,samples,candidates,profile=None,checkpoint=Non
                         continue
                     if event['confidence']>=.85 and support>=threshold:
                         item['events'].append({**event,'time':item['time'],'frame':item['frame'],'template_score':support,'ownership':'self'})
-                    elif event['confidence']>=.65 and support>=.9:
+                    elif event['confidence']>=.65 and support>=.85:
+                        # 真实录像中同一条击倒提示连续多帧的行首图形得分稳定在 0.87–0.90，而 OCR 置信度只有 0.6–0.8；
+                        # 相邻帧同一行首位置（同一条提示）均达标才确认，单帧仍不算。
                         potential={**event,'time':item['time'],'frame':item['frame'],'template_score':support,'ownership':'self'}
                         possible.append(potential)
                         if any(abs(previous['time']-item['time'])<=1.1 and previous['time']!=item['time'] and
-                               any(e['kind']==event['kind'] for e in previous.get('possible_events',[])) for previous in observations.values()):
+                               any(e['kind']==event['kind'] and (min(support,e.get('template_score',0))>=.9 or same_toast_slot(e,event)) for e in previous.get('possible_events',[])) for previous in observations.values()):
                             item['events'].append({**potential,'confirmation':'two_frame_prefix'})
                 if possible: item['possible_events']=possible
                 if item['events']: item['status']='self_event'

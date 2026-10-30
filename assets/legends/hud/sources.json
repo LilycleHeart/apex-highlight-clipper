@@ -81,6 +81,42 @@
       "sha256": "b68ee9d74f11a9f4d4e0118507834495cf9123332bc9b6dec595d1063ac70a8f",
       "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ash",
       "note": "Native Phase Breach blade and circle, identified against the official ability artwork. Deidentified glyph mask; held-out recordings used for validation."
+    },
+    {
+      "id": "sparrow",
+      "slot": "ultimate",
+      "file": "sparrow-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "a2d5a7614a6666541b769b0f7cf78697e8276cd9478463b591a969e32b1f0b34",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/sparrow",
+      "note": "Native self ultimate glyph (median row-contrast mask over several frames of one capture clip, frame and scene removed). Identified against the official ability artwork; validated on clips other than the capture."
+    },
+    {
+      "id": "valkyrie",
+      "slot": "ultimate",
+      "file": "valkyrie-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "bd5664b2f62edb3a6da726df44cf56d1d948399989e942e88652162c5fdace7a",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/valkyrie",
+      "note": "Native self ultimate glyph (median row-contrast mask over several frames of one capture clip, frame and scene removed). Identified against the official ability artwork; validated on clips other than the capture."
+    },
+    {
+      "id": "horizon",
+      "slot": "ultimate",
+      "file": "horizon-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "c736c40b95ebab0dcc516a05bece20e3722486d771f2609ac923327a45c3af97",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/horizon",
+      "note": "Native self ultimate glyph (median row-contrast mask over several frames of one capture clip, frame and scene removed). Identified against the official ability artwork; validated on clips other than the capture."
+    },
+    {
+      "id": "ballistic",
+      "slot": "ultimate",
+      "file": "ballistic-ultimate.png",
+      "mode": "row_contrast",
+      "sha256": "8abc8490bc178ced75f62f79d3cbb94a92cab6f6060d90b002a7020f0e5a2c22",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ballistic",
+      "note": "Native self ultimate glyph (median row-contrast mask over several frames of one capture clip, frame and scene removed). Identified against the official ability artwork; validated on clips other than the capture."
     }
   ]
 }

@@ -402,9 +402,13 @@ def read_hud(samples, profile, fps, output, start=0, end=math.inf,optimize=True,
         retry=[(row,icon) for row,icon in zip(rows[before_count:],kill_icons) if row['kills'] is None and icon is not None]
         if retry:
             recognized,_=recognizer([icon for _,icon in retry])
-            for (row,_),(text,score) in zip(retry,recognized):
+            from stat_counter_fallback import ZERO_ALIASES,zero_glyph_proof
+            for (row,icon),(text,score) in zip(retry,recognized):
                 value=numeric(text,score,60,.88)
                 if value is not None:row.update(kills=value,kills_text=text,kills_score=float(score),kills_source='icon_anchor')
+                # 骷髅图标右侧细体单个 0 常被读成 D/口；固定框与图标框都读成 0 的同形字、像素是唯一居中闭合环时才记为 0。
+                elif text.strip() in ZERO_ALIASES and row.get('kills_text','').strip() in ZERO_ALIASES and zero_glyph_proof(icon) is not None:
+                    row.update(kills=0,kills_text=text,kills_score=float(score),kills_source='icon_anchor_zero_ring')
         if journal: journal.append(rows[before_count:])
         from ui_observer import preview
         preview(batch[-1],rows[-1]['time'])

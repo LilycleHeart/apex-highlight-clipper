@@ -51,7 +51,9 @@ class WeaponCoverageTests(unittest.TestCase):
     def test_similar_energy_names_are_not_conflated(self):
         self.assertEqual(resolve_weapon_text('電能步槍')['id'],'charge_rifle')
         self.assertEqual(resolve_weapon_text('電能衝鋒槍')['id'],'volt')
-        self.assertIsNone(resolve_weapon_text('電能'))
+        # 繁中 HUD 武器栏里电能冲锋枪只显示「電能」（三段真实录像核对）；电能步枪显示完整「電能步槍」。
+        self.assertEqual(resolve_weapon_text('電能')['id'],'volt')
+        self.assertIsNone(resolve_weapon_text('電能步',.8))
 
     def test_garbage_and_ambiguous_labels_remain_unknown(self):
         for text in ['','死','R','冲锋枪','完全不认识的枪','R-99 CAR']:

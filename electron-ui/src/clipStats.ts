@@ -2,7 +2,7 @@ import type {OutcomeEvidence} from './shared';
 import {withProcessStarts,type PlaybackAnalysis} from './combatPlayback';
 
 const count=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null;
-const nativeNumericMethods=new Set(['numeric-three-model-v3','numeric-three-model-v4']);
+const nativeNumericMethods=new Set(['numeric-three-model-v3','numeric-three-model-v4','numeric-three-model-v5']);
 const eventCompletionVersion='native-event-completion-v1';
 const nativeTargetNameVersions=new Set(['target-name-v14','target-name-v15']);
 const resultPrefix=/^(?:(?:ASSIST|助攻)\s*[,.:，：]*\s*|KN[O0]CK(?:ED)?\s*D[O0]WN\s*|ELIMINAT(?:ED|ION)\s*|(?:已)?[擊击撃擎驛驿]倒\s*|(?:已)?消[滅灭減减]\s*)/i;
@@ -30,7 +30,8 @@ export function outcomeTarget(event:{target_text?:unknown;target?:unknown;text?:
 }
 
 type VideoIdentity={path:string;size:number;mtime_ms:number;aliases?:string[]};
-const weaponContextVersion='event-weapon-context-v1';
+// v2 放宽了枪名分数门槛并增加「战果前持枪」；v1 结果按原规则继续显示，重新识别后升级。
+const weaponContextVersions=new Set(['event-weapon-context-v1','event-weapon-context-v2']);
 const outcomeIdentity=(event:any)=>`${event.kind}-${event.time}-${event.text||''}-${JSON.stringify(event.prefix_box||event.box||[])}`;
 // 成片被片段库确认移动后，旧路径记在 moved_from（aliases）；其他路径的证据仍不能借用。
 const samePath=(a:string,b:string)=>a.toLowerCase().replaceAll('\\','/')===b.toLowerCase().replaceAll('\\','/');
@@ -108,7 +109,7 @@ function nativeEndProof(endpoint:any,key:string):boolean{
 
 function weaponContextBound(event:any,clip:any,fileIdentity?:VideoIdentity):boolean{
  const context=event?.weapon_context,bound=context?.event;
- if(context?.version!==weaponContextVersion||!sameVideoIdentity(context.source,fileIdentity)||typeof context.recipe!=='string'||!/^[a-f0-9]{64}$/.test(context.recipe)||!['observed','unknown'].includes(context.status)||context.kill_attribution!==false||event.ownership!=='self'||event.confirmed!==true||!['knock','assist','elimination'].includes(event.kind)||!Number.isFinite(event.time)||bound?.kind!==event.kind||(bound.action??null)!==(event.action??null)||bound.time!==event.time)return false;
+ if(!weaponContextVersions.has(context?.version)||!sameVideoIdentity(context.source,fileIdentity)||typeof context.recipe!=='string'||!/^[a-f0-9]{64}$/.test(context.recipe)||!['observed','unknown'].includes(context.status)||context.kill_attribution!==false||event.ownership!=='self'||event.confirmed!==true||!['knock','assist','elimination'].includes(event.kind)||!Number.isFinite(event.time)||bound?.kind!==event.kind||(bound.action??null)!==(event.action??null)||bound.time!==event.time)return false;
  const rawOrigin=clip.metadata?.streams?.find((stream:any)=>stream.codec_type==='video')?.start_time;
  const origin=rawOrigin===undefined?0:Number(rawOrigin),local=bound.source_time??bound.time;
  return Number.isFinite(local)&&local>=0&&Number.isFinite(origin)&&Number.isFinite(clip.segment?.start)&&Math.abs(local-(event.time-clip.segment.start+origin))<=.001;
@@ -120,15 +121,19 @@ function weaponIconSimilarity(a:unknown,b:unknown):number{
  for(let i=0;i<left.length;i++){const x=left.charCodeAt(i),y=right.charCodeAt(i);total+=bits(x)+bits(y);intersection+=bits(x&y);}
  return total?2*intersection/total:0;
 }
-function weaponContextFor(event:any,clip:any,fileIdentity?:VideoIdentity):OutcomeEvidence['weaponContext']{
+export function weaponContextFor(event:any,clip:any,fileIdentity?:VideoIdentity):OutcomeEvidence['weaponContext']{
  if(!weaponContextBound(event,clip,fileIdentity))return undefined;
  const context=event.weapon_context,weapon=context.weapon,second=context.event.source_time??context.event.time;
- if(context.status!=='observed'||!['nearby_firing','held_at_event'].includes(context.scope)||typeof weapon?.id!=='string'||!weapon.id||typeof weapon.name!=='string'||!weapon.name.trim()||weapon.name.length>60||/[\x00-\x1f<>]/.test(weapon.name)||!Array.isArray(context.evidence))return undefined;
+ const v2=context.version==='event-weapon-context-v2',minimum=v2?.75:.80;
+ if(v2&&context.scope==='held_near_event')return nearEventContext(context,weapon,second);
+ if(context.status!=='observed'||!['nearby_firing','held_at_event',...(v2?['held_before_event']:[])].includes(context.scope)||typeof weapon?.id!=='string'||!weapon.id||typeof weapon.name!=='string'||!weapon.name.trim()||weapon.name.length>60||/[\x00-\x1f<>]/.test(weapon.name)||!Array.isArray(context.evidence))return undefined;
  const rows=context.evidence.filter((row:any)=>typeof row?.actual_pts==='number'&&Number.isFinite(row.actual_pts)&&row.actual_pts>=0&&row.actual_pts>=second-1.5&&row.actual_pts<=second+.25).sort((a:any,b:any)=>a.actual_pts-b.actual_pts);
  if(rows.length!==context.evidence.length||rows.some((row:any)=>row.excluded_view)||new Set(rows.map((row:any)=>row.actual_pts)).size!==rows.length||rows.length<2)return undefined;
  const sameWeapon=(a:any,b:any)=>a?.weapon?.id===b?.weapon?.id&&(a?.weapon?.variant??null)===(b?.weapon?.variant??null)&&a?.weapon?.name===b?.weapon?.name;
- const usable=(row:any)=>row.weapon&&[0,1].includes(row.slot)&&typeof row.confidence==='number'&&Number.isFinite(row.confidence)&&row.confidence>=.80&&Number.isInteger(row.name_view_agreement)&&row.name_view_agreement>=2;
- const sameHeld=(a:any,b:any)=>usable(a)&&usable(b)&&a.slot===b.slot&&sameWeapon(a,b)&&weaponIconSimilarity(a.weapon_icon,b.weapon_icon)>=.80;
+ const usable=(row:any)=>row.weapon&&[0,1].includes(row.slot)&&typeof row.confidence==='number'&&Number.isFinite(row.confidence)&&row.confidence>=minimum&&Number.isInteger(row.name_view_agreement)&&row.name_view_agreement>=2;
+ // v2 另存图标白色前景掩膜：开枪闪光改变边缘纹理但不改图标形状，掩膜同形（≥0.88）亦视为同一图标。
+ const sameIcon=(a:any,b:any)=>weaponIconSimilarity(a.weapon_icon,b.weapon_icon)>=.80||v2&&weaponIconSimilarity(a.weapon_icon_mask,b.weapon_icon_mask)>=.88;
+ const sameHeld=(a:any,b:any)=>usable(a)&&usable(b)&&a.slot===b.slot&&sameWeapon(a,b)&&sameIcon(a,b);
  const shots:any[]=[];
  for(let i=1;i<rows.length;i++){
   const before=rows[i-1],after=rows[i],a=before.ammo,b=after.ammo,interval=after.actual_pts-before.actual_pts;
@@ -140,8 +145,38 @@ function weaponContextFor(event:any,clip:any,fileIdentity?:VideoIdentity):Outcom
   return {scope:'nearby_firing',weapon:weapon.name,label:'战果前射击：'+weapon.name};
  }
  const held=rows.filter((row:any)=>row.actual_pts>=second-.04&&row.actual_pts<=second+.25);
+ if(context.scope==='held_before_event'){
+  // 与 event_weapon_reader 相同：事件前可用帧至少两帧同槽同枪，期间没有另一把枪。
+  const valid=rows.filter((row:any)=>usable(row)),last=valid[valid.length-1];
+  if(last&&sameWeapon(last,{weapon})&&!valid.some((row:any)=>!sameWeapon(row,last))&&valid.filter((row:any)=>sameHeld(last,row)).length>=2)
+   return {scope:'held_before_event',weapon:weapon.name,label:'战果前持枪：'+weapon.name};
+  // 每帧只有一个视图读对时：至少三帧不同画面同槽同枪、图标同形，期间没有其他枪名。
+  const read=rows.filter((row:any)=>row.weapon&&[0,1].includes(row.slot)&&typeof row.confidence==='number'&&row.confidence>=minimum&&Number.isInteger(row.name_view_agreement)&&row.name_view_agreement>=1);
+  const tail=read[read.length-1];
+  if(context.reason!=='three_frame_single_view_consensus'||read.length<3||!tail||!sameWeapon(tail,{weapon})||read.some((row:any)=>row.slot!==tail.slot||!sameWeapon(row,tail)||!sameIcon(row,tail)))return undefined;
+  return {scope:'held_before_event',weapon:weapon.name,label:'战果前持枪：'+weapon.name};
+ }
  if(context.scope!=='held_at_event'||held.length<2||!sameWeapon(held[0],{weapon})||!held.slice(1).every((row:any)=>sameHeld(held[0],row)))return undefined;
  return {scope:'held_at_event',weapon:weapon.name,label:'当时持枪：'+weapon.name};
+}
+
+/** 与 event_weapon_reader.context_near_event 相同：事件前 6 秒至后 3 秒，从事件向两侧取最近的可读帧，遇到另一把枪即停；
+ *  这一串同槽同枪、图标同形，事件前后各至少一帧或事件前两帧，总计两帧双视图一致或三帧单视图一致，中间没有离开本人视角。 */
+function nearEventContext(context:any,weapon:any,second:number):OutcomeEvidence['weaponContext']{
+ if(context.status!=='observed'||context.reason!=='same_slot_chain_near_event'||typeof weapon?.id!=='string'||!weapon.id||typeof weapon.name!=='string'||!weapon.name.trim()||weapon.name.length>60||/[\x00-\x1f<>]/.test(weapon.name)||!Array.isArray(context.evidence))return undefined;
+ const rows=context.evidence.filter((row:any)=>typeof row?.actual_pts==='number'&&Number.isFinite(row.actual_pts)&&row.actual_pts>=0&&row.actual_pts>=second-6&&row.actual_pts<=second+3).sort((a:any,b:any)=>a.actual_pts-b.actual_pts);
+ if(rows.length!==context.evidence.length||new Set(rows.map((row:any)=>row.actual_pts)).size!==rows.length)return undefined;
+ const read=(row:any)=>!row.excluded_view&&row.weapon&&[0,1].includes(row.slot)&&typeof row.confidence==='number'&&row.confidence>=.75&&Number.isInteger(row.name_view_agreement)&&row.name_view_agreement>=1;
+ const icon=(a:any,b:any)=>weaponIconSimilarity(a.weapon_icon,b.weapon_icon)>=.80||weaponIconSimilarity(a.weapon_icon_mask,b.weapon_icon_mask)>=.88;
+ const reads=rows.filter(read),before=reads.filter((row:any)=>row.actual_pts<=second+.25).reverse(),after=reads.filter((row:any)=>row.actual_pts>second+.25);
+ const anchor=before[0]||after[0];if(!anchor||anchor.weapon.id!==weapon.id||anchor.weapon.name!==weapon.name)return undefined;
+ const same=(row:any)=>row.slot===anchor.slot&&row.weapon.id===anchor.weapon.id&&(row.weapon.variant??null)===(anchor.weapon.variant??null)&&icon(anchor,row);
+ const chain:any[]=[];for(const side of [before,after])for(const row of side){if(!same(row))break;chain.push(row);}
+ const left=chain.filter((row:any)=>row.actual_pts<=second+.25).length,right=chain.length-left,strong=chain.filter((row:any)=>row.name_view_agreement>=2).length;
+ if(!chain.length||!(strong>=2||chain.length>=3)||!(left>0&&(right>0||left>=2)))return undefined;
+ const first=Math.min(...chain.map((row:any)=>row.actual_pts)),last=Math.max(...chain.map((row:any)=>row.actual_pts));
+ if(rows.some((row:any)=>row.excluded_view&&row.actual_pts>=first&&row.actual_pts<=last))return undefined;
+ return {scope:'held_near_event',weapon:weapon.name,label:'战果前后持枪：'+weapon.name};
 }
 
 function confirmedCenterCounts(events:any[],segment:any,fileIdentity?:VideoIdentity){
@@ -165,7 +200,9 @@ export function applyStatisticsCorrection(clip:any,fix:any,version:string,fileId
  const summary={...(clip.summary||{})};let changed=false,centerChanged=false;
  for(const key of counterFileValid&&(!Array.isArray(fix.repair_fields)||fix.repair_fields.includes('statistics'))?['kills','assists','damage']:[]){
   if(endpointUpdated&&fix.counter_verification_pending?.includes(key)&&!nativeCounterProof(fix,key)){
-   summary[key]=null;summary.statistics_partial={...summary.statistics_partial,[key]:true};changed=true;continue;
+   // 原片已删时复核只能看成片首尾；沿用导出时的完整统计作为已确认下限，不能清成未知。
+   const kept=Array.isArray(fix.source_lower_bound_fields)&&fix.source_lower_bound_fields.includes(key)?count(fix.counts?.[key]):null;
+   summary[key]=kept!==null&&Number.isInteger(kept)?kept:null;summary.statistics_partial={...summary.statistics_partial,[key]:true};changed=true;continue;
   }
   const value=count(fix.counts?.[key]);if(value===null||!Number.isInteger(value))continue;
   if(!nativeCounterProof(fix,key))continue;

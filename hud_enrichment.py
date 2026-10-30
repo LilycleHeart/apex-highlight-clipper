@@ -1,4 +1,5 @@
 """交战边界之外的可选信息识别；同一实现支持原录像与已导出片段。"""
+from collections import Counter
 from pathlib import Path
 from functools import lru_cache
 from contextlib import nullcontext,contextmanager
@@ -6,6 +7,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -33,7 +35,9 @@ def visual_field_recipe(field,reader_versions):
     # 每个工作进程只摘要一次源码和小型运行资源，不加载模型或解码录像。
     modules=['rank_reader.py'] if field=='rank' else ['hero_reader.py','hero_portrait_reader.py']
     root=BASE/('assets/ranks' if field=='rank' else 'assets/legends')
-    files=[BASE/name for name in modules]+sorted(file for file in root.rglob('*') if file.is_file() and file.suffix.lower() in {'.png','.json'})
+    # 模式图标也决定段位字段结果；替换模板后必须让旧段位结果失效。
+    roots=[root]+([BASE/'assets/modes'] if field=='rank' else [])
+    files=[BASE/name for name in modules]+sorted(file for base in roots for file in base.rglob('*') if file.is_file() and file.suffix.lower() in {'.png','.json'})
     digest=hashlib.sha256(json.dumps(reader_versions).encode())
     for file in files:
         digest.update(str(file.relative_to(BASE)).replace('\\','/').encode());digest.update(b'\0')
@@ -119,8 +123,108 @@ def name_patch(image,profile,bounds,*,left_padding=8):
             if score>=.83 and x>=round(25*sx*w/rw):matches.append((score,x,y,template.shape[0]))
         if matches:
             _,x,y,height=max(matches)
-            patch=patch[max(0,y-2):min(patch.shape[0],y+height+2),:max(1,x-2)]
+            return patch[max(0,y-2):min(patch.shape[0],y+height+2),:max(1,x-2)]
+        # 直播贴图常只盖住图标右半：图标左半仍高分匹配时，同样以它作为名字右边界。
+        for factor in [.75,1.,1.25]:
+            template=voice_template(round(sx*w/rw*factor,4),round(sy*h/rh*factor,4))
+            template=template[:,:max(3,round(template.shape[1]*.6))]
+            if patch.shape[0]<template.shape[0] or patch.shape[1]<template.shape[1]:continue
+            _,score,_,(x,y)=cv2.minMaxLoc(cv2.matchTemplate(gray,template,cv2.TM_CCOEFF_NORMED))
+            if score>=.88 and x>=round(25*sx*w/rw):matches.append((score,x,y,template.shape[0]))
+        if matches:
+            _,x,y,height=max(matches)
+            return patch[max(0,y-2):min(patch.shape[0],y+height+2),:max(1,x-2)]
+        # 图标整个被盖住时，只有末字与遮挡物之间留有明显背景空隙才把遮挡物左缘当右边界；
+        # 末字紧贴遮挡物说明尾字可能被盖住，保持原样交给清晰度检查排除。
+        cut=occluder_left(patch)
+        if cut is not None:return patch[:,:cut]
     return patch
+
+
+def confirm_by_weapon_names(images,profile,minimum=2):
+    """计分栏不存在（训练场）且名字行被遮挡时，用右下原生武器栏确认标准布局。
+
+    只接受标准界面、未拉伸的候选；至少两帧在固定枪名框里读出同一把枪械目录中的枪，
+    且两个视图一致、置信度不低于 0.85，才视为本人原生 HUD。
+    """
+    if profile.get('ui_layout')=='compact' or any(abs(v-profile['reference_size'][1]/1080)>.001 for v in profile.get('hud_scale',[1,1])):return None
+    from engine_pool import pooled_engine
+    from gpu_ocr_backend import create_ocr_engine
+    from weapon_reader import caption_views,recognize_text_views,MODEL_PATH,MODEL_SHA,WeaponTextReader
+    backend=os.environ.get('APEX_OCR_BACKEND','cpu')
+    reader=pooled_engine(('layout-weapon-names',backend,MODEL_SHA),lambda:WeaponTextReader(create_ocr_engine(backend=backend,model_path=MODEL_PATH,rec_batch_num=1).text_rec))
+    hits={}
+    for index,image in enumerate(images):
+        if list(image.shape[1::-1])!=list(profile['reference_size']) or inactive_view(image):continue
+        views=[];slots=[]
+        for slot,box in enumerate(profile['weapon_name_boxes']):
+            patch=roi(image,profile,box)
+            if patch.size:slots.append(slot);views.extend(caption_views(patch))
+        if not views:continue
+        texts=reader(views)[0]
+        for offset,slot in enumerate(slots):
+            pair=texts[offset*2:offset*2+2]
+            label,match=recognize_text_views(pair)
+            agreed=len(pair)==2 and all(confidence>=.85 for _,confidence in pair)
+            if match and agreed:hits.setdefault((slot,match['id']),set()).add(index)
+    best=max(hits.items(),key=lambda item:len(item[1]),default=None)
+    if not best or len(best[1])<minimum:return None
+    return {'weapon_name_frames':len(best[1]),'weapon_name_anchor':best[0][1]}
+
+
+def occluded_prefix(patch):
+    """遮挡物左侧仍可见的名字前缀；不补被盖住的字，只用于和已确认账号比对。"""
+    quality=name_patch_quality(patch)
+    if not quality['blocking']:return None
+    cut=min(box[0] for box in quality['blocking'])
+    return patch[:,:max(1,cut-1)] if cut>=patch.shape[0]*2 else None
+
+
+def resolve_account_prefixes(manifest,targets):
+    """尾部始终被遮挡的片段：多帧可见前缀唯一对应库内其他片段已确认的账号时才采用。"""
+    confirmed=Counter()
+    for clip in manifest.get('clips',[]):
+        info=clip.get('recognition',{}).get('hud_info',{})
+        value=info.get('account')
+        if not value or value.get('method')=='occluded_prefix_match':continue
+        if info.get('field_versions',{}).get('account',info.get('version'))!=field_version('account'):continue
+        confirmed[value['name']]+=1
+    names=[name for name,count in confirmed.items() if count>=3 and len(name_key(name))>=4]
+    for clip in targets:
+        info=clip.get('recognition',{}).get('hud_info',{})
+        if info.get('account') or info.get('version')!=VERSION:continue
+        votes=Counter();evidence=[]
+        for row in info.get('name_observations',[]):
+            # 整行读数没能通过清晰度复核时，同样只当作可见前缀使用。
+            prefix=row.get('account_prefix') or row.get('account')
+            if not prefix or prefix.get('confidence',0)<.85:continue
+            # 战队标签的方括号常被读丢；贴着遮挡物的末字只露出一部分，不参与比对。
+            key=name_key(re.sub(r'^\W*[A-Za-z0-9]{2,6}\W*\s+','',prefix['name']))[:-1]
+            # 拉丁名至少 3 个可见字符；假名/汉字信息量大，2 个字即可，但仍须覆盖账号一半以上。
+            enough=len(key)>=3 or len(key)>=2 and not key.isascii()
+            matches=[name for name in names if enough and len(key)*2>=len(name_key(name)) and name_key(name).startswith(key)]
+            # 完整读到另一个已确认账号（含短名）的画面也计票，片段里出现两个账号时不采用。
+            exact=[name for name,count in confirmed.items() if count>=3 and name_key(name)==name_key(prefix['name'])]
+            if exact:matches=exact
+            # 前缀须唯一对应一个已确认账号；对应多个或不对应任何账号的读数都不计票。
+            if len(matches)==1:votes[matches[0]]+=1;evidence.append({'time':row.get('time'),'prefix':prefix['name'],'confidence':prefix['confidence']})
+        if len(votes)==1 and next(iter(votes.values()))>=2:
+            name=next(iter(votes))
+            info['account']={'name':name,'confidence':min(item['confidence'] for item in evidence),'method':'occluded_prefix_match',
+                'votes':len(evidence),'prefix_evidence':evidence,'reference_clips':confirmed[name]}
+            info.setdefault('field_status',{})['account']='confirmed'
+
+
+def occluder_left(patch):
+    quality=name_patch_quality(patch)
+    if not quality['blocking']:return None
+    height=patch.shape[0];cut=min(box[0] for box in quality['blocking'])
+    if cut<height:return None
+    hsv=cv2.cvtColor(patch[:,:cut],cv2.COLOR_BGR2HSV)
+    text=(hsv[:,:,1]<85)&(hsv[:,:,2]>=170)
+    columns=np.nonzero(text[round(height*.2):round(height*.85)].any(axis=0))[0]
+    if not len(columns) or cut-int(columns[-1])-1<max(4,round(height*.11)):return None
+    return cut
 
 
 def name_patch_quality(patch,*,text_right=None):
@@ -142,7 +246,10 @@ def account_search_moments(observations,frame_times,start,end):
     if visible:
         seed=max(visible,key=lambda row:row['account'].get('confidence',0))['time']
         moments=[seed+delta for delta in [-2.4,-1.8,-1.2,-.6,.6,1.2,1.8,2.4]]
-    else:moments=[start+(end-start)*fraction for fraction in [.05,.25,.35,.45,.55,.65,.75,.95]]
+    else:
+        moments=[start+(end-start)*fraction for fraction in [.05,.25,.35,.45,.55,.65,.75,.95]]
+        # 长片段常在开头几秒是本人视角、之后整段观战；固定比例会全部落在观战里。
+        if end-start>60:moments+=[start+1,start+4,end-4]
     return sorted({max(start,min(end-.04,second)) for second in moments if end-start>.04 and all(abs(max(start,min(end-.04,second))-seen)>.1 for seen in frame_times)})
 
 
@@ -196,7 +303,23 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
     frames=list(native_frames(source,start,end))
     if not frames:raise ValueError('片段中没有可读取的HUD画面')
     if profile and list(profile.get('reference_size',[]))!=[video['width'],video['height']]:profile=None
-    if not profile:profile=detect_images([image for _,image in frames],video['width'],video['height'])
+    # 旧结果里未确认的布局不能沿用，否则头像补查、无图标规则会一直跳过。
+    if profile and profile.get('layout_status')!='confirmed':profile=None
+    if not profile:
+        profile=detect_images([image for _,image in frames],video['width'],video['height']);extra=[]
+        if profile.get('layout_status')!='confirmed' and end-start>1:
+            # 三个固定时刻可能都落在载入、背包或菜单画面；再补两帧本人 HUD 后重新检测，不全片扫描。
+            extra=[image for _,image in native_frames(source,start,end,[start+(end-start)*f for f in [.3,.7]])]
+            if extra:profile=detect_images([image for _,image in frames]+extra,video['width'],video['height'])
+            if profile.get('layout_status')!='confirmed':
+                # 计分栏被直播叠加层遮住时，改用左下本人名称行的固定语音图标确认原生布局。
+                from hud_layout import confirm_by_name_row
+                anchor=confirm_by_name_row([image for _,image in frames]+extra,profile)
+                if anchor:profile={**profile,'layout_status':'confirmed','layout_basis':'self_name_row',**anchor}
+            if profile.get('layout_status')!='confirmed':
+                # 训练场等没有伤害计分栏、名字又被贴图盖住时，右下武器栏仍是原生 HUD：标准几何下多帧读出枪械目录里的枪名才确认。
+                anchor=confirm_by_weapon_names([image for _,image in frames]+extra,profile)
+                if anchor:profile={**profile,'layout_status':'confirmed','layout_basis':'weapon_names',**anchor}
     notify('载入所选信息的识别模型',frames_total=len(frames))
     from weapon_reader import caption_views,recognize_text_views,MODEL_PATH,WeaponTextReader
     reader=None
@@ -257,6 +380,12 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
                 if key.startswith('weapon_'):target.extend(caption_views(patch))
                 else:target.append(patch)
         names=name_reader(crops) if crops else []
+        # 名字尾部被贴图盖住时整行读不准；另读遮挡物左侧可见前缀，仅作为与其他片段已确认账号比对的证据。
+        account_index=next((index for key,index in slots if key=='account'),None)
+        if account_index is not None and account_quality is None and not name_patch_quality(crops[account_index])['clear']:
+            visible=occluded_prefix(crops[account_index])
+            prefix=name_reader([visible])[0] if visible is not None else None
+            if prefix:row['account_prefix']={key:prefix[key] for key in ['name','confidence','view_agreement'] if key in prefix}
         for key,index in slots:
             value=names[index]
             if value:
@@ -324,6 +453,8 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
     visual_search=[]
     if missing_visual_fields(fields,observations,weapons) and end-start>.08:
         moments=[start+(end-start)*fraction for fraction in [.05,.25,.35,.65,.75,.95]]
+        # 长片段常在开头几秒是本人视角、之后整段观战；固定比例会全部落在观战里。
+        if end-start>60:moments=[start+1,start+4]+moments
         moments=[second for second in moments if all(abs(second-seen)>.1 for seen in frame_times)]
         for second,image in native_frames(source,start,end,moments):
             pending=missing_visual_fields(fields,observations,weapons)
@@ -354,8 +485,11 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
         selected=0
         for _,second,image,quality,record in sorted(candidates,key=lambda item:(-item[0],item[1])):
             candidate_profile=detect_images([image],video['width'],video['height'])
-            if candidate_profile.get('layout_status')!='confirmed':continue
-            if any(abs(a-b)>8 for a,b in zip(candidate_profile['account_roi'],profile['account_roi'])):continue
+            if candidate_profile.get('layout_status')!='confirmed':
+                # 计分栏被贴图挡住时，本帧名称行的语音图标同样证明是本人原生 HUD。
+                from hud_layout import confirm_by_name_row
+                if not confirm_by_name_row([image],profile,minimum=1):continue
+            elif any(abs(a-b)>8 for a,b in zip(candidate_profile['account_roi'],profile['account_roi'])):continue
             record['selected']=True;inspect(second,image,account_quality=quality);selected+=1
             notify('复核清晰账号画面',len(frame_times),len(frame_times)+3-selected)
             visible=[row for row in observations if row.get('account',{}).get('name_visibility',{}).get('verified')]
@@ -363,7 +497,7 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
         notify('账号清晰度检查完成',len(frame_times),len(frame_times))
         visible=[row for row in observations if row.get('account',{}).get('name_visibility',{}).get('verified')]
         if not stable(visible,'account'):confirm_account_pair()
-    names=[{k:v for k,v in row.items() if k in ['time','account','teammates']} for row in observations]
+    names=[{k:v for k,v in row.items() if k in ['time','account','account_prefix','teammates']} for row in observations]
     result={'version':VERSION,'field_versions':{field:field_version(field) for field in fields},'source_identity':before,
         'field_source_identities':{field:dict(before) for field in fields},'profile_source_identity':dict(before),'requested_fields':fields,'profile':profile,
         'checked_frames':len(frame_times),'frame_times':frame_times,'account':None,'teammates':[],'name_observations':names,
@@ -377,7 +511,9 @@ def recognize_video(source,fields=None,start=0.,end=None,profile=None,on_activit
         # 控制/混战等模式在段位位置显示的是时钟，本来就没有段位；多帧一致时
         # 明确记成「其他模式」，避免报告成「未识别段位」。
         clocks=[row['rank'] for row in observations if (row.get('rank') or {}).get('mode')=='other']
-        if len(clocks)>=2 and not result['rank']:
+        tier_votes=sum(1 for row in observations if (row.get('rank') or {}).get('tier') and (row['rank'].get('tier')==(result['rank'] or {}).get('tier')))
+        # 时钟帧多于段位帧时以时钟为准：遮挡帧里的「无图标」不能盖过多帧一致的模式时钟。
+        if len(clocks)>=2 and (not result['rank'] or len(clocks)>tier_votes):
             result['rank']={'tier':None,'name':'其他模式','division':None,'mode':'other',
                             'confidence':max(float(c.get('confidence') or 0) for c in clocks),
                             'method':'mode_clock_consensus','votes':len(clocks)}
@@ -486,8 +622,8 @@ def merge_name_observations(previous,current,fields):
     rows=[]
     for observations,fresh in [(previous,False),(current,True)]:
         for row in observations:
-            names={key:row[key] for key in ['account','teammates']
-                if row.get(key) and (key in fields)==fresh}
+            names={key:row[key] for key in ['account','account_prefix','teammates']
+                if row.get(key) and (('account' if key=='account_prefix' else key) in fields)==fresh}
             if names:rows.append({'time':row.get('time'),**names})
     return rows
 
@@ -701,7 +837,7 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
     name_updates={}
     share_match_fields(manifest,selected,fields,force,lambda:write_json(path,manifest),on_activity)
     from hud_read_queue import ClipReadQueue
-    workers=min(3,max(1,int(os.environ.get('APEX_HUD_WORKERS','1'))))
+    workers=max(1,int(os.environ.get('APEX_HUD_WORKERS','1')))
     queue=ClipReadQueue([(clip,fields,force) for clip in selected],_prepare_visual_clip,workers) if workers>1 or os.environ.get('APEX_ADAPTIVE_HUD')=='1' else nullcontext(None)
     with queue as prepared:
         for index,clip in enumerate(selected):
@@ -770,6 +906,7 @@ def enrich_manifest(directory,files=None,fields=None,on_progress=None,*,force=Fa
             if prepared:prepared.advance(index)
     # 手动重读只使用本次所选片段的姓名证据，旧片段不能把误识别带回来。
     reconcile_manifest_names({'clips':selected} if force else manifest,fields,targets=selected,updates=name_updates,match_keys=recorded_match_keys(manifest,directory))
+    if 'account' in fields:resolve_account_prefixes(manifest,[clip for clip in selected if 'account' in name_updates.get(id(clip),())])
     write_json(path,manifest)
     return manifest
 
@@ -976,50 +1113,70 @@ def _run_job_sequence(request,direct,emit):
                         from concurrent.futures import ThreadPoolExecutor,as_completed
                         import threading
                         from hud_recovery import claim,commit_extra,failed as mark_failed
-                        workers=min(6,max(1,int(os.environ.get('APEX_HUD_WORKERS','3'))))
+                        workers=max(1,int(os.environ.get('APEX_HUD_WORKERS','3')))
                         emit_lock=threading.Lock();progress={'index':0};done={'value':0}
                         def report(file,event):
                             with emit_lock:
                                 emit({'type':'hud-info-activity','index':offset+done['value'],'total':total,
                                       'file':file,'fields':extra,'backend':request.get('backend','cpu'),**event})
                         stored={}
-                        def stored_profile(file):
+                        def stored_clip(file):
                             key=str(directory)
                             if key not in stored:
                                 try:
                                     data=json.loads((directory/'export.json').read_text('utf-8-sig'))
-                                    stored[key]={str(Path(row.get('output','')).resolve()).casefold():
-                                                 ((row.get('recognition') or {}).get('hud_info') or {}).get('profile')
+                                    stored[key]={str(Path(row.get('output','')).resolve()).casefold():row
                                                  for row in data.get('clips',[]) if row.get('output')}
                                 except (OSError,ValueError):
                                     stored[key]={}
-                            return stored[key].get(str(Path(file).resolve()).casefold())
+                            return stored[key].get(str(Path(file).resolve()).casefold()) or {}
+                        def stored_profile(file):
+                            return ((stored_clip(file).get('recognition') or {}).get('hud_info') or {}).get('profile')
                         def build(file):
                             check_cancel();claim(file,extra)
-                            report(file,{'message':'采样成片并读取计分栏','frames_done':0,'frames_total':0})
-                            return build_statistics(file,profile=stored_profile(file),
-                                                    on_activity=lambda event:report(file,event))
-                        results={}
+                            from imported_statistics import attach_event_weapons,carry_weapon_contexts
+                            previous=stored_clip(file).get('statistics')
+                            if 'statistics' in extra or not previous:
+                                report(file,{'message':'采样成片并读取计分栏','frames_done':0,'frames_total':0})
+                                result=carry_weapon_contexts(previous,build_statistics(file,profile=stored_profile(file),
+                                                        on_activity=lambda event:report(file,event)))
+                            else:result=previous
+                            if 'event_weapons' in extra:
+                                # 战果附近持枪证据与任务片段同一套规则；只读事件前后少量原生帧。
+                                result=attach_event_weapons(file,result,profile=stored_profile(file),force=request.get('force',False),
+                                                            on_activity=lambda event:report(file,event))
+                            return result
+                        # 结果先写入导入清单，再推进检查点；暂停或中断时已完成的片段不会只标「完成」却丢掉统计。
+                        # 清单很大，按小批写回，避免每段都整份重写。
+                        pending={}
+                        def flush():
+                            if not pending:return
+                            apply_many(directory/'export.json',pending)
+                            for file in list(pending):
+                                updated.add(file);commit_extra(directory,file,extra,())
+                            pending.clear()
                         from engine_pool import init_worker_pool
-                        with ThreadPoolExecutor(max_workers=workers,initializer=init_worker_pool,thread_name_prefix='imported-stat') as pool:
-                            futures={pool.submit(build,file):file for file in job['files']}
-                            for future in as_completed(futures):
-                                file=futures[future]
-                                try:
-                                    results[file]=future.result()
-                                    updated.add(file);commit_extra(directory,file,extra,())
-                                except Exception as error:
-                                    mark_failed(file,extra,error)
-                                    errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
-                                with emit_lock:
-                                    done['value']+=1
-                                    emit({'type':'hud-info-progress','index':offset+done['value'],'total':total,'file':file})
-                        apply_many(directory/'export.json',results)
+                        try:
+                            with ThreadPoolExecutor(max_workers=workers,initializer=init_worker_pool,thread_name_prefix='imported-stat') as pool:
+                                futures={pool.submit(build,file):file for file in job['files']}
+                                for future in as_completed(futures):
+                                    file=futures[future]
+                                    try:
+                                        pending[file]=future.result()
+                                    except Exception as error:
+                                        mark_failed(file,extra,error)
+                                        errors.append({'directory':str(directory),'message':Path(file).name+'：'+str(error)})
+                                    if len(pending)>=8:flush()
+                                    with emit_lock:
+                                        done['value']+=1
+                                        emit({'type':'hud-info-progress','index':offset+done['value'],'total':total,'file':file})
+                        finally:
+                            flush()
                         offset+=count
                         continue
                     original=json.loads(statistics.read_text('utf-8-sig'));clips=exported_clips(directory,original)
                     from hud_read_queue import ClipReadQueue
-                    workers=min(3,max(1,int(os.environ.get('APEX_HUD_WORKERS','1'))))
+                    workers=max(1,int(os.environ.get('APEX_HUD_WORKERS','1')))
                     bounds=[tuple(next((clip.get('segment',{}) for clip,identity in clips if identity['path'].casefold()==str(Path(file).resolve()).casefold()),{}).get(key) for key in ['start','end']) for file in job['files']]
                     if len(set(bounds))!=len(bounds):workers=1
                     records=[{'directory':str(directory),'files':[file],'fields':extra,'native':True,'force':request.get('force',False),'recheck_existing':request.get('force',False),'recheck_names':'opponents' in extra} for file in job['files']]

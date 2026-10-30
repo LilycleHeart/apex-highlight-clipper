@@ -6,7 +6,7 @@ import time
 
 from ocr_cache import ExactTextCache
 
-METHOD='numeric-three-model-v4'
+METHOD='numeric-three-model-v5'
 
 
 class NumericModelCache(ExactTextCache):
@@ -55,7 +55,17 @@ class NumericReader:
                     alias=self.glyphs.decode_numeric_alias(text,image)
                     if alias is not None:text,confidence=alias,self.glyphs.last_match_score
                 values.append((text,confidence))
-            original=agreed_number(values);proposals={};proofs=separated_digit_views(image)
+            original=agreed_number(values)
+            if not original[0]:
+                # 计分栏细体单个 0 常被三个模型读成 0/D/口 且置信度低于 .88；
+                # 至少两个模型读成 0 的同形字、且像素字形是唯一一个居中闭合环时，才接受为 0。
+                from stat_counter_fallback import ZERO_ALIASES,zero_glyph_proof
+                zero_like=sum(1 for text,_ in values if isinstance(text,str) and text.strip() in ZERO_ALIASES)
+                proof=zero_glyph_proof(image) if zero_like>=2 else None
+                if proof:
+                    result.append(('0',.9));self.last_digit_reviews.append({'index':index,'previous':'','text':'0','confidence':.9,'method':'zero_glyph_ring','model_reads':values,**proof})
+                    continue
+            proposals={};proofs=separated_digit_views(image)
             counts={proof['glyph_count'] for proof in proofs if proof['glyph_count']>len(original[0])}
             for proof in proofs if counts else []:
                 reviews=[reader([proof['image']])[0][0] for reader in self.readers]

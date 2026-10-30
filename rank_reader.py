@@ -20,31 +20,51 @@ def empty_badge_region(roi):
     edges=float(np.count_nonzero(cv2.Canny(gray,40,100)))/gray.size
     return {'contrast':round(contrast,3),'edge_fraction':round(edges,4)} if contrast<24 and edges<.02 else None
 
-_MODE_CLOCK=None
+def shifted_squad_panel(roi):
+    """没有段位徽章时，「剩余小队数」白底面板右移进徽章位（真实 HUD 实测）；有徽章时此处是深色徽章。"""
+    h,w=roi.shape[:2]
+    box=roi[round(h*48/108):round(h*82/108),round(w*5/120):round(w*65/120)]
+    if not box.size:return None
+    hsv=cv2.cvtColor(box,cv2.COLOR_BGR2HSV)
+    white=float(((hsv[:,:,1]<45)&(hsv[:,:,2]>215)).mean());dark=float((hsv[:,:,2]<70).mean())
+    return {'panel_white':round(white,3),'panel_glyphs':round(dark,3)} if white>=.5 and .05<=dark<=.4 else None
+
+_MODE_ICONS=None
+# 段位位置出现的非排位模式图标（均裁自真实录像的本人 HUD）。阈值按真实画面实测：
+# 时钟在半透明背景上 0.48–0.78，绿色爱心 0.72；各段位徽章与无徽章面板对两者最高 0.32。
+MODE_ICONS=(('mode-clock.png','clock',.42),('mode-heart.png','heart',.55))
 
 def mode_clock_evidence(roi):
-    """右上角出现模式时钟（控制/混战等），说明这不是大逃杀排位画面。
+    """右上角出现模式图标（控制/混战的时钟、绿色爱心等），说明这不是大逃杀排位画面。
 
-    只在已确认布局的本人 HUD 区域里比对，阈值保持偏低但要求形状高度一致，
-    避免把排位徽章的外环误判成时钟。
+    只在已确认布局的本人 HUD 区域里比对，避免把排位徽章的外环误判成模式图标。
     """
-    global _MODE_CLOCK
-    if _MODE_CLOCK is None:
-        path=BASE/'assets/modes/mode-clock.png'
-        _MODE_CLOCK=read_image(str(path),cv2.IMREAD_COLOR) if path.is_file() else False
-    template=_MODE_CLOCK
-    if template is False or roi.size==0:return None
-    th,tw=template.shape[:2]
-    if roi.shape[0]<th or roi.shape[1]<tw:return None
-    _,score,_,point=cv2.minMaxLoc(cv2.matchTemplate(roi,template,cv2.TM_CCOEFF_NORMED))
-    return {'score':round(float(score),3),'point':[int(point[0]),int(point[1])]} if score>=.62 else None
+    global _MODE_ICONS
+    if _MODE_ICONS is None:
+        _MODE_ICONS=[(read_image(str(BASE/'assets/modes'/name),cv2.IMREAD_COLOR),icon,threshold)
+                     for name,icon,threshold in MODE_ICONS if (BASE/'assets/modes'/name).is_file()]
+    if roi.size==0:return None
+    best=None
+    for template,icon,threshold in _MODE_ICONS:
+        if template is None:continue
+        th,tw=template.shape[:2]
+        if roi.shape[0]<th or roi.shape[1]<tw:continue
+        _,score,_,point=cv2.minMaxLoc(cv2.matchTemplate(roi,template,cv2.TM_CCOEFF_NORMED))
+        if score>=threshold and (best is None or score-threshold>best['score']-best['threshold']):
+            best={'score':round(float(score),3),'point':[int(point[0]),int(point[1])],'icon':icon,'threshold':threshold}
+    if best:best.pop('threshold')
+    return best
 
 def palette_matches(template,patch):
     """同形徽章仍需符合其调色板；颜色证据不足时继续使用形状门槛。"""
     reference=cv2.cvtColor(template,cv2.COLOR_BGR2HSV);observed=cv2.cvtColor(patch,cv2.COLOR_BGR2HSV)
     mask=(reference[:,:,1]>60)&(reference[:,:,2]>110)
     colored=mask&(observed[:,:,1]>60)&(observed[:,:,2]>110)
-    if np.count_nonzero(colored)<max(8,np.count_nonzero(mask)*.25):return True
+    if np.count_nonzero(colored)<max(8,np.count_nonzero(mask)*.25):
+        # 彩色徽章（青铜/黄金/白金等）的着色位置在画面里几乎无饱和度：实为灰色徽章（如白银），不是同形彩色段位。
+        bright=mask&(observed[:,:,2]>110)
+        if np.count_nonzero(mask)>=16 and np.count_nonzero(bright)>=np.count_nonzero(mask)*.5 and float(np.median(observed[:,:,1][bright]))<30:return False
+        return True
     def hue(image,selection):
         angles=image[:,:,0][selection].astype(float)*np.pi/90
         weights=image[:,:,1][selection].astype(float)*image[:,:,2][selection]
@@ -87,6 +107,8 @@ class RankReader:
         # 用户规则：已校准的本人 HUD 右上角没有图标时归为匹配。
         # 仍由调用者按不同原生帧形成共识；布局未确认不能从空白画面猜模式。
         absence=empty_badge_region(native) if profile and profile.get('layout_status')=='confirmed' else None
+        if absence is None and profile and profile.get('layout_status')=='confirmed' and profile.get('ui_layout')!='compact':
+            absence=shifted_squad_panel(native)
         if absence is not None:
             return {'tier':'unranked','name':NAMES['unranked'],'division':None,'confidence':.8,
                     'method':'no_badge_matching_rule','absence_evidence':absence}

@@ -206,7 +206,9 @@
         "Volt SMG",
         "電能衝鋒槍",
         "VOLT",
-        "Volt"
+        "Volt",
+        "電能",
+        "电能"
       ],
       "prototypes": [],
       "calibration_times": [],
@@ -285,7 +287,9 @@
         "SPITFIRE",
         "M600",
         "噴火",
-        "喷火轻机枪"
+        "喷火轻机枪",
+        "噴火槍",
+        "喷火枪"
       ],
       "prototypes": [],
       "calibration_times": [],

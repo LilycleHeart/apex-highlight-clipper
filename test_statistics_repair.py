@@ -250,6 +250,81 @@ class StatisticsRepairTests(unittest.TestCase):
             self.assertEqual(result['segments'][0]['counts']['damage'],2076);self.assertEqual(result['segments'][0]['events'][0]['target_text'],'new')
             self.assertEqual(result['segments'][0]['repair_fields'],['opponents'])
 
+    def test_exported_clips_retries_while_sibling_commit_replaces_manifest(self):
+        # 同组片段提交时会原子替换 export.json；替换瞬间的读失败不能让后续片段报「不在导出记录中」。
+        from repair_cached_statistics import exported_clips
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve();clip=root/'clip.mp4';clip.write_bytes(b'x')
+            (root/'export.json').write_text(json.dumps({'source':{'a':1},'outputs':[str(clip)],'clips':[{'output':str(clip)}]}),'utf-8')
+            original=Path.read_text;calls={'n':0}
+            def flaky(self,*args,**kwargs):
+                if self.name=='export.json' and calls['n']<2:calls['n']+=1;raise PermissionError('replacing')
+                return original(self,*args,**kwargs)
+            with patch.object(Path,'read_text',flaky),patch('repair_cached_statistics.time.sleep'):
+                self.assertEqual(len(exported_clips(root,{'source':{'a':1}})),1)
+
+    def test_exported_view_redetects_layout_when_saved_profile_is_not_reusable(self):
+        # 强制重识别会作废旧布局；默认几何没有确认标记，事件武器会全部判为「布局未确认」，必须按成片重新检测。
+        from repair_cached_statistics import exported_view
+        clip={'segment':{'start':0,'end':10},'recognition':{'hud_info':{'profile':{'layout_version':'v','layout_status':'confirmed'}}}}
+        detected={'layout_version':'anchored-hud-v2','layout_status':'confirmed'}
+        with patch('apex_clipper.probe',return_value=({'format':{'duration':10}},{'width':2560,'height':1080})),\
+             patch('hud_recovery.active',return_value=True),patch('hud_recovery.profile_reusable',return_value=False),\
+             patch('hud_layout.detect_video',return_value=detected) as detect:
+            view=exported_view([(clip,{'path':'clip.mp4'})],{'start':0,'end':10},{})
+        self.assertEqual(view[4]['layout_status'],'confirmed');detect.assert_called_once()
+
+    def test_deleted_source_uses_original_match_start_zero_with_native_export_end(self):
+        # 成片开头计分栏未显示：起点取导出时完整原片判定的开局 0，终点取成片片尾双帧原生读数。
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);record,original,fresh=self.fixture(root)
+            report=json.loads(original.read_text('utf-8'));segment=report['segments'][0]
+            segment['counts'].update(kills=None,damage=None);segment['partial'].update(kills=True,damage=True)
+            segment['endpoint']={'baseline':{'kills':0,'assists':0,'damage':0},'last_hud':{},'initial_hidden_zero':True,'baseline_frames':[]}
+            original.write_text(json.dumps(report),'utf-8')
+            Path(report['source']['path']).unlink();(Path(record['analysis_cache'])/'hud.json').unlink()
+            exported=root/'videos/clip.mp4';exported.write_bytes(b'export fixture')
+            manifest={'metadata_directory':record['directory'],'video_directory':str(root/'videos'),'source':report['source'],'outputs':[str(exported)],'clips':[{'output':str(exported),'segment':{'start':0,'end':20}}]}
+            original.with_name('export.json').write_text(json.dumps(manifest),'utf-8')
+            fresh['baseline']=dict.fromkeys(['kills','assists','damage'])
+            fresh['last_hud']={'kills':2,'assists':None,'damage':384}
+            fresh['baseline_frames']=[{'native_time':t,'native_verified':True} for t in [.04,.08]]
+            fresh['end_frames']=[{'native_time':t,'native_verified':True,'kills':2,'damage':384} for t in [19.5,19.9]]
+            fresh.update(native_counter_scope='exported_visible_delta',export_baseline_fields=[])
+            with patch.dict(os.environ,{'APEX_DATA_ROOT':str(root/'software')}),patch('stat_counter_fallback.counter_recipe',return_value='recipe'),patch('repair_cached_statistics.exported_endpoint',return_value=copy.deepcopy(fresh)):
+                fixed=repair({**record,'native':True,'force':True})['segments'][0]
+            self.assertEqual((fixed['counts']['kills'],fixed['counts']['damage']),(2,384))
+            self.assertTrue(fixed['partial']['kills']);self.assertEqual(fixed['export_baseline_from_original'],{'damage':0,'kills':0})
+            # 导出时起点没有开局隐藏证据、也没有多帧一致：不能当 0。
+            segment['endpoint']={'baseline':{'kills':0,'damage':0},'initial_hidden_zero':False,'baseline_frames':[]}
+            original.write_text(json.dumps(report),'utf-8')
+            with patch.dict(os.environ,{'APEX_DATA_ROOT':str(root/'software')}),patch('stat_counter_fallback.counter_recipe',return_value='recipe2'),patch('repair_cached_statistics.exported_endpoint',return_value=copy.deepcopy(fresh)):
+                fixed=repair({**record,'native':True,'force':True})['segments'][0]
+            self.assertIsNone(fixed['counts']['kills'])
+
+    def test_deleted_source_force_recheck_keeps_export_counts_as_lower_bound(self):
+        # 导出后删除原片：强制重识别只能看成片首尾，读不到起点时不能把导出时的完整统计清空。
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);record,original,fresh=self.fixture(root)
+            report=json.loads(original.read_text('utf-8'));report['segments'][0]['counts'].update(kills=2)
+            report['segments'][0]['partial'].update(kills=False)
+            original.write_text(json.dumps(report),'utf-8');raw=original.read_bytes()
+            Path(report['source']['path']).unlink();(Path(record['analysis_cache'])/'hud.json').unlink()
+            exported=root/'videos/clip.mp4';exported.write_bytes(b'export fixture')
+            manifest={'metadata_directory':record['directory'],'video_directory':str(root/'videos'),'source':report['source'],'outputs':[str(exported)],'clips':[{'output':str(exported),'segment':{'start':0,'end':20}}]}
+            original.with_name('export.json').write_text(json.dumps(manifest),'utf-8')
+            for group in ['baseline','last_hud']:fresh[group]=dict.fromkeys(['kills','assists','damage'])
+            for group in ['baseline_frames','end_frames']:
+                for frame in fresh[group]:frame.pop('damage')
+            fresh.update(native_counter_scope='exported_visible_delta',export_baseline_fields=[])
+            with patch.dict(os.environ,{'APEX_DATA_ROOT':str(root/'software')}),patch('stat_counter_fallback.counter_recipe',return_value='recipe'),patch('repair_cached_statistics.exported_endpoint',return_value=fresh):
+                segment=repair({**record,'native':True,'force':True})['segments'][0]
+            self.assertEqual(segment['counts']['damage'],2076);self.assertEqual(segment['counts']['kills'],2)
+            self.assertTrue(segment['partial']['damage']);self.assertTrue(segment['partial']['kills'])
+            self.assertEqual(segment['source_lower_bound_fields'],['damage','kills'])
+            self.assertNotIn('damage',segment.get('native_repaired_fields',[]))
+            self.assertEqual(original.read_bytes(),raw)
+
     def fixture(self,root,native=True):
         destination=root/'videos/task';destination.mkdir(parents=True)
         source=root/'source.mp4';source.write_bytes(b'unchanged source')

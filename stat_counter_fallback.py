@@ -115,7 +115,7 @@ def separated_digit_views(image):
     return result
 
 
-KILLS_FALLBACK='icon-digit-span-v1'
+KILLS_FALLBACK='icon-digit-span-v2-zero-ring'
 
 
 def digit_span(patch):
@@ -144,6 +144,34 @@ def digit_span(patch):
     left_wall=max([x2 for x,x2,_ in others if x2<=first[0]],default=0)
     right_wall=min([x for x,_,_ in others if x>=right],default=width)
     return max(left_wall,first[0]-pad),min(right_wall,right+pad)
+
+
+ZERO_ALIASES=('0','O','D','〇','日','口','o','Q')
+
+
+def zero_glyph_proof(image):
+    """计分框里单个「0」的字形核对：唯一前景字形是一个闭合环，内孔居中且纵向占字高一半以上。
+
+    OCR 常把计分栏细体 0 读成 D/口/O 且置信度低；这里只看实际像素拓扑，6/8/9/4 等因孔位置或数量不同不会通过。
+    """
+    if image is None or not image.size:return None
+    gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY) if image.ndim==3 else image
+    height=gray.shape[0]
+    for level in [max(150,int(np.percentile(gray,99)*.7)),max(130,int(np.percentile(gray,99)*.6))]:
+        mask=(gray>=level).astype(np.uint8)
+        count,labels,stats,_=cv2.connectedComponentsWithStats(mask,connectivity=8)
+        glyphs=[(i,s) for i,s in enumerate(stats[1:],1) if height*.45<=s[3]<=height*.95 and s[2]>=2 and s[4]>=6 and s[0]>0 and s[0]+s[2]<gray.shape[1]]
+        if len(glyphs)!=1:continue
+        index,(x,y,w,h,area)=glyphs[0]
+        if not .35<=w/h<=.85:continue
+        part=(labels[y:y+h,x:x+w]==index).astype(np.uint8)
+        holes=cv2.connectedComponentsWithStats(cv2.copyMakeBorder(1-part,1,1,1,1,cv2.BORDER_CONSTANT,value=1),connectivity=4)
+        inner=[s for s in holes[2][1:] if s[0]>0 and s[1]>0 and s[0]+s[2]<w+2 and s[1]+s[3]<h+2 and s[4]>=2]
+        if len(inner)!=1:continue
+        hx,hy,hw,hh,_=inner[0];centre=(hy-1+hh/2)/h
+        if hh>=h*.5 and .35<=centre<=.65 and hw>=w*.2:
+            return {'threshold':level,'glyph':[int(x),int(y),int(w),int(h)],'hole':[int(hx-1),int(hy-1),int(hw),int(hh)]}
+    return None
 
 
 class CounterFallback:

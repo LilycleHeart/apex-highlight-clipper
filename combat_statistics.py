@@ -343,7 +343,7 @@ def confirmed_assist_eliminations(events):
 def complete_exported_counter_delta(endpoint,key):
     """现有成片的完整可见增量不受未录到的局后归因推测覆盖。"""
     if endpoint.get('native_counter_scope')!='exported_visible_delta' or endpoint.get('native_view_version')!='self-hud-view-v3':return False
-    if endpoint.get('native_numeric_method') not in ['numeric-three-model-v3','numeric-three-model-v4']:return False
+    if endpoint.get('native_numeric_method') not in ['numeric-three-model-v3','numeric-three-model-v4','numeric-three-model-v5']:return False
     if key not in endpoint.get('export_baseline_fields',[]) or key in endpoint.get('unconfirmed_latest',{}) or endpoint.get('excluded_terminal_view'):return False
     baseline=endpoint.get('baseline',{}).get(key);last=endpoint.get('last_hud',{}).get(key)
     if any(not isinstance(value,int) or isinstance(value,bool) or value<0 for value in [baseline,last]) or last<baseline:return False

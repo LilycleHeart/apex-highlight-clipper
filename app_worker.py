@@ -227,6 +227,11 @@ def _run_task(request_path):
                     events=detect_events(rows)
                     from hud_layout import ensure_activity_is_readable
                     ensure_activity_is_readable(profile,events,saved.get('smart_plan',{}))
+                    layout_note=None
+                    if profile.get('layout_status')=='unconfirmed':
+                        # 没认出 HUD 布局时 0 段不能当成「没有交战」，要让用户和诊断包都看到原因。
+                        layout_note=f'未能确认 {video["width"]}x{video["height"]} 录像的 HUD 布局（计分栏匹配 {profile.get("layout_score")}），可能漏掉全部交战；请导出诊断包并附一张游戏画面截图'
+                        emit('log',message=source.name+'：'+layout_note,progress=74)
                     lifecycle=downed_intervals(rows,duration,gap,post)
                     candidates=segments_from_events(events,duration,gap,pre,post,lifecycle)
                     candidates=cap_segment_ends(candidates,saved['outcome_events'])
@@ -322,7 +327,8 @@ def _run_task(request_path):
                         record['source_cleanup']=recycle_source(source,identity,outputs,verification,review,segments)
                         emit('log',message=source.name+'：'+record['source_cleanup']['reason'],progress=99)
                     item.update(status='complete',stage='complete'); save_task(task_path,task)
-                    emit('result',**record,message=f'完成：{len(outputs)} 段交战，排除 {len(rejected)} 段，{len(review)} 个待复核候选',progress=100)
+                    if layout_note:record['layout_warning']=layout_note
+                    emit('result',**record,message=f'完成：{len(outputs)} 段交战，排除 {len(rejected)} 段，{len(review)} 个待复核候选'+(f'。{layout_note}' if layout_note else ''),progress=100)
             except Exception as error:
                 item.update(status='error',stage='error',record={'source':str(source),'status':'error','error':str(error) or type(error).__name__,'outputs':[]})
                 emit('error',source=str(source),message=source.name+'：'+item['record']['error'],progress=100); save_task(task_path,task)

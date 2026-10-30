@@ -199,9 +199,9 @@ def current_registry(root=None, semantic_config=None, model_paths=None):
         'teammates': (names, name_weights, tree('templates/hud')),
         'weapons': (hud, {'weapon_rec_v5.onnx': model('weapon_rec_v5.onnx')}, {'weapon-catalog.json': resource(root / 'weapon-catalog.json')}),
         'hero': ({**hud, 'hero_portrait': version('hero_portrait_reader')}, {}, tree('assets/legends')),
-        'rank': ({**hud, 'rank': version('rank_reader')}, {}, tree('assets/ranks')),
-        'statistics': ({**layout, 'statistics': version('combat_statistics'), 'numeric': version('numeric_reader', 'METHOD'), 'self_view': version('outcome_reader', 'SELF_VIEW_VERSION')}, numeric_weights, tree('templates/statistics')),
-        'opponents': ({**layout, 'parser': version('combat_outcome_reader', 'PARSER_VERSION'), 'combat_rules': version('combat_outcome_reader', 'RULE_VERSION'), 'event_completion': version('combat_candidate_completion')}, {**numeric_weights, **{name: model(name) for name in ['name_rec_v5_server.onnx', 'name_rec_en_v5.onnx']}}, tree('templates/combat-outcomes')),
+        'rank': ({**hud, 'rank': version('rank_reader')}, {}, {**tree('assets/ranks'), **(tree('assets/modes') if (root / 'assets/modes').is_dir() else {})}),
+        'statistics': ({**layout, 'statistics': version('combat_statistics'), 'numeric': version('numeric_reader', 'METHOD'), 'self_view': version('outcome_reader', 'SELF_VIEW_VERSION'), **({'toast_confirmation': version('combat_outcome_reader', 'CONFIRMATION_VERSION')} if version('combat_outcome_reader', 'CONFIRMATION_VERSION') else {})}, numeric_weights, tree('templates/statistics')),
+        'opponents': ({**layout, 'parser': version('combat_outcome_reader', 'PARSER_VERSION'), 'combat_rules': version('combat_outcome_reader', 'RULE_VERSION'), **({'toast_confirmation': version('combat_outcome_reader', 'CONFIRMATION_VERSION')} if version('combat_outcome_reader', 'CONFIRMATION_VERSION') else {}), 'event_completion': version('combat_candidate_completion')}, {**numeric_weights, **{name: model(name) for name in ['name_rec_v5_server.onnx', 'name_rec_en_v5.onnx']}}, tree('templates/combat-outcomes')),
         'event_weapons': ({**layout, 'event_weapons': version('event_weapon_reader')}, numeric_weights, {'weapon-catalog.json': resource(root / 'weapon-catalog.json')}),
     }
     registry = {}

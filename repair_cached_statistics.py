@@ -138,8 +138,15 @@ def native_verified_fields(endpoint):
 
 
 def exported_clips(destination,report):
-    try:manifest=json.loads((destination/'export.json').read_text('utf-8-sig'))
-    except (OSError,ValueError):return []
+    # 同组其他片段提交时会原子替换 export.json；Windows 上替换瞬间读取可能失败或读到不完整内容，
+    # 短暂重试，不能把一次读失败当作「片段不在导出记录中」而中止整组。
+    manifest=None
+    for attempt in range(6):
+        try:manifest=json.loads((destination/'export.json').read_text('utf-8-sig'));break
+        except FileNotFoundError:return []
+        except (OSError,ValueError):
+            if attempt==5:return []
+            time.sleep(.05*(attempt+1))
     if manifest.get('source')!=report.get('source'):return []
     if manifest.get('metadata_directory') and Path(manifest['metadata_directory']).resolve()!=destination.resolve():return []
     video_root=Path(manifest.get('video_directory',destination)).resolve()
@@ -173,9 +180,23 @@ def exported_view(clips,segment,profile):
         selected_profile=clip.get('recognition',{}).get('hud_info',{}).get('profile') or profile
         from hud_recovery import profile_reusable,active
         if active() and not profile_reusable(clip.get('recognition',{}),['statistics','opponents','event_weapons']):selected_profile={}
-        if not selected_profile.get('layout_version'):
-            from hud_layout import make_profile
-            selected_profile=make_profile(video['width'],video['height'])
+        if not selected_profile.get('layout_version') or selected_profile.get('layout_status')!='confirmed':
+            # 旧布局作废或缺失时按成片重新检测；未带确认标记的默认几何会让事件武器全部判为「布局未确认」。
+            from hud_layout import detect_video,detect_images,confirm_by_name_row,make_profile
+            try:selected_profile=detect_video(source,video,duration)
+            except ValueError:selected_profile=None
+            if not selected_profile or selected_profile.get('layout_status')!='confirmed':
+                # detect_video 只看片段前段几个固定时刻，可能都落在菜单/遮挡画面；改为在整段均匀取五帧再确认，
+                # 计分栏被遮时再用本人名称行确认。仍未确认就保持未确认，不猜布局。
+                from hud_enrichment import native_frames
+                images=[image for _,image in native_frames(source,origin,origin+duration,[origin+duration*f for f in (.1,.3,.5,.7,.9)])]
+                if images:
+                    candidate=detect_images(images,video['width'],video['height'])
+                    if candidate.get('layout_status')!='confirmed':
+                        anchor=confirm_by_name_row(images,candidate)
+                        if anchor:candidate={**candidate,'layout_status':'confirmed','layout_basis':'self_name_row',**anchor}
+                    selected_profile=candidate
+            if not selected_profile:selected_profile=make_profile(video['width'],video['height'])
         return source,identity,origin,duration,selected_profile
     return None
 
@@ -220,6 +241,25 @@ def early_export_baseline_fields(endpoint,origin):
         first=frames[0] if frames else None
         if first and 0<=first['native_time']-origin<=.08 and first[key]==endpoint.get('baseline',{}).get(key):fields.append(key)
     return fields
+
+
+def original_baseline(endpoint,key):
+    """导出时完整原片得到的段起点计数：开局隐藏计分栏（initial_hidden_zero）为 0，否则需段前至少两帧一致。"""
+    value=(endpoint.get('baseline') or {}).get(key)
+    if not isinstance(value,int) or isinstance(value,bool) or value<0:return None
+    if endpoint.get('initial_hidden_zero') and value==0:return 0
+    frames=[row for row in endpoint.get('baseline_frames') or [] if row.get(key)==value]
+    return value if len({row.get('time') for row in frames})>=2 else None
+
+
+def native_last_value(endpoint,key):
+    """本次成片片尾至少两帧原生一致的读数；仍有更新的未确认值或观战片尾时不采用。"""
+    if endpoint.get('excluded_terminal_view') or key in (endpoint.get('unconfirmed_latest') or {}):return None
+    value=(endpoint.get('last_hud') or {}).get(key)
+    if not isinstance(value,int) or isinstance(value,bool) or value<0:return None
+    times={row.get('native_time') for row in endpoint.get('end_frames') or []
+           if row.get('native_verified') is True and row.get(key)==value and isinstance(row.get('native_time'),(int,float))}
+    return value if len(times)>=2 else None
 
 
 def correction_key(raw,directory):
@@ -292,6 +332,9 @@ def _repair(record,on_activity=None,*,deferred=False):
     destination=Path(record['directory']);original=destination/'statistics.json'
     if not original.is_file():return
     raw=original.read_bytes();report=json.loads(raw)
+    # 导出时由完整原片/采样缓存算出的计数；原片被删后只剩成片首尾，证据更弱，不能据此清空。
+    original_counts={(segment['start'],segment['end']):dict(segment.get('counts') or {}) for segment in report['segments']}
+    original_endpoints={(segment['start'],segment['end']):copy.deepcopy(segment.get('endpoint') or {}) for segment in report['segments']}
     requested=set(record.get('fields',['statistics']+(['opponents'] if record.get('recheck_names') else [])))
     counters='statistics' in requested;recheck_names='opponents' in requested;recheck_weapons='event_weapons' in requested
     verify_existing=counters and record.get('recheck_existing') is True
@@ -451,6 +494,33 @@ def _repair(record,on_activity=None,*,deferred=False):
                 if segment['counts'].get(key)!=result['counts'][key] or segment['partial'].get(key)!=result['partial'][key]:changed+=1
                 segment['counts'][key]=result['counts'][key];segment['partial'][key]=result['partial'][key]
                 if verified_delta:segment['native_repaired_fields']=sorted(set(segment.get('native_repaired_fields',[]))|{key})
+        # 原片已删（含导出后删除原片）时，本次只能核对成片首尾；未能验证的计数沿用导出时的完整统计，
+        # 只作为已确认下限，不能当作「未知」把原有数字清空。原片仍在时照旧以本次读数为准。
+        source_lower=set()
+        if counters and not source_available:
+            # 成片开头读不到计数时，用导出时由完整原片确定的起点：对局开局隐藏计分栏判为 0，
+            # 或段前多帧一致的计数。终点必须是本次成片片尾至少两帧原生一致的读数，且不小于起点。
+            prior=original_endpoints.get((segment['start'],segment['end']),{})
+            for key in counter_keys-set(verified):
+                start_value=original_baseline(prior,key)
+                end_value=native_last_value(fresh,key)
+                if start_value is None or end_value is None or end_value<start_value:continue
+                value=end_value-start_value
+                current=segment['counts'].get(key)
+                if isinstance(current,int) and current>value:value=current
+                changed+=int(current!=value or segment['partial'].get(key) is not True)
+                segment['counts'][key]=value;segment['partial'][key]=True;source_lower.add(key)
+                segment.setdefault('export_baseline_from_original',{})[key]=start_value
+            before=original_counts.get((segment['start'],segment['end']),{})
+            for key in counter_keys-set(verified)-source_lower:
+                value=before.get(key)
+                if not isinstance(value,int) or isinstance(value,bool) or value<0:continue
+                current=segment['counts'].get(key)
+                lower=max(value,current) if isinstance(current,int) else value
+                changed+=int(current!=lower or segment['partial'].get(key) is not True)
+                segment['counts'][key]=lower;segment['partial'][key]=True;source_lower.add(key)
+        if source_lower:segment['source_lower_bound_fields']=sorted(source_lower)
+        else:segment.pop('source_lower_bound_fields',None)
         if counters:
             from combat_statistics import confirmed_assist_eliminations
             own=[event for event in segment['events'] if event.get('confirmed') is True and event.get('ownership')=='self']
@@ -460,6 +530,10 @@ def _repair(record,on_activity=None,*,deferred=False):
             for key,value in center.items():
                 previous=segment['counts'].get(key)
                 center_only=key=='knockdowns' or old.get('baseline',{}).get(key) is None or old.get('last_hud',{}).get(key) is None
+                if key in source_lower:
+                    # 中心提示只补高下限，不能把沿用的导出统计改回未知。
+                    if value>previous:segment['counts'][key]=value;changed+=1
+                    continue
                 if (key in counter_keys or key=='knockdowns') and segment['partial'].get(key,True) and center_only and key not in verified:
                     repaired=value or None
                     changed+=int(previous!=repaired)
@@ -473,6 +547,7 @@ def _repair(record,on_activity=None,*,deferred=False):
         if counters:
             segment['notes']=result['notes']
             if fresh.get('native_counter_scope')=='exported_visible_delta':segment['notes'].append('按现有成片首尾原生 HUD 可见增量复核；原片或采样缓存不可用')
+            if source_lower:segment['notes'].append('原片已删除，未能复核的计数沿用导出时统计，仅为已确认下限')
         segment['repair_applied']=True;segment['repair_fields']=sorted(set(segment.get('repair_fields',[]))|requested)
         if counters:
             recipes=segment.setdefault('native_field_recipes',{})

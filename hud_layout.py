@@ -38,18 +38,36 @@ DETECTOR_VERSION = 'fit-scale-candidates-v1'
 
 
 def point(profile, x, y, horizontal='right', vertical='top'):
-    width, height = profile['reference_size']
+    # 两侧带黑边时（4:3 游戏画面录进 16:9 文件），HUD 锚定在实际游戏画面的边上。
+    left, top, width, height = profile.get('content_box') or [0, 0, *profile['reference_size']]
     sx, sy = profile.get('hud_scale', [height / 1080, height / 1080])
     px = x*sx if horizontal == 'left' else width-(2560-x)*sx if horizontal == 'right' else width/2+(x-1280)*sx
     py = y*sy if vertical == 'top' else height-(1080-y)*sy if vertical == 'bottom' else height/2+(y-540)*sy
-    return [round(px), round(py)]
+    return [round(left+px), round(top+py)]
+
+
+def pillarbox_content(images, width, height):
+    """左右对称、所有画面都不亮的纯黑边；返回实际游戏画面 [x, y, w, h]，没有黑边时返回 None。"""
+    lit = None
+    for image in images:
+        if image.shape[:2] != (height, width): continue
+        bright = image.max(axis=2) > 24
+        if bright.mean() < .2: continue  # 载入黑屏不能证明边界
+        columns = bright.mean(axis=0)
+        lit = columns if lit is None else np.maximum(lit, columns)
+    if lit is None: return None
+    used = np.nonzero(lit > .01)[0]
+    if not len(used): return None
+    x1, x2 = int(used[0]), int(used[-1]) + 1
+    if x1 < width * .03 or abs(x1 - (width - x2)) > max(4, width * .01): return None
+    return [x1, 0, x2 - x1, height]
 
 
 def box(profile, values, horizontal='right', vertical='top'):
     return point(profile,*values[:2],horizontal,vertical) + point(profile,*values[2:],horizontal,vertical)
 
 
-def make_profile(width, height, vertical_scale=1., horizontal_scale=1., base=None, ui='standard', layout=None):
+def make_profile(width, height, vertical_scale=1., horizontal_scale=1., base=None, ui='standard', layout=None, content_box=None):
     original = base or json.loads((BASE/'profile-ultrawide.json').read_text('utf-8'))
     compact = ui == 'compact'
     # 精简界面的坐标以放大后的参考单位表示；标准界面保持原有键和数值不变。
@@ -57,9 +75,12 @@ def make_profile(width, height, vertical_scale=1., horizontal_scale=1., base=Non
     k = COMPACT_SCALE if compact else 1.
     profile = deepcopy(original)
     profile['reference_size'] = [width,height]
-    profile['hud_scale'] = [height/1080*horizontal_scale*k,height/1080*vertical_scale*k]
+    if content_box: profile['content_box'] = list(content_box)
+    scale_height = content_box[3] if content_box else height
+    profile['hud_scale'] = [scale_height/1080*horizontal_scale*k,scale_height/1080*vertical_scale*k]
     profile['layout_version'] = VERSION
     profile['layout'] = layout or ('4:3-stretched' if abs(vertical_scale-.75)<.05 else 'native')
+    if content_box: profile['layout'] = 'pillarbox/' + profile['layout']
     if compact:
         profile['ui_layout'] = 'compact'; profile['layout'] += '/compact'
     profile['name'] = f'Auto {width}x{height} / {profile["layout"]}'
@@ -80,8 +101,10 @@ def make_profile(width, height, vertical_scale=1., horizontal_scale=1., base=Non
         profile[key] = box(profile,original[key],horizontal='center',vertical='bottom')
     profile['banner'] = box(profile,original['banner'],horizontal='center',vertical='center')
     # Native sidecar crops use the same bottom-right quarter as the existing decoder.
-    cx=round(width*.75/2)*2;cy=round(height*5/6/2)*2
-    profile['weapon_native_crop'] = [cx,cy,width-cx,height-cy]
+    # 有黑边时按实际游戏画面取右下角，黑边以外不存在武器栏。
+    left,top,inner_w,inner_h = content_box or [0,0,width,height]
+    cx=round((left+inner_w*.75)/2)*2;cy=round((top+inner_h*5/6)/2)*2
+    profile['weapon_native_crop'] = [cx,cy,(round((left+inner_w)/2)*2 if content_box else width)-cx,height-cy]
     profile['rank_roi'] = box(profile,source['rank_roi'],vertical='top')
     profile['account_roi'] = box(profile,source['account_roi'],horizontal='left',vertical='bottom')
     profile['teammate_rois'] = [box(profile,b,horizontal='left',vertical='bottom') for b in source['teammate_rois']]
@@ -90,11 +113,14 @@ def make_profile(width, height, vertical_scale=1., horizontal_scale=1., base=Non
     return profile
 
 
-def layout_candidates(width, height, base=None):
-    """列出录像可能的 HUD 几何：游戏渲染比例（原生/拉伸）× 界面模式（标准/精简）。"""
-    candidates=[];seen=set();aspect=width/height
+def layout_candidates(width, height, base=None, content_box=None):
+    """列出录像可能的 HUD 几何：游戏渲染比例（原生/拉伸）× 界面模式（标准/精简）。
+
+    content_box 为两侧黑边内的实际游戏画面；比例按它计算，坐标仍是整帧坐标。
+    """
+    candidates=[];seen=set();aspect=(content_box[2]/content_box[3]) if content_box else width/height
     def add(vertical,horizontal,ui,layout=None):
-        profile=make_profile(width,height,vertical,horizontal,base=base,ui=ui,layout=layout)
+        profile=make_profile(width,height,vertical,horizontal,base=base,ui=ui,layout=layout,content_box=content_box)
         key=(ui,round(profile['hud_scale'][0],3),round(profile['hud_scale'][1],3))
         if key not in seen:seen.add(key);candidates.append(profile)
     for ui in ('standard','compact'):
@@ -121,6 +147,9 @@ def detect_images(images, width, height, base=None):
     original = base or json.loads((BASE/'profile-ultrawide.json').read_text('utf-8'))
     marker=read_image(str(BASE/original['counter_marker']),cv2.IMREAD_GRAYSCALE)
     candidates=layout_candidates(width,height,base=original)
+    # 显卡按比例缩放时 4:3 画面会带左右黑边录进宽屏文件；只有确实检测到对称黑边才追加这些候选。
+    content=pillarbox_content(images,width,height)
+    if content:candidates+=layout_candidates(width,height,base=original,content_box=content)
     evidence=[]
     for profile in candidates:
         scores=[]
@@ -138,6 +167,32 @@ def detect_images(images, width, height, base=None):
     else:profile['layout_status']='confirmed'
     profile['layout_score']=round(score,4)
     return profile
+
+
+def confirm_by_name_row(images, profile, minimum=2):
+    """右上计分栏被直播叠加层遮住时，用左下本人名称行的固定语音图标确认原生标准布局。
+
+    只接受标准界面、未拉伸的候选；图标须在至少两帧中落在本人名称行的高度上。
+    """
+    if profile.get('ui_layout') == 'compact' or any(abs(v - profile['reference_size'][1] / 1080) > .001 for v in profile.get('hud_scale', [1, 1])):
+        return None
+    voice = read_image(str(BASE / 'templates/hud/voice.png'), cv2.IMREAD_GRAYSCALE)
+    if voice is None: return None
+    width, height = profile['reference_size']; x1, y1, x2, y2 = profile['account_roi']
+    hits = []
+    for image in images:
+        h, w = image.shape[:2]
+        if (w, h) != (width, height): continue
+        top = max(0, y1 - 8)
+        band = cv2.cvtColor(image[top:min(h, y2 + 8), x1:min(w, x2 + 260)], cv2.COLOR_BGR2GRAY)
+        best = 0.
+        for factor in (.75, 1., 1.25):
+            template = cv2.resize(voice, None, fx=factor * h / 1080, fy=factor * h / 1080)
+            if band.shape[0] < template.shape[0] or band.shape[1] < template.shape[1]: continue
+            _, score, _, (_, y) = cv2.minMaxLoc(cv2.matchTemplate(band, template, cv2.TM_CCOEFF_NORMED))
+            if abs(top + y + template.shape[0] / 2 - (y1 + y2) / 2) <= 6 * h / 1080: best = max(best, float(score))
+        hits.append(round(best, 3))
+    return {'name_row_scores': hits} if sum(s >= .85 for s in hits) >= minimum else None
 
 
 def detect_video(source, video, duration, base=None):
@@ -176,6 +231,7 @@ def needs_layout_retry(record, profile):
 def outcome_profile(hud, original):
     if not hud.get('layout_version'):return original
     profile=deepcopy(original);profile['reference_size']=hud['reference_size']
+    if hud.get('content_box'):profile['content_box']=hud['content_box']
     profile['toast_roi']=box(hud,original['toast_roi'],'center','center')
     profile['context_padding_left']=round(original.get('context_padding_left',100)*hud['hud_scale'][0])
     profile['hud_scale']=hud['hud_scale'];profile['layout_version']=VERSION

@@ -14,7 +14,7 @@ import {JsonLines,safeOptions,safeHudFiles,videoExtensions} from './protocol';
 import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,SystemTheme,UpdateInfo,HudEnrichmentResult} from '../src/shared';
 import {animationDefaults,normalizeAnimationPreferences} from '../src/animationPreferences';
 import {normalizePlayerAudio,defaultPlayerAudio,type PlayerAudioPreferences} from '../src/audioPreferences';
-import {clipStatistics,recordingTime,applyStatisticsCorrection} from '../src/clipStats';
+import {clipStatistics,recordingTime,applyStatisticsCorrection,weaponContextFor} from '../src/clipStats';
 import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo,RELEASES_API} from './updates';
 import {downloadInstaller,pruneUpdates,installationPaths,pruneLegacyLauncher} from './updateInstaller';
 import {VideoRegistry} from './media';
@@ -116,7 +116,7 @@ async function pruneRequests(){
  }
 }
 let loggedStage='',loggedProgress=-1;
-function send(e:WorkerEvent){if(e.source)diagnostics.alias(e.source,'<video>');const progress=Math.floor((e.progress||0)/10);if(['run','file','stage','done','stopped','fatal','error','exit','log','stderr','close-request','hud-info-start','hud-info-file','hud-info-error','hud-info-done'].includes(e.type)||(e.type==='progress'&&(e.stage!==loggedStage||progress!==loggedProgress))){loggedStage=e.stage||loggedStage;loggedProgress=progress;diagnostics.log(['fatal','error','stderr','hud-info-error'].includes(e.type)?'error':'info','worker',e.message||e.type,{type:e.type,stage:e.stage,progress:e.progress,index:e.index,total:e.total,failures:e.failures,clips:e.clips});}if(win&&!win.isDestroyed())win.webContents.send('worker-event',e);}
+function send(e:WorkerEvent){if(e.source)diagnostics.alias(e.source,'<video>');const progress=Math.floor((e.progress||0)/10);if(['run','file','metadata','stage','done','stopped','fatal','error','exit','log','stderr','close-request','hud-info-start','hud-info-file','hud-info-error','hud-info-done'].includes(e.type)||(e.type==='progress'&&(e.stage!==loggedStage||progress!==loggedProgress))){loggedStage=e.stage||loggedStage;loggedProgress=progress;const meta=e as any;/* 诊断包需要录像分辨率与 HUD 布局判定，才能分辨「0 段」是没交战还是布局没认出。 */diagnostics.log(['fatal','error','stderr','hud-info-error'].includes(e.type)?'error':'info','worker',e.message||e.type,{type:e.type,stage:e.stage,progress:e.progress,index:e.index,total:e.total,failures:e.failures,clips:e.clips,...(e.type==='metadata'?{width:meta.width,height:meta.height,hud_layout:meta.hud_layout,hud_layout_status:meta.hud_layout_status}:{})});}if(win&&!win.isDestroyed())win.webContents.send('worker-event',e);}
 function theme():SystemTheme{let accent='#526b4a';let reduceMotion=false;try{const color=systemPreferences.getAccentColor();if(/^[\da-f]{8}$/i.test(color))accent='#'+color.slice(0,6);}catch{}try{reduceMotion=systemPreferences.getAnimationSettings().prefersReducedMotion;}catch{}return{accent,dark:nativeTheme.shouldUseDarkColors,reduceMotion};}
 let saveChain=Promise.resolve();
 async function flushSaves(){await teammateWrites.catch(()=>{});let pending:Promise<void>;do{pending=saveChain;await pending.catch(()=>{});}while(pending!==saveChain);await diagnostics.flush();}
@@ -186,7 +186,7 @@ async function collectResults(p:string,repair=true):Promise<Result[]>{
 let libraryRead:Promise<{results:Result[];tasks:number;errors:number}>|null=null;
 let unreadableTasks:string[]=[];
 const importedRoot=path.join(dataRoot,'imported'),importedManifest=path.join(importedRoot,'export.json');
-const importedClips=new Set<string>();const importedFields=new Set(['account','weapons','teammates','hero','rank','statistics']);
+const importedClips=new Set<string>();const importedFields=new Set(['account','weapons','teammates','hero','rank','statistics','event_weapons']);
 /** 片段库记录的改写统一交给 Python（保持文件时间戳等大整数精确）；不移动、不删除任何视频。 */
 function libraryRecords(command:Record<string,unknown>):Promise<any>{
  return new Promise((resolve,reject)=>{
@@ -262,10 +262,12 @@ async function collectImported():Promise<Result|null>{
  for(const c of manifest.clips){
   if(typeof c.output!=='string'||!path.isAbsolute(c.output)||!outputs.has(normalized(c.output))||!videoExtensions.has(path.extname(c.output).toLowerCase())||libraryStore.isHidden(c.output))continue;
   const target=path.resolve(c.output);let stat;try{stat=await fs.stat(target);if(!stat.isFile())continue;}catch{continue;}
-  allowedPaths.add(normalized(target));allowedClips.add(normalized(target));importedClips.add(normalized(target));clipDirectories.set(normalized(target),importedRoot);clipTasks.delete(normalized(target));
+  // 同一成片已属于某个任务时以任务记录为准；改登为导入片段会让识别结果写进导入清单，界面却仍显示任务记录。
+  if(clipTasks.has(normalized(target)))continue;
+  allowedPaths.add(normalized(target));allowedClips.add(normalized(target));importedClips.add(normalized(target));clipDirectories.set(normalized(target),importedRoot);
   const duration=Number(c.metadata?.format?.duration)||Number(c.segment?.end)||0;clipDurations.set(normalized(target),duration);
   const {matchKey:_matchKey,...statistics}=clipStatistics(c,[],{},{path:target,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)});
-  const importedCounts=(c.statistics&&c.statistics.counts)||{};const importedFieldsStatus=((c.recognition||{}).hud_info||{}).field_status;const importedEvidence=((c.statistics&&c.statistics.events)||[]).filter((e:any)=>e&&Number.isFinite(e.time)&&['knock','assist','elimination'].includes(e.kind)).map((e:any)=>({kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:e.target}));result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,fieldStatus:importedFieldsStatus,...statistics,kills:importedCounts.kills??null,damage:importedCounts.damage??null,assists:importedCounts.assists??null,knockdowns:importedCounts.knockdowns??null,evidence:importedEvidence});
+  const importedCounts=(c.statistics&&c.statistics.counts)||{};const importedFieldsStatus=((c.recognition||{}).hud_info||{}).field_status;const importedIdentity={path:target,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)};const importedEvidence=((c.statistics&&c.statistics.events)||[]).filter((e:any)=>e&&Number.isFinite(e.time)&&['knock','assist','elimination'].includes(e.kind)).map((e:any)=>({kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:e.target,weaponContext:weaponContextFor(e,c,importedIdentity)}));result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,fieldStatus:importedFieldsStatus,...statistics,kills:importedCounts.kills??null,damage:importedCounts.damage??null,assists:importedCounts.assists??null,knockdowns:importedCounts.knockdowns??null,evidence:importedEvidence});
  }
  return result.clips.length?result:null;
 }
@@ -411,7 +413,7 @@ async function enrichHud(files:unknown,fields:unknown,mode:unknown='missing',rec
  // 未经本软件处理的已有片段没有原录像和交战分析，只读取画面中的 HUD 信息。
  const visual=(list:unknown[])=>list.filter(field=>importedFields.has(String(field)));
  const jobs=[...grouped].map(([directory,files])=>normalized(directory)===normalized(importedRoot)?{directory,files,fields:visual(fields)}:{directory,files}).filter(job=>!('fields' in job)||job.fields!.length);
- if(!jobs.length)throw new Error('已有片段只能补充账号、队友、武器、英雄、段位和战绩数字');
+ if(!jobs.length)throw new Error('已有片段只能补充账号、队友、武器、英雄、段位、战绩数字和战果相关武器');
  if(recovery.selection&&typeof recovery.selection==='object')recovery={...recovery,selection:Object.fromEntries(Object.entries(recovery.selection as Record<string,unknown[]>).map(([file,list])=>[file,importedClips.has(normalized(file))?visual(list):list]).filter(([,list])=>(list as unknown[]).length))};
  const root=path.join(validationRoot,'app-requests');await fs.mkdir(root,{recursive:true});requestPath=path.join(root,randomUUID()+'.json');hudStopFile=requestPath+'.stop';
  await fs.writeFile(requestPath,JSON.stringify({stop_file:hudStopFile,jobs,fields,force:mode==='refresh',...normalizePerformance(snapshot),backend:snapshot.backend,recovery_root:hudRecoveryRoot,...recovery}),'utf8');if(hudStopRequested)await fs.writeFile(hudStopFile,'stop','utf8');

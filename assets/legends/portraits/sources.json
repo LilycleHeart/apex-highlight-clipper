@@ -99,6 +99,200 @@
       "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/bloodhound",
       "label_evidence": "Two bundled OCR models independently read the localized fixed hero prefix in two native subtitle frames, with the self HUD portrait checked against the class depiction. No player-name inputs.",
       "validation": "Holdout portrait confirmation excludes the subtitle authoring frames; only one source recording is available for this class."
+    },
+    {
+      "id": "revenant",
+      "file": "revenant-1.png",
+      "sha256": "e2f885520e0c56cf8ef22fc65924eca77debd0f3dcedcf93319f7c0b7c7e34eb",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/revenant",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs.",
+      "validation": "Templates taken from two different source recordings; holdout recordings checked separately."
+    },
+    {
+      "id": "revenant",
+      "file": "revenant-2.png",
+      "sha256": "32a1d41221c0ff0fec847ea65951fd3570836e12b448fb623a085c75e5eab394",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/revenant",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs.",
+      "validation": "Templates taken from two different source recordings; holdout recordings checked separately."
+    },
+    {
+      "id": "mad-maggie",
+      "file": "mad-maggie-1.png",
+      "sha256": "5586be020d66ed3f0f8df1cabcb910a54f5ef810ab46b92b1be5fc94fa292d96",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/mad-maggie",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs.",
+      "validation": "Templates taken from two different source recordings; holdout recordings checked separately."
+    },
+    {
+      "id": "mad-maggie",
+      "file": "mad-maggie-2.png",
+      "sha256": "1185c641406093a7fb63cab2272ccbc094ea97e0703af558d7b2eab73487ad0a",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/mad-maggie",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs.",
+      "validation": "Templates taken from two different source recordings; holdout recordings checked separately."
+    },
+    {
+      "id": "ballistic",
+      "file": "ballistic-1.png",
+      "sha256": "c5da56c465f096079d4df43c14a97a9df4016280786fa3dec87c371524f148ac",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/ballistic",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "sparrow",
+      "file": "sparrow-1.png",
+      "sha256": "2e398e188b0a7b5c8cde10b795f7cac5980c07f98d761f475aabe0579fe73888",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/sparrow",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "valkyrie",
+      "file": "valkyrie-1.png",
+      "sha256": "c2b5c2d52bf848aa4f967a810928f744de4cfd62c838306c7c2b6e51c73e543c",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/valkyrie",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "horizon",
+      "file": "horizon-1.png",
+      "sha256": "00a46da11de3e36d7eec35570d8e9ff90e7d8a629cac4cfbad0939f73d3408ed",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/horizon",
+      "label_evidence": "Self ability glyph independently confirmed on at least two distinct native frames; no player-name inputs."
+    },
+    {
+      "id": "wattson",
+      "file": "wattson-1.png",
+      "sha256": "2d659a36e0b57b4ad9ba3a9b5f9b5404658223e09f2229436d197bf163a9b905",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/wattson",
+      "capture": "https://www.youtube.com/watch?v=QyvNJfDZgUY&t=240s",
+      "label_evidence": "Third-party gameplay video titled as Wattson; self ultimate glyph in the same frame matches the Interception Pylon icon. Capture is independent of all validation clips; only the 56x48 self HUD portrait is kept."
+    },
+    {
+      "id": "alter",
+      "file": "alter-1.png",
+      "sha256": "9ffe06526cd162c1008edf2be0ebde9c514c9b7db6be38236cb043049370ab13",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/alter",
+      "capture": "https://www.youtube.com/watch?v=UnzWu2JpyP0&t=780s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "bangalore",
+      "file": "bangalore-1.png",
+      "sha256": "373d197f90a2de1747d0d056353b6aa89ae761ce08f5cf579a877f24cdda6fac",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/bangalore",
+      "capture": "https://www.youtube.com/watch?v=3auIDqFdsqA&t=780s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "catalyst",
+      "file": "catalyst-1.png",
+      "sha256": "3bfe2c02d5a3e5baa0032f715c24164c57b1df486b52f80ddc76c7ee7081f693",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/catalyst",
+      "capture": "https://www.youtube.com/watch?v=qXmk_tIcHhU&t=330s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "caustic",
+      "file": "caustic-1.png",
+      "sha256": "24a3360fa3c49b55307c8cba1867c661754db7bf469b845287bb89f8541a3058",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/caustic",
+      "capture": "https://www.youtube.com/watch?v=UkQ9Bu-FWQE&t=480s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "conduit",
+      "file": "conduit-1.png",
+      "sha256": "276ec3600a7ec5808c90bfee25a5e36506871addd07bfba7896d48d91386e47b",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/conduit",
+      "capture": "https://www.youtube.com/watch?v=2KthB2NaIkU&t=930s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "crypto",
+      "file": "crypto-1.png",
+      "sha256": "110359db88f8335f183cec208c7585dd53caa4c2409b323a0c548d2615845b55",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/crypto",
+      "capture": "https://www.youtube.com/watch?v=VMLxhYej9GY&t=180s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "gibraltar",
+      "file": "gibraltar-1.png",
+      "sha256": "d0ec43fb70278e66bb8697414e591785c8eff99ce1218672c4d47c772ae3e8e9",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/gibraltar",
+      "capture": "https://www.youtube.com/watch?v=glHNjE7pBuY&t=930s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "lifeline",
+      "file": "lifeline-1.png",
+      "sha256": "e359cede98d4cfad078b2dbf30eb17688b836e4f78c5fd269d1d90cd69da0950",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/lifeline",
+      "capture": "https://www.youtube.com/watch?v=cMAs7ewmgnQ&t=480s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "mirage",
+      "file": "mirage-1.png",
+      "sha256": "19ef349c631dc802e0b2f8dfa339ea7108039e9415644d92650d28b3458fd6e9",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/mirage",
+      "capture": "https://www.youtube.com/watch?v=1VbYavfoO00&t=180s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "newcastle",
+      "file": "newcastle-1.png",
+      "sha256": "67de2d1c8ca625781c0b9f9cef2d7c5e6629f770c6cab75def0fbbaf79b41482",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/newcastle",
+      "capture": "https://www.youtube.com/watch?v=TRP8oe5l9jQ&t=930s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "rampart",
+      "file": "rampart-1.png",
+      "sha256": "eabd5de5ca1de488f38ef7fcf3066f70183e3ae5791d4990eec86ee3fb8bb6db",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/rampart",
+      "capture": "https://www.youtube.com/watch?v=C3mwur7fjVk&t=480s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "seer",
+      "file": "seer-1.png",
+      "sha256": "2d0da8e7989fbe89758921248ba39da85590b32bbee74666e82fe313bfdfc1b5",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/seer",
+      "capture": "https://www.youtube.com/watch?v=H4Gouoy0s8U&t=180s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "vantage",
+      "file": "vantage-1.png",
+      "sha256": "74ddda0ee2cd9c34d375d313d73eaf0141b302fa3132759dbe94622bd588d441",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/vantage",
+      "capture": "https://www.youtube.com/watch?v=sWOoHnWtzUg&t=330s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
+    },
+    {
+      "id": "wraith",
+      "file": "wraith-1.png",
+      "sha256": "1d24b1b16da742afcf4147197ae89a38583f0a06058f1ef2fa9d2fa3975d8364",
+      "reference": "https://www.ea.com/games/apex-legends/apex-legends/characters-hub/wraith",
+      "capture": "https://www.youtube.com/watch?v=wmgdjOKS8CU&t=930s",
+      "label_evidence": "Third-party no-commentary gameplay video titled as this legend; the same self HUD portrait appears across the sampled native 1080p frames. Only the 56x48 self HUD portrait is kept.",
+      "validation": "Other frames of the capture video matched this class with no cross-class hits; user control clips of other classes produced no identifications of this class."
     }
   ]
 }

@@ -148,6 +148,9 @@ def finalize_names(store,job_id):
             fields=set().union(*updates.values())
             reconcile_manifest_names({'clips':selected} if job['request'].get('force') else manifest,
                 fields,targets=selected,updates=updates,match_keys=recorded_match_keys(manifest,directory))
+            if 'account' in fields:
+                from hud_enrichment import resolve_account_prefixes
+                resolve_account_prefixes(manifest,[clip for clip in selected if 'account' in updates.get(id(clip),())])
             write_json(path,manifest)
         store.mark_finalized(job_id,key,receipt=commit_receipt(path))
 

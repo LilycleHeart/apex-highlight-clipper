@@ -50,6 +50,46 @@ class HudEnrichmentTests(unittest.TestCase):
         self.assertTrue(name_patch_quality(image,text_right=60)['clear'])
         self.assertFalse(name_patch_quality(image,text_right=85)['clear'])
 
+    def test_occluder_edge_is_name_boundary_only_after_visible_background_gap(self):
+        from hud_enrichment import occluder_left,name_patch_quality
+        image=np.full((35,218,3),40,np.uint8)
+        for x in [10,25,40,55]:image[8:26,x:x+4]=255
+        image[:,120:]=255
+        self.assertEqual(occluder_left(image),120)
+        self.assertTrue(name_patch_quality(image[:,:occluder_left(image)])['clear'])
+        for x in range(60,115,6):image[8:26,x:x+4]=255
+        self.assertIsNone(occluder_left(image))
+
+    def test_occluded_prefix_adopts_only_unique_confirmed_library_account(self):
+        from hud_enrichment import resolve_account_prefixes
+        def clip(account=None,prefixes=()):
+            return {'recognition':{'hud_info':{'version':VERSION,'field_versions':{'account':field_version('account')},'account':account,
+                'name_observations':[{'time':i,'account_prefix':{'name':p,'confidence':.9}} for i,p in enumerate(prefixes)]}}}
+        known={'name':'SampleHeart','confidence':.99}
+        house={'name':'SampleHouse','confidence':.99}
+        refs=[clip(known),clip(known),clip(known),clip(house),clip(house),clip(house)]
+        # 末字只露出一部分（Hel 的 l）不参与比对；无方括号的标签也去掉。
+        target=clip(prefixes=['SampleHel','TAG SampleHeat']);single=clip(prefixes=['SampleHea']);ambiguous=clip(prefixes=['SampleHo','SampleH'])
+        resolve_account_prefixes({'clips':refs+[target,single,ambiguous]},[target,single,ambiguous])
+        info=target['recognition']['hud_info']
+        self.assertEqual(info['account']['name'],'SampleHeart');self.assertEqual(info['account']['method'],'occluded_prefix_match')
+        self.assertIsNone(single['recognition']['hud_info']['account']);self.assertIsNone(ambiguous['recognition']['hud_info']['account'])
+
+    def test_weapon_name_row_confirms_standard_layout_only_with_two_agreeing_frames(self):
+        from hud_enrichment import confirm_by_weapon_names
+        from hud_layout import make_profile
+        profile=make_profile(1920,1080);image=np.full((1080,1920,3),70,np.uint8)
+        def reader(reads):
+            fake=lambda views:([reads.pop(0) for _ in views],None)
+            return patch('engine_pool.pooled_engine',return_value=fake)
+        good=[('R-99',.95),('R-99',.95),('FLATLINE',.92),('FLATLINE',.92)]
+        with reader(good*2):self.assertEqual(confirm_by_weapon_names([image,image],profile)['weapon_name_anchor'],'r99')
+        # 只有一帧读到、或两个视图置信度不足时不能确认。
+        with reader(good+[('',0.)]*4):self.assertIsNone(confirm_by_weapon_names([image,image],profile))
+        with reader([('R-99',.95),('R-99',.70),('',0.),('',0.)]*2):self.assertIsNone(confirm_by_weapon_names([image,image],profile))
+        # 拉伸布局不用这条规则。
+        self.assertIsNone(confirm_by_weapon_names([image],make_profile(1920,1080,.75)))
+
     def test_visibility_search_is_bounded_and_skips_existing_read_times(self):
         from hud_enrichment import account_search_moments
         times=account_search_moments([{'time':20.,'account':{'confidence':.9}}],[18.2,20.],0.,40.)

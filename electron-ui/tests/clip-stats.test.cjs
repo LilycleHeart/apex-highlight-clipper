@@ -36,6 +36,9 @@ test('首帧未知仍可展示双帧确认的本局末值，旧观战末值不�
  assert.deepEqual(clipStatistics(corrected).roundTotals,{damage:868,kills:1});
  const contradicted=structuredClone(corrected);contradicted.recognition.statistics.endpoint.last_hud.damage=1088;
  assert.deepEqual(clipStatistics(contradicted).roundTotals,{damage:null,kills:1});
+ // 原片已删：复核沿用导出时的完整统计，只显示为已确认下限
+ const kept=applyStatisticsCorrection(clip,{...fix,source_lower_bound_fields:['damage']},'v13');
+ assert.equal(kept.summary.damage,2076);assert.equal(kept.summary.statistics_partial.damage,true);
 });
 
 test('非空旧数值仅能由匹配区间且两端双帧原生证据的修复覆盖',()=>{
@@ -275,6 +278,26 @@ function weaponContextFixture(scope='nearby_firing'){
  const fix={start:100,end:120,repair_fields:['event_weapons'],counts:{kills:999,damage:999},events:[{...event,weapon_context:context}]};
  return {clip,fix,event,context};
 }
+
+test('v2 武器上下文：0.75 词表分类、图标掩膜同形与战果前持枪可显示，v1 规则不变',()=>{
+ const show=(context)=>{const {clip,fix}=weaponContextFixture('held_at_event');fix.events[0].weapon_context=context;return clipStatistics(applyStatisticsCorrection(clip,fix,'weapon-v2',completionVideo),[],{},completionVideo).evidence[0].weaponContext;};
+ const base=weaponContextFixture('held_at_event').context;
+ const flash=Buffer.alloc(336,0x0f).toString('base64'),mask=Buffer.alloc(336,0x3c).toString('base64');
+ const v2={...base,version:'event-weapon-context-v2',evidence:base.evidence.map((row,i)=>({...row,confidence:.75,weapon_icon:i?flash:row.weapon_icon,weapon_icon_mask:mask}))};
+ assert.equal(show(v2)?.scope,'held_at_event');
+ assert.equal(show({...v2,version:'event-weapon-context-v1'}),undefined);
+ assert.equal(show({...v2,evidence:v2.evidence.map(row=>({...row,weapon_icon_mask:undefined}))}),undefined);
+ const before={...v2,scope:'held_before_event',evidence:[{...v2.evidence[0],actual_pts:9},{...v2.evidence[1],actual_pts:9.5},{actual_pts:10,slot:0,weapon:null,confidence:.4,name_view_agreement:0}]};
+ assert.deepEqual(show(before),{scope:'held_before_event',weapon:'死敌',label:'战果前持枪：死敌'});
+ assert.equal(show({...before,version:'event-weapon-context-v1'}),undefined);
+ assert.equal(show({...before,evidence:[before.evidence[0],{...before.evidence[1],weapon:{id:'car',name:'CAR'}},before.evidence[2]]}),undefined);
+ const hidden=t=>({actual_pts:t,slot:null,highlights:[0,0]}),good=t=>({...v2.evidence[0],actual_pts:t,name_view_agreement:2});
+ const near={...v2,scope:'held_near_event',reason:'same_slot_chain_near_event',evidence:[good(5),good(5.5),hidden(9),hidden(10),good(11)]};
+ assert.deepEqual(show(near),{scope:'held_near_event',weapon:'死敌',label:'战果前后持枪：死敌'});
+ assert.equal(show({...near,evidence:[good(5),good(5.5),{...good(9),slot:1,weapon:{id:'car',name:'CAR'}},hidden(10),good(11)]}),undefined);
+ assert.equal(show({...near,evidence:[good(5),{actual_pts:5.2,excluded_view:true},good(5.5),good(11)]}),undefined);
+ assert.equal(show({...near,version:'event-weapon-context-v1'}),undefined);
+});
 
 test('独立武器修正验证射击或同持枪证据，安全生成标签且不改战绩与事件武器',()=>{
  for(const scope of ['nearby_firing','held_at_event']){

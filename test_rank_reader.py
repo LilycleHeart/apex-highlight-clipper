@@ -106,6 +106,34 @@ class RankTests(unittest.TestCase):
         cv2.rectangle(image,(2470,15),(2530,75),(0,0,200),-1)
         self.assertIsNone(empty_badge_region(image[:108,2440:]))
 
+    def test_shifted_squad_panel_means_no_badge_only_on_confirmed_layout(self):
+        # 无徽章时「剩余小队数」白底面板右移进徽章位；有徽章时此处是深色徽章。
+        from rank_reader import shifted_squad_panel
+        image=np.full((1080,2560,3),120,np.uint8);roi=image[:108,2440:]
+        roi[48:82,5:65]=(250,250,250);roi[55:75,15:30]=(20,20,20);roi[55:75,40:55]=(20,20,20)
+        profile={'reference_size':[2560,1080],'hud_scale':[1,1],'rank_roi':[2440,0,2560,108],'layout_status':'confirmed'}
+        self.assertIsNotNone(shifted_squad_panel(roi))
+        self.assertEqual(RankReader().inspect(image,profile)['tier'],'unranked')
+        profile['layout_status']='unconfirmed';self.assertIsNone(RankReader().inspect(image,profile))
+        badge=np.full((108,120,3),120,np.uint8);cv2.circle(badge,(60,45),35,(30,30,30),-1)
+        self.assertIsNone(shifted_squad_panel(badge))
+
+    def test_colorless_badge_does_not_match_colored_tier_palette(self):
+        from rank_reader import palette_matches
+        template=np.zeros((20,22,3),np.uint8);template[4:16,4:18]=(40,110,200)
+        gray=np.zeros_like(template);gray[4:16,4:18]=(190,190,190)
+        self.assertFalse(palette_matches(template,gray))
+        self.assertTrue(palette_matches(template,template))
+
+    def test_bundled_mode_icons_are_recognized_as_other_mode(self):
+        # 模板裁自真实 HUD；原图放回徽章位应判为「其他模式」，并标明是哪种图标。
+        from rank_reader import mode_clock_evidence
+        for name,icon in [('mode-clock.png','clock'),('mode-heart.png','heart')]:
+            template=cv2.imread(str(BASE/'assets/modes'/name))
+            roi=np.full((108,120,3),90,np.uint8);roi[10:10+template.shape[0],20:20+template.shape[1]]=template
+            self.assertEqual(mode_clock_evidence(roi)['icon'],icon)
+        self.assertIsNone(mode_clock_evidence(np.full((108,120,3),90,np.uint8)))
+
     def test_two_existing_samples_confirm_and_checkpoint_reuses_without_ocr(self):
         frame=BASE/'validation/sample100.jpg'
         if not frame.exists(): self.skipTest('本地真实录像样本不存在')

@@ -17,7 +17,7 @@ export interface FileItem {id:string;path:string;name:string;bytes?:number;durat
 export type MascotStyle='flat'|'sketch';
 export interface ThemePreferences extends AnimationPreferences {mode:'system'|'light'|'dark';seed:string|null;reduceMotion:boolean;mascotStyle:MascotStyle;mascotEnabled:boolean}
 export interface SystemTheme {dark:boolean;accent:string;reduceMotion:boolean}
-export interface OutcomeEvidence {kind:'knock'|'assist'|'elimination';time:number;processStart?:number;processStartBasis?:'shoot'|'hit'|'candidate'|'near_result';text?:string;confidence?:number;target?:string;weapon?:string;weaponContext?:{scope:'nearby_firing'|'held_at_event';weapon:string;label:string}}
+export interface OutcomeEvidence {kind:'knock'|'assist'|'elimination';time:number;processStart?:number;processStartBasis?:'shoot'|'hit'|'candidate'|'near_result';text?:string;confidence?:number;target?:string;weapon?:string;weaponContext?:{scope:'nearby_firing'|'held_at_event'|'held_before_event'|'held_near_event';weapon:string;label:string}}
 export interface Rank {tier:string;name:string;division:string|null;confidence:number;method:string;scope?:string}
 export interface HudName {name:string;confidence:number;method?:string;raw_name?:string}
 export interface Hero extends HudName {id:string}

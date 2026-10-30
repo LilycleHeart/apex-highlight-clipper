@@ -181,7 +181,11 @@ class WeaponTextReader:
         for ident,alias,tokens in self.labels:
             label=normalized(alias)
             # 一字灰色枪名允许再查另一字的模型概率；长名称最多一处缺字/错字。
-            if not (clean==label or min(len(clean),len(label))>=2 and SequenceMatcher(None,clean,label).ratio()>=.70 or
+            # 两字中文枪名错一字（如「猎默」）时相似度只有 0.5；同位置有一字相同才交给模型概率核对，
+            # 仍要求每个字都有实际概率峰值，不靠字面猜。
+            one_off=(len(clean)==len(label)==2 and not clean.isascii() and not label.isascii()
+                     and sum(a==b for a,b in zip(clean,label))==1)
+            if not (clean==label or min(len(clean),len(label))>=2 and SequenceMatcher(None,clean,label).ratio()>=.70 or one_off or
                     len(clean)==1 and not clean.isascii() and len(label)==2 and clean in label):continue
             if any(peaks[token]<.08 for token in tokens):continue
             probability=ctc_label_score(probabilities,tokens)

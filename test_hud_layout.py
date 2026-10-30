@@ -27,6 +27,36 @@ class HudLayoutTests(unittest.TestCase):
         self.assertGreaterEqual(score,.78)
         self.assertGreaterEqual(offset[1],46)
 
+    def test_pillarboxed_four_by_three_recording_anchors_hud_inside_black_bars(self):
+        # 显卡即时回放把未拉伸的 4:3 画面放在 16:9 文件中间，两侧是纯黑边。
+        inner=make_profile(1920,1440,.75)
+        marker=read_image(BASE/'templates/damage-marker.png',cv2.IMREAD_GRAYSCALE)
+        resized=template_for(inner,marker)
+        game=np.full((720,960,3),70,dtype=np.uint8)
+        x,y=round(inner['counter_marker_origin'][0]/2),round(inner['counter_marker_origin'][1]/2)
+        game[y:y+resized.shape[0],x:x+resized.shape[1]]=resized[:,:,None]
+        game=cv2.resize(game,(1920,1440),interpolation=cv2.INTER_NEAREST)
+        frame=np.zeros((1440,2560,3),np.uint8);frame[:,320:2240]=game
+        detected=detect_images([frame],2560,1440)
+        self.assertEqual(detected['layout_status'],'confirmed')
+        self.assertEqual(detected['content_box'],[320,0,1920,1440])
+        self.assertEqual(detected['damage'],[v+320*(i%2==0) for i,v in enumerate(inner['damage'])])
+        # 没有黑边的普通宽屏录像不追加黑边候选，原有布局不变。
+        self.assertNotIn('content_box',make_profile(2560,1440))
+
+    def test_self_name_row_voice_icon_confirms_native_layout_only_on_two_frames(self):
+        # 计分栏被叠加层盖住时，本人名称行的语音图标在两帧中位于固定高度才算原生标准布局。
+        from hud_layout import confirm_by_name_row
+        profile=make_profile(2560,1080);voice=read_image(BASE/'templates/hud/voice.png',cv2.IMREAD_GRAYSCALE)
+        x1,y1,x2,y2=profile['account_roi'];top=round((y1+y2)/2-voice.shape[0]/2)
+        frame=np.full((1080,2560,3),40,np.uint8);frame[top:top+voice.shape[0],x1+120:x1+120+voice.shape[1]]=voice[:,:,None]
+        blank=np.full((1080,2560,3),40,np.uint8)
+        self.assertIsNotNone(confirm_by_name_row([frame,frame],profile))
+        self.assertIsNone(confirm_by_name_row([frame,blank],profile))
+        shifted=np.full((1080,2560,3),40,np.uint8);shifted[top+60:top+60+voice.shape[0],x1+120:x1+120+voice.shape[1]]=voice[:,:,None]
+        self.assertIsNone(confirm_by_name_row([shifted,shifted],profile))
+        self.assertIsNone(confirm_by_name_row([frame,frame],make_profile(2560,1080,.75)))
+
     def _marker_image(self,profile):
         marker=read_image(BASE/'templates/damage-marker.png',cv2.IMREAD_GRAYSCALE)
         resized=template_for(profile,marker);width,height=profile['reference_size']
