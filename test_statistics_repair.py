@@ -9,7 +9,7 @@ import multiprocessing
 from unittest.mock import patch
 from apex_clipper import fingerprint
 from repair_cached_statistics import repair,correction_key,correction_lock,early_export_baseline_fields
-from numeric_reader import METHOD
+from hud_digit_reader import METHOD
 
 
 def hold_correction_lock(path,ready,release):
@@ -30,7 +30,7 @@ class StatisticsRepairTests(unittest.TestCase):
         prior=copy.deepcopy(empty);prior['last_hud']={'kills':None,'assists':None,'damage':150}
         prior['end_frames']=[{'time':t,'native_time':t,'native_verified':True,'damage':150} for t in [8.42,8.5]]
         source=Path('exported.mp4')
-        with patch('repair_cached_statistics.exported_view',return_value=(source,{'path':str(source)},0.,10.,{})),patch('apex_clipper.fingerprint',return_value={}),patch('combat_statistics.counter_endpoints',side_effect=[[empty],[prior]]) as read:
+        with patch('repair_cached_statistics.exported_view',return_value=(source,{'path':str(source)},0.,10.,{})),patch('apex_clipper.fingerprint',return_value={}),patch('repair_cached_statistics.last_counter_time',return_value=None),patch('combat_statistics.counter_endpoints',side_effect=[[empty],[prior]]) as read:
             endpoint=exported_endpoint([],{'start':100.,'end':110.},{})
         result=reconciled_counts(endpoint,[],{'checked_frames':0,'expected_frames':0,'ambiguous_frames':[]})
         self.assertEqual(read.call_count,2)
@@ -38,6 +38,86 @@ class StatisticsRepairTests(unittest.TestCase):
         self.assertTrue(result['partial']['damage'])
         self.assertTrue(any('片尾计分栏未完整读取' in note for note in result['notes']))
         self.assertAlmostEqual(endpoint['end_frames'][-1]['time'],109.96)
+
+    def terminal_fixture(self):
+        fields=['kills','assists','damage']
+        baseline={'kills':2,'assists':4,'damage':923}
+        frames=lambda times,values:[{'time':t,'native_time':t,'native_verified':True,'marker_score':.9,**values} for t in times]
+        empty={'baseline':dict(baseline),'last_hud':dict.fromkeys(fields),'last_hud_update':dict.fromkeys(fields),'unconfirmed_latest':{},
+               'baseline_frames':frames([0.,.04,.08],baseline),'end_frames':[{'time':t,'native_time':t,'native_verified':False,'excluded_view':True} for t in [95.5,95.84]]}
+        def check(values,unconfirmed,times):
+            result=copy.deepcopy(empty);result['last_hud']={**dict.fromkeys(fields),**values};result['unconfirmed_latest']=unconfirmed
+            result['last_hud_update']=dict.fromkeys(fields,times[0]);result['end_frames']=frames(times,values);return result
+        return empty,check
+
+    def test_terminal_lookback_reads_the_last_own_counter_and_waits_out_a_counter_roll(self):
+        # 阵亡前伤害数字正在滚动：最后一帧本人画面只确认了击杀和助攻，伤害往前再找一个稳定读数，较近的未确认值保留。
+        from repair_cached_statistics import exported_endpoint
+        from combat_statistics import reconciled_counts
+        empty,check=self.terminal_fixture()
+        rolling=check({'kills':3,'assists':7},{'damage':1565},[91.8,91.88])
+        steady=check({'kills':3,'assists':7,'damage':1532},{},[91.5,91.58])
+        source=Path('exported.mp4')
+        with patch('repair_cached_statistics.exported_view',return_value=(source,{'path':str(source)},0.,95.88,{})),patch('apex_clipper.fingerprint',return_value={}),\
+             patch('repair_cached_statistics.last_counter_time',return_value=91.88),patch('combat_statistics.counter_endpoints',side_effect=[[empty],[rolling],[steady]]) as read:
+            endpoint=exported_endpoint([],{'start':0.,'end':95.88},{})
+        self.assertEqual(read.call_count,3)
+        self.assertEqual([round(row['time'],2) for row in read.call_args_list[1].args[0]['rows']],[91.8,91.88])
+        self.assertEqual([round(row['time'],2) for row in read.call_args_list[2].args[0]['rows']],[91.5,91.58])
+        self.assertEqual(endpoint['last_hud'],{'kills':3,'assists':7,'damage':1532})
+        self.assertEqual(endpoint['unconfirmed_latest'],{'damage':1565});self.assertTrue(endpoint['terminal_hud_hidden'])
+        self.assertTrue(endpoint['end_frames'][-1].get('excluded_view'))
+        result=reconciled_counts(endpoint,[],{'checked_frames':0,'expected_frames':0,'ambiguous_frames':[]})
+        self.assertEqual((result['counts']['kills'],result['counts']['damage']),(1,609));self.assertTrue(result['partial']['damage'])
+
+    def test_terminal_lookback_does_not_chase_fields_that_were_never_read(self):
+        from repair_cached_statistics import exported_endpoint,lookback_moments
+        empty,check=self.terminal_fixture()
+        source=Path('exported.mp4')
+        with patch('repair_cached_statistics.exported_view',return_value=(source,{'path':str(source)},0.,95.88,{})),patch('apex_clipper.fingerprint',return_value={}),\
+             patch('repair_cached_statistics.last_counter_time',return_value=91.88),patch('combat_statistics.counter_endpoints',side_effect=[[empty],[check({'damage':1689},{},[91.8,91.88])]]) as read:
+            endpoint=exported_endpoint([],{'start':0.,'end':95.88},{})
+        self.assertEqual(read.call_count,2);self.assertEqual(endpoint['last_hud'],{'kills':None,'assists':None,'damage':1689})
+        # 片尾这几秒都找不到本人计分图标时，仍按原来的固定距离回看。
+        self.assertEqual([round(95.88-t,2) for t in lookback_moments(None,0.,95.88)],[1.5,3.,6.,12.,24.,48.])
+        self.assertEqual([round(t,2) for t in lookback_moments(91.88,0.,95.88)][:6],[91.88,91.58,91.28,90.88,90.38,89.38])
+
+    def test_stable_lead_run_ignores_fading_counter_reads(self):
+        from repair_cached_statistics import stable_lead_run
+        rows=lambda pairs:[{'native_time':t,'native_verified':True,'damage':v} for t,v in pairs]
+        # 计分栏淡入时 771 连续两帧读成 71：要三帧、0.6 秒以上的同一读数才采用。
+        self.assertEqual(stable_lead_run(rows([(.12,71),(.2,71),(.3,None),(.6,771),(.8,None),(1.,771),(1.3,771)]),'damage')[0],771)
+        self.assertEqual(stable_lead_run(rows([(1.2,218),(1.4,218),(2.2,218)]),'damage')[0],218)
+        self.assertEqual(stable_lead_run(rows([(.12,71),(.2,71),(.3,71)]),'damage'),(None,[]))
+        # 计数只增不减：比之前读数小的一段不能当起点。
+        self.assertEqual(stable_lead_run(rows([(.2,900),(.3,900),(.5,90),(.8,90),(1.2,90),(1.5,900),(2.,900),(2.4,900)]),'damage')[0],900)
+        self.assertEqual(stable_lead_run(rows([(.2,5),(.4,5),(.6,5)])+[{'native_time':1.,'native_verified':False,'damage':5}],'damage'),(None,[]))
+        value,run=stable_lead_run(rows([(2.4,6),(3.3,6),(4.,6),(13.,189)]),'damage');self.assertEqual((value,len(run)),(6,3))
+
+    def test_exported_lead_baseline_is_a_lower_bound_start_only_for_missing_fields(self):
+        from repair_cached_statistics import exported_lead_baseline,native_verified_fields
+        from combat_statistics import reconciled_counts
+        lead=[{'frame':f'native:export:{t:.5f}','time':t,'native_time':t,'native_verified':True,'marker_score':.95,'kills':1,'assists':5,**({'damage':v} if v else {})}
+              for t,v in [(.12,71),(.2,71),(.4,None),(.6,771),(1.,771),(1.3,771)]]
+        def endpoint():
+            return {'baseline':{'kills':1,'assists':5,'damage':None},'last_hud':{'kills':1,'assists':5,'damage':868},'unconfirmed_latest':{},
+                    'baseline_frames':[{'time':t,'native_time':t,'native_verified':True,'marker_score':.95,'kills':1,'assists':5} for t in [0.,.04,.09]],
+                    'end_frames':[{'time':t,'native_time':t,'native_verified':True,'kills':1,'assists':5,'damage':868} for t in [24.5,25.]],
+                    'export_baseline_fields':['kills','assists'],'native_view_version':'self-hud-view-v3','native_numeric_method':METHOD,'native_counter_scope':'exported_visible_delta'}
+        current=endpoint()
+        with patch('apex_clipper.fingerprint',return_value={}),patch('combat_statistics.counter_endpoints',return_value=[{'baseline_frames':lead}]) as read:
+            exported_lead_baseline(current,Path('clip.mp4'),0.,29.,{},['damage'])
+        self.assertEqual(read.call_args.kwargs['lead_rows'],len(read.call_args.args[0]['rows']))
+        self.assertEqual(current['baseline']['damage'],771);self.assertEqual(current['baseline_lower_bound_fields'],['damage'])
+        self.assertEqual(current['export_baseline_fields'],['kills','assists','damage'])
+        self.assertIn('damage',native_verified_fields(current))
+        result=reconciled_counts(current,[],{'checked_frames':0,'expected_frames':0,'ambiguous_frames':[]})
+        self.assertEqual(result['counts']['damage'],97);self.assertTrue(result['partial']['damage']);self.assertFalse(result['partial']['kills'])
+        # 导出时已有统计的字段不在 fields 里：不读成片开头，原记录照旧沿用。
+        untouched=endpoint()
+        with patch('combat_statistics.counter_endpoints',side_effect=AssertionError('no lead read')):
+            exported_lead_baseline(untouched,Path('clip.mp4'),0.,29.,{},[])
+        self.assertIsNone(untouched['baseline']['damage'])
 
     def test_weapon_only_repair_preserves_counters_and_maps_local_event_time(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -274,15 +354,21 @@ class StatisticsRepairTests(unittest.TestCase):
             view=exported_view([(clip,{'path':'clip.mp4'})],{'start':0,'end':10},{})
         self.assertEqual(view[4]['layout_status'],'confirmed');detect.assert_called_once()
 
-    def test_deleted_source_uses_original_match_start_zero_with_native_export_end(self):
+    def test_export_only_recheck_uses_original_match_start_zero_with_native_export_end(self):
         # 成片开头计分栏未显示：起点取导出时完整原片判定的开局 0，终点取成片片尾双帧原生读数。
+        # 原片已删、或原片仍在但采样缓存已清理，本次都只能看成片首尾，不能把导出时的计数清空。
+        for deleted in [True,False]:
+            with self.subTest(source_deleted=deleted):self.export_only_recheck(deleted)
+
+    def export_only_recheck(self,deleted):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);record,original,fresh=self.fixture(root)
             report=json.loads(original.read_text('utf-8'));segment=report['segments'][0]
             segment['counts'].update(kills=None,damage=None);segment['partial'].update(kills=True,damage=True)
             segment['endpoint']={'baseline':{'kills':0,'assists':0,'damage':0},'last_hud':{},'initial_hidden_zero':True,'baseline_frames':[]}
             original.write_text(json.dumps(report),'utf-8')
-            Path(report['source']['path']).unlink();(Path(record['analysis_cache'])/'hud.json').unlink()
+            if deleted:Path(report['source']['path']).unlink()
+            (Path(record['analysis_cache'])/'hud.json').unlink()
             exported=root/'videos/clip.mp4';exported.write_bytes(b'export fixture')
             manifest={'metadata_directory':record['directory'],'video_directory':str(root/'videos'),'source':report['source'],'outputs':[str(exported)],'clips':[{'output':str(exported),'segment':{'start':0,'end':20}}]}
             original.with_name('export.json').write_text(json.dumps(manifest),'utf-8')
@@ -390,3 +476,48 @@ class StatisticsRepairTests(unittest.TestCase):
             self.assertEqual(result['segments'][0]['counts']['damage'],196)
             self.assertEqual(original.read_bytes(),raw)
             self.assertTrue(all(path.parent==root/'software/recognition-corrections' for path in(root/'software/recognition-corrections').glob('*.json')))
+
+    def zero_rows(self,times):
+        return [{'frame':f'native:export:{t:.5f}','time':t,'native_verified':True,'native_time':t,'kills':0,'assists':0,'damage':0,'zero_evidence':{'method':'test'}} for t in times]
+
+    def test_exported_clip_zero_start_counts_as_export_baseline(self):
+        # 成片开头计分栏没出现、小队数行在：起点三项按 0，与开头 80 毫秒内的原生读数同样作为成片起点。
+        from repair_cached_statistics import zero_exported_counters,native_verified_fields
+        endpoint={'baseline':dict.fromkeys(['kills','assists','damage']),'last_hud':{'kills':2,'assists':1,'damage':384},'unconfirmed_latest':{},
+                  'baseline_frames':[{'time':t,'native_time':t,'native_verified':True,'marker_score':.55} for t in [0.,.04,.08]],
+                  'end_frames':[{'time':t,'native_time':t,'native_verified':True,'kills':2,'assists':1,'damage':384} for t in [24.5,24.75,25.]],
+                  'export_baseline_fields':[],'native_view_version':'self-hud-view-v3','native_numeric_method':METHOD,'native_counter_scope':'exported_visible_delta'}
+        with patch('repair_cached_statistics.exported_zero_frames',side_effect=[self.zero_rows([.31,.81])]) as probe:
+            zero_exported_counters(endpoint,Path('clip.mp4'),0.,25.,{})
+        self.assertEqual(probe.call_count,1)  # 片尾已读到计数，不再核对
+        self.assertEqual(endpoint['baseline'],{'kills':0,'assists':0,'damage':0})
+        self.assertEqual(endpoint['export_baseline_fields'],['kills','assists','damage']);self.assertTrue(endpoint['initial_hidden_zero'])
+        self.assertEqual(sorted(native_verified_fields(endpoint)),['assists','damage','kills'])
+        # 开头已经找到计分图标（只是数字没读出来）时不能判 0。
+        visible={**endpoint,'baseline':dict.fromkeys(['kills','assists','damage']),'export_baseline_fields':[],
+                 'baseline_frames':[{'time':0.,'native_time':0.,'native_verified':True,'marker_score':.92}]}
+        with patch('repair_cached_statistics.exported_zero_frames',side_effect=AssertionError('icon visible')):
+            zero_exported_counters(visible,Path('clip.mp4'),0.,25.,{})
+        self.assertIsNone(visible['baseline']['damage'])
+
+    def test_exported_clip_zero_end_replaces_unread_own_view_tail_only(self):
+        from repair_cached_statistics import zero_exported_counters
+        from combat_statistics import reconciled_counts
+        base={'baseline':{'kills':0,'assists':0,'damage':0},'last_hud':dict.fromkeys(['kills','assists','damage']),'unconfirmed_latest':{},
+              'baseline_frames':[{'time':t,'native_time':t,'native_verified':True,'kills':0,'assists':0,'damage':0} for t in [0.,.04]],
+              'end_frames':[{'time':t,'native_time':t,'native_verified':True,'marker_score':.5} for t in [9.5,9.75,9.96]],'export_baseline_fields':['kills','assists','damage']}
+        coverage={'checked_frames':0,'expected_frames':0,'ambiguous_frames':[]}
+        own=copy.deepcopy(base)
+        with patch('repair_cached_statistics.exported_zero_frames',return_value=self.zero_rows([9.7,9.96])) as probe:
+            zero_exported_counters(own,Path('clip.mp4'),0.,10.,{})
+        self.assertTrue(probe.call_args.kwargs.get('descending'))
+        self.assertEqual([row['native_time'] for row in own['end_frames']],[9.7,9.96])
+        result=reconciled_counts(own,[],coverage)
+        self.assertEqual(result['counts']['damage'],0);self.assertFalse(result['partial']['damage'])
+        dead=copy.deepcopy(base);dead['excluded_terminal_view']=True
+        dead['end_frames']=[{'time':9.96,'native_time':9.96,'native_verified':False,'excluded_view':True}]
+        with patch('repair_cached_statistics.exported_zero_frames',return_value=self.zero_rows([4.,7.])):
+            zero_exported_counters(dead,Path('clip.mp4'),0.,10.,{})
+        result=reconciled_counts(dead,[],coverage)
+        # 阵亡后观战的片尾仍按下限：观战期间本人可能还有延迟伤害。
+        self.assertEqual(result['counts']['damage'],0);self.assertTrue(result['partial']['damage'])

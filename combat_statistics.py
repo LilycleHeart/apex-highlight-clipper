@@ -87,6 +87,57 @@ def stable_value(rows,key):
     return next((r[key] for r in reversed(rows) if r.get(key) in reliable),None)
 
 
+LEAD_ROWS=8
+ZERO_WINDOW_SECONDS=300.
+ZERO_PROBES=40
+# 片尾最后这一小段若右上角整块不显示（转场、刚打开地图），仍可用紧挨着的「只有小队数行」画面证明片尾是 0。
+END_TOLERANCE=1.5
+
+def earliest_consistent(rows,key,start):
+    """段内最早一个被下一帧同值确认的读数，返回 (数值, 是否只能作下限)。
+
+    计数只增不减：确认之前若读到过更小的数，说明段首之后已有增量；最早一帧晚于段首 2 秒，
+    段首到这一帧之间也可能有增量。这两种情况起点只能作下限。比确认值大的早期读数是误读。
+    """
+    unique={}
+    for index,row in enumerate(rows):
+        if row.get(key) is not None:unique.setdefault(row.get('native_time',row.get('frame',index)),row)
+    reads=sorted(unique.values(),key=lambda row:row['time'])
+    for index in range(len(reads)-1):
+        if reads[index][key]==reads[index+1][key]:
+            value=reads[index][key]
+            return value,reads[index]['time']>start+2 or any(row[key]<value for row in reads[:index])
+    return None,False
+
+def zero_window(rows,start,end,reverse=False):
+    """段首（reverse 时为段尾）本人视角、计分栏没显示的采样行，按核对顺序排列。
+
+    观战、阵亡、大厅等非本人画面里本人不会造成伤害，直接跳过；段首核对时开头的结算画面也跳过。
+    遇到计分栏、对局结束画面，或离第一帧本人画面超过 ZERO_WINDOW_SECONDS 即停。
+    """
+    ordered=sorted((row for row in rows if start<=row['time']<end),key=lambda row:row['time'],reverse=reverse)
+    window=[]
+    for row in ordered:
+        if row.get('round_ended'):
+            if window:break
+            continue
+        if row.get('inactive_view') or row.get('friend_spectate'):continue
+        if (row.get('counter_marker_score') or 0)>=.78 or window and abs(row['time']-window[0]['time'])>ZERO_WINDOW_SECONDS:break
+        window.append(row)
+    return window
+
+def probe_rows(window):
+    """前三帧逐帧核对，之后一分钟内每 5 秒、再往后每 10 秒取一帧，最多 ZERO_PROBES 帧。"""
+    picked=[]
+    for row in window:
+        if picked and len(picked)>=3:
+            gap=5 if abs(row['time']-picked[0]['time'])<=60 else 10
+            if abs(row['time']-picked[-1]['time'])<gap:continue
+        picked.append(row)
+        if len(picked)>=ZERO_PROBES:break
+    return picked
+
+
 def final_counter_reader():
     import os
     from engine_pool import pooled_engine
@@ -95,7 +146,14 @@ def final_counter_reader():
     backend=os.environ.get('APEX_OCR_BACKEND','cpu')
     return pooled_engine(('final-counters-exact-v2',backend),lambda:ExactTextCache(NumericReader(backend)))
 
-def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps=None,initial_samples=None):
+def counter_digit_reader():
+    """本人计分栏数字的专用识别（hud_digit_reader）；弹药等其他数字仍用 final_counter_reader。"""
+    from engine_pool import pooled_engine
+    from hud_digit_reader import HudDigitReader,MODEL_SHA256
+    from ocr_cache import ExactTextCache
+    return pooled_engine(('hud-digits',MODEL_SHA256),lambda:ExactTextCache(HudDigitReader()))
+
+def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps=None,initial_samples=None,lead_rows=LEAD_ROWS):
     from sample_locations import SampleResolver
     resolver=SampleResolver(cache,samples)
     source=Path(cache['source']['path']);native=source.is_file()
@@ -121,16 +179,20 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
     for segment in segments:
         start,end=segment['start'],segment['end']
         before=[r for r in eligible if max(0,start-120)<=r['time']<=start]
-        if not before: before=[r for r in eligible if start<r['time']<=start+2]
+        # 段前没有本人计分栏（导入片段、录像开头、开头在观战）：取段内最早几帧，按「变化前两帧一致」定起点。
+        lead=[] if before else [r for r in eligible if start<r['time']<end][:lead_rows]
+        early=[r for r in lead if r['time']<=start+2]
         after=[r for r in eligible if start<=r['time']<end]
-        initial=[r for r in after if r['time']<=start+15][:5] if not before else []
-        pair=(before[-5:],after[-5:],initial);probes.append(pair)
+        initial=[r for r in after if r['time']<=start+15][:5] if not before and not early else []
+        pair=(before[-5:],after[-5:],initial,lead);probes.append(pair)
         for group in pair:
             for row in group: chosen[row['frame']]=row
-    from stat_counter_fallback import CounterFallback,counter_box,digit_view
-    fallback=CounterFallback();fallback_views={}
+    from stat_counter_fallback import CounterFallback,counter_box
+    from hud_digit_reader import MINIMUM
+    fallback=CounterFallback()
     marker=read_image(str(BASE/profile['counter_marker']),0);images=[];positions=[];recognized={}
     boxes={'kills':profile['kills'],'assists':profile.get('assists',ASSIST_BOX),'damage':counter_box(profile,'damage')}
+    limit=lambda key:20000 if key=='damage' else 99
     for row in chosen.values():
         image,provenance=frame_image(row)
         result={'frame':row['frame'],'time':row['time'],**provenance};recognized[row['frame']]=result
@@ -138,37 +200,20 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
         delta,score=counter_offset(image,profile,marker);result['marker_score']=float(score)
         if delta is None: continue
         regions=fallback.regions(image,profile,delta)
-        fallback_views[row['frame']]={key:digit_view(region) for key,region in regions.items()}
         for key,box in boxes.items():
             if key not in regions:continue
-            images.append(cv2.resize(regions[key],None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC))
+            # 专用模型直接读原生分辨率裁片，不再放大、二值化或拆字后交给通用文字模型补读。
+            images.append(regions[key])
             positions.append((row['frame'],key))
-    recognizer=final_counter_reader();values=[]
-    for i in range(0,len(images),24):
+    recognizer=counter_digit_reader();values=[]
+    for i in range(0,len(images),64):
         from app_cancel import check_cancel
-        check_cancel();batch,_=recognizer(images[i:i+24]);values.extend(batch)
+        check_cancel();batch,_=recognizer(images[i:i+64]);values.extend(batch)
     for (frame,key),(text,confidence) in zip(positions,values):
-        recognized[frame][key]=numeric(text,float(confidence),20000 if key=='damage' else 99,.88)
-    extra_views=[];extra_positions=[]
-    for frame,result in recognized.items():
-        missing=[key for key in FIELDS if result.get(key) is None]
-        if not missing:continue
-        patches=fallback_views.get(frame,{})
-        for key in missing:
-            patch=patches.get(key)
-            if patch is not None:extra_views.append(patch);extra_positions.append((frame,key))
-    extra_values=[]
-    for i in range(0,len(extra_views),24):
-        batch,_=recognizer(extra_views[i:i+24]);extra_values.extend(batch)
-    for (frame,key),(text,confidence),view in zip(extra_positions,extra_values,extra_views):
-        value=numeric(text,float(confidence),20000 if key=='damage' else 99,.90)
-        if value is None:
-            alias=fallback.decode_numeric_alias(text,view)
-            if alias is not None:value=numeric(alias,fallback.last_match_score,20000 if key=='damage' else 99,.90)
-        if value is not None:recognized[frame][key]=value;recognized[frame].setdefault('recovered_fields',[]).append(key)
+        recognized[frame][key]=numeric(text,float(confidence),limit(key),MINIMUM)
     # 尾端刚增加的伤害可能只有一张固定采样；在其附近补最多两帧，不能退回较早的多数值冒充最终数。
     if native:
-        for segment,(_,after,_) in zip(segments,probes):
+        for segment,(_,after,_,_) in zip(segments,probes):
             if not after:continue
             last=after[-1];latest=recognized[last['frame']]
             pending=[key for key in FIELDS if latest.get(key) is not None and latest[key]!=stable_value([recognized[row['frame']] for row in after],key)]
@@ -183,73 +228,74 @@ def counter_endpoints(cache,samples,segments,profile,extra_samples=None,scan_fps
                 if delta is None:continue
                 result={**row,**provenance,'marker_score':float(score)}
                 regions=fallback.regions(image,profile,delta);keys=[key for key in boxes if key in regions]
-                for key,(text,confidence) in zip(keys,recognizer([cv2.resize(regions[key],None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC) for key in keys])[0]):result[key]=numeric(text,float(confidence),20000 if key=='damage' else 99,.88)
+                for key,(text,confidence) in zip(keys,recognizer([regions[key] for key in keys])[0]):result[key]=numeric(text,float(confidence),limit(key),MINIMUM)
                 recognized[row['frame']]=result;after.append(row);after.sort(key=lambda value:value['time'])
                 if all(latest.get(key)==stable_value([recognized[value['frame']] for value in after],key) for key in pending):break
-    if native:
-        from stat_counter_fallback import without_counter_divider
-        # 仅在伤害端点尚未确认时复读现有原生帧，不能改变已有双帧确认值。
-        for before,after,_ in probes:
-            for group in [before,after]:
-                if stable_value([recognized[row['frame']] for row in group],'damage') is not None:continue
-                missing=[row for row in group if recognized[row['frame']].get('native_verified') is True and recognized[row['frame']].get('damage') is None and recognized[row['frame']].get('marker_score',0)>=.78]
-                for row in missing[:3]:
-                    image,_=frame_image(row)
-                    if image is None:continue
-                    delta,_=counter_offset(image,profile,marker)
-                    if delta is None:continue
-                    region=fallback.regions(image,profile,delta).get('damage')
-                    clean=without_counter_divider(cv2.resize(region,None,fx=3,fy=3,interpolation=cv2.INTER_CUBIC)) if region is not None else None
-                    if clean is None:continue
-                    (text,confidence)=recognizer([clean])[0][0]
-                    value=numeric(text,float(confidence),20000,.88)
-                    if value is not None:
-                        recognized[row['frame']]['damage']=value
-                        recognized[row['frame']].setdefault('recovered_fields',[]).append('damage_divider')
     endpoints=[]
-    for segment_index,(segment,(before,after,initial)) in enumerate(zip(segments,probes)):
+    from apex_clipper import stable_counter
+    import squads_panel
+    def probe(window):
+        for row in probe_rows(window):
+            image,provenance=frame_image(row)
+            yield row['time'],image,{**provenance,'frame':row['frame']}
+    for segment_index,(segment,(before,after,initial,lead)) in enumerate(zip(segments,probes)):
+        start,end=segment['start'],segment['end']
         base_rows=[recognized[r['frame']] for r in before];end_rows=[recognized[r['frame']] for r in after]
         baseline={key:stable_value(base_rows,key) for key in FIELDS}
-        hidden=[r for r in rows if segment['start']<=r['time']<min(segment['end'],segment['start']+5) and
+        hidden=[r for r in rows if start<=r['time']<min(end,start+5) and
                 not r.get('inactive_view') and (r.get('counter_marker_score') or 0)<.78]
-        prior_visible=any(r['time']<segment['start'] and r.get('counter_marker_score',0)>=.78 and
-                          (r.get('kills') is not None or r.get('damage') is not None) for r in rows)
-        # 本人计分栏在首次战果前尚未显现；半局起录但已有计分栏时绝不归零。
-        hidden_count=len(hidden)
-        if not prior_visible and hidden_count<2 and extra_samples is not None:
-            from combat_outcome_reader import candidate_indices
-            from apex_clipper import inactive_view
-            rate=scan_fps or cache['fps']
-            for index in candidate_indices({'start':segment['start'],'end':min(segment['end'],segment['start']+5)},rate)[:10]:
-                path=Path(initial_samples or samples)/f'{index:06d}.jpg'
-                if not path.is_file():path=Path(extra_samples)/f'candidate-{segment_index+1:03d}'/path.name
-                if not path.is_file():continue
-                image=read_image(str(path));delta,_=counter_offset(image,profile,marker)
-                if delta is None and not inactive_view(image):hidden_count+=1
-                if hidden_count>=2:break
-        from apex_clipper import stable_counter
-        previous_damage=[value for index,value in stable_counter(rows,'damage').items() if rows[index]['time']<segment['start']]
+        previous_damage=[value for index,value in stable_counter(rows,'damage').items() if rows[index]['time']<start]
         first_damage=stable_value([recognized[r['frame']] for r in initial],'damage')
-        reset_evidence=(not before and hidden_count>=2 and previous_damage and first_damage is not None and first_damage<previous_damage[-1]-20)
-        initial_zero=(not prior_visible or bool(reset_evidence)) and hidden_count>=2
-        if initial_zero:
+        # 新一局：段前很久没有本人计分栏，段首计分栏隐藏，段内首个伤害又明显小于上一局。
+        reset_evidence=bool(initial and len(hidden)>=2 and previous_damage and first_damage is not None and first_damage<previous_damage[-1]-20)
+        # 计分栏没出现不能只凭时间位置当作 0；要右上角真的只有小队数那一行（见 squads_panel）。
+        opening=zero_window(rows,start,end);zero_start=zero_end=[];lower=[];zero_baseline=False
+        if all(value is None for value in baseline.values()) and opening:
+            zero_start=squads_panel.zero_frames(probe(opening),profile)
+        if zero_start:
+            baseline=dict.fromkeys(FIELDS,0);base_rows=base_rows+zero_start;zero_baseline=True
+        elif reset_evidence:
             baseline={key:0 if value is None else value for key,value in baseline.items()}
+        elif lead:
+            lead_rows=[recognized[r['frame']] for r in lead];base_rows=base_rows+lead_rows
+            for key in FIELDS:
+                value,bounded=earliest_consistent(lead_rows,key,start)
+                if value is not None:
+                    baseline[key]=value
+                    if bounded:lower.append(key)
         last_values={key:stable_value(end_rows,key) for key in FIELDS}
+        if not after:
+            # 段内一直没出现计分栏：段尾本人画面若仍只有小队数行，三项到段尾都还是 0。
+            closing=zero_window(rows,start,end,reverse=True)
+            zero_end=squads_panel.zero_frames(probe(closing),profile,latest=END_TOLERANCE) if closing else []
+            if zero_end:
+                last_values=dict.fromkeys(FIELDS,0);end_rows=sorted(zero_end,key=lambda row:row['time'])
+                if all(value is None for value in baseline.values()) and opening and max(row['time'] for row in zero_end)<=opening[-1]['time']:
+                    # 从段首到这几帧一直是本人视角、计分栏一直没出现，段首同样是 0。
+                    baseline=dict.fromkeys(FIELDS,0);zero_baseline=True
         unconfirmed_latest={key:next((row[key] for row in reversed(end_rows) if row.get(key) is not None),None) for key in FIELDS}
         unconfirmed_latest={key:value for key,value in unconfirmed_latest.items() if value is not None and value!=last_values[key]}
+        # 计数只增不减：段尾较早的读数比确认末值还大，说明其中有一方读错（例如 428 与 426），末值只能当下限。
+        regressed={key:max(row[key] for row in end_rows if row.get(key) is not None) for key in FIELDS
+                   if last_values[key] is not None and any(row.get(key) is not None and row[key]>last_values[key] for row in end_rows)}
+        for key,value in regressed.items():unconfirmed_latest.setdefault(key,value)
         updates={}
         for key,value in last_values.items():
             last_change=None;last_seen_value=None
             for row in rows:
-                if row['time']>=segment['end']:break
+                if row['time']>=end:break
                 if row.get('inactive_view') or row.get('friend_spectate') or row.get(key) is None:continue
                 if row[key]!=last_seen_value:last_change=row['time'];last_seen_value=row[key]
             updates[key]=last_change if last_seen_value==value else None
         endpoints.append({'baseline':baseline,'last_hud':last_values,'last_hud_update':updates,
-                          'baseline_frames':base_rows,'end_frames':end_rows,'unconfirmed_latest':unconfirmed_latest,'initial_hidden_zero':initial_zero,'new_round_reset':bool(reset_evidence)})
+                          'baseline_frames':base_rows,'end_frames':end_rows,'unconfirmed_latest':unconfirmed_latest,
+                          'initial_hidden_zero':zero_baseline or reset_evidence,'new_round_reset':reset_evidence})
+        if zero_start or zero_end:endpoints[-1]['zero_evidence']={'method':squads_panel.VERSION,'start':len(zero_start),'end':len(zero_end)}
+        if lower:endpoints[-1]['baseline_lower_bound_fields']=lower
+        if regressed:endpoints[-1]['terminal_regression_fields']=sorted(regressed)
         if native:
             from outcome_reader import SELF_VIEW_VERSION
-            from numeric_reader import METHOD
+            from hud_digit_reader import METHOD
             endpoints[-1]['native_view_version']=SELF_VIEW_VERSION
             endpoints[-1]['native_numeric_method']=METHOD
     if native and fingerprint(source)!=cache['source']:raise ValueError('核对战绩端点期间原录像发生变化')
@@ -343,7 +389,7 @@ def confirmed_assist_eliminations(events):
 def complete_exported_counter_delta(endpoint,key):
     """现有成片的完整可见增量不受未录到的局后归因推测覆盖。"""
     if endpoint.get('native_counter_scope')!='exported_visible_delta' or endpoint.get('native_view_version')!='self-hud-view-v3':return False
-    if endpoint.get('native_numeric_method') not in ['numeric-three-model-v3','numeric-three-model-v4','numeric-three-model-v5']:return False
+    if endpoint.get('native_numeric_method') not in ['numeric-three-model-v3','numeric-three-model-v4','numeric-three-model-v5','hud-digits-v1']:return False
     if key not in endpoint.get('export_baseline_fields',[]) or key in endpoint.get('unconfirmed_latest',{}) or endpoint.get('excluded_terminal_view'):return False
     baseline=endpoint.get('baseline',{}).get(key);last=endpoint.get('last_hud',{}).get(key)
     if any(not isinstance(value,int) or isinstance(value,bool) or value<0 for value in [baseline,last]) or last<baseline:return False
@@ -373,6 +419,8 @@ def reconciled_counts(endpoint,events,coverage,settlement=None):
             hud_deltas[key]=v-b
             counts[key]=v-b;partial[key]=bool(settlement and not settled) or bool(settlement and key=='damage') or not settled and (key in endpoint.get('unconfirmed_latest',{}) or key in terminal_unreadable_fields(endpoint) or bool(endpoint.get('excluded_terminal_view')))
             if visible_complete.get(key):partial[key]=False
+            # 起点取自段首之后的读数时，段首到该读数之间的增量没算进来。
+            if key in endpoint.get('baseline_lower_bound_fields',[]):partial[key]=True
         else:
             n=len(assist_eliminations) if key=='assists' else sum(e['kind']==kind for e in confirmed) if kind else 0
             counts[key]=n or None;partial[key]=True
@@ -406,6 +454,11 @@ def reconciled_counts(endpoint,events,coverage,settlement=None):
     if endpoint.get('unconfirmed_latest') and not settled:notes.append('末端变化未获得双帧确认，相关计数仅为已确认下限')
     if terminal_unreadable_fields(endpoint) and not settled:notes.append('片尾计分栏未完整读取，较早已确认数值仅为下限')
     if endpoint.get('excluded_terminal_view') and not settled:notes.append('片尾包含观战画面；仅使用此前本人 HUD，计数保留为已确认下限')
+    if endpoint.get('baseline_lower_bound_fields'):notes.append('段首读不到本人计分栏，起点取之后最早的稳定读数，相关计数仅为下限')
+    if endpoint.get('terminal_regression_fields'):notes.append('段尾较早读数大于末值，计数不会减少，说明有读错，末值仅为下限')
+    zero=endpoint.get('zero_evidence') or {}
+    if zero.get('start'):notes.append('段首右上角只有小队数行、计分行还没出现，三项计数按 0 起算')
+    if zero.get('end'):notes.append('段尾右上角仍只有小队数行、计分行没有出现，三项计数到段尾为 0')
     return {'counts':counts,'partial':partial,'notes':notes,'endpoint':endpoint,'settlement_totals':settled}
 
 def collect_statistics(cache,samples,segments,profile,checkpoint):

@@ -96,3 +96,22 @@
 
 .hud-task-float-actions{display:flex;justify-content:flex-end;gap:8px}
 .hud-task-float-actions .secondary{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:10px;font-size:11px}
+
+
+/* 收藏：已收藏的星标点亮；工具栏收藏夹入口与列表面板。 */
+.clip-action.clip-collect[data-collected=true]{color:var(--card-accent)}
+.clip-action.clip-collect[data-collected=true]:hover{color:color-mix(in srgb,var(--card-accent) 82%,white)}
+.collection-toggle{display:inline-flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
+.collection-toggle[data-active=true]{color:var(--card-accent)}
+.collection-toggle>small{min-width:16px;padding:0 5px;border-radius:999px;background:var(--card-tint);color:var(--card-muted);font-size:10px;line-height:16px;text-align:center}
+.collection-browser-list{display:grid;gap:6px;margin-top:10px;max-height:320px;overflow:auto}
+.collection-browser-row{display:flex;align-items:center;gap:4px}
+.collection-browser-row>.collection-browser-item{flex:1}
+.collection-browser-item{display:flex;align-items:center;gap:8px;width:100%;min-width:0;min-height:38px;padding:8px 10px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--card-ink);font-size:12px;text-align:left;cursor:pointer}
+.collection-browser-item>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.collection-browser-item>small{flex:none;color:var(--card-muted);font-size:10px}
+.collection-browser-item:hover,.collection-browser-item:focus-visible{background:var(--card-tint)}
+.collection-browser-item[aria-pressed=true]{border-color:var(--card-accent);background:var(--card-tint);color:var(--card-accent)}
+.collection-browser-item[aria-pressed=true]>svg{color:var(--card-accent)}
+.collection-browser-row .icon-button[data-confirming=true]{color:var(--error)}
+.collection-browser-empty{margin:10px 0 0;color:var(--card-muted);font-size:12px}

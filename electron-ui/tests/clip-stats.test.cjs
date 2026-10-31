@@ -1,6 +1,6 @@
 const{test}=require('node:test');const assert=require('node:assert/strict');
 const{clipStatistics}=require('../dist-electron/src/clipStats');
-const{applyStatisticsCorrection,cleanTargetName}=require('../dist-electron/src/clipStats');
+const{applyStatisticsCorrection,cleanTargetName,importedStatisticsPartial}=require('../dist-electron/src/clipStats');
 
 test('片尾遮挡的已有数字保留下限，不把较早末值冒充当前本局总数',()=>{
  const clip={segment:{start:0,end:20},summary:{damage:196,statistics_partial:{damage:false}}};
@@ -60,6 +60,26 @@ test('非空旧数值仅能由匹配区间且两端双帧原生证据的修复�
  assert.equal(applyStatisticsCorrection(clip,fromExport,'v9',{...identity,size:124}),clip);
  assert.equal(applyStatisticsCorrection(clip,fromExport,'v9',identity).summary.damage,196);
  const lower=structuredClone(fix);lower.partial.damage=true;lower.endpoint.unconfirmed_latest={damage:2300};const bound=applyStatisticsCorrection(clip,lower,'v9');assert.equal(bound.summary.damage,196);assert.equal(bound.summary.statistics_partial.damage,true);
+});
+
+test('成片开头只有小队数行时按 0 起算，两帧原生证据与片尾读数都齐才显示',()=>{
+ const identity={path:'C:\\videos\\clip.mp4',size:123,mtime_ms:123456};
+ const zero=[.31,.81].map(native_time=>({native_time,native_verified:true,kills:0,assists:0,damage:0,zero_evidence:{method:'squads-row-zero-v1'}}));
+ const endpoint={native_view_version:'self-hud-view-v3',native_numeric_method:'numeric-three-model-v5',native_counter_scope:'exported_visible_delta',exported_video_identity:identity,
+  export_baseline_fields:['kills','assists','damage'],baseline:{kills:0,assists:0,damage:0},last_hud:{kills:2,assists:1,damage:384},unconfirmed_latest:{},
+  baseline_frames:zero,end_frames:[24.5,24.75].map(native_time=>({native_time,native_verified:true,kills:2,assists:1,damage:384}))};
+ const fix={start:0,end:25,counts:{kills:2,assists:1,damage:384},partial:{kills:false,assists:false,damage:false},native_repaired_fields:['kills','assists','damage'],counter_verification_pending:[],endpoint};
+ const clip={segment:{start:0,end:25},summary:{kills:2,damage:384,statistics_partial:{kills:true,damage:true}}};
+ const shown=applyStatisticsCorrection(clip,fix,'v15',identity);
+ assert.equal(shown.summary.damage,384);assert.equal(shown.summary.statistics_partial.damage,false);
+ const single=structuredClone(fix);single.endpoint.baseline_frames=zero.slice(0,1);
+ assert.equal(applyStatisticsCorrection(clip,single,'v15',identity).summary.statistics_partial.damage,true);
+});
+
+test('导入片段按记录的 partial 显示下限，旧记录没有时保持原样',()=>{
+ assert.deepEqual(importedStatisticsPartial({partial:{kills:true,assists:false,knockdowns:true,damage:false}}),{kills:true,assists:false,knockdowns:true,damage:false});
+ assert.equal(importedStatisticsPartial({partial:{kills:true}}),undefined);
+ assert.equal(importedStatisticsPartial(undefined),undefined);
 });
 
 test('原生复核姓名使用新置信度，纯数字账号与动作同形字不会被界面丢弃',()=>{

@@ -67,19 +67,21 @@ class AlgorithmVersionTests(unittest.TestCase):
                 'combat_statistics': "VERSION='combat-statistics-v15'\n",
                 'combat_outcome_reader': "PARSER_VERSION='target-name-v15'\nRULE_VERSION='own-center-result-v4'\n",
                 'numeric_reader': "METHOD='numeric-three-model-v4'\n",
+                'hud_digit_reader': "METHOD='hud-digits-v1'\n",
                 'outcome_reader': "SELF_VIEW_VERSION='self-hud-view-v3'\n",
                 'event_weapon_reader': "VERSION='event-weapon-context-v1'\n",
                 'combat_candidate_completion': "VERSION='native-event-completion-v1'\n",
             }.items():
                 (root / (name + '.py')).write_text(source, encoding='utf-8')
-            for folder in ('assets/legends', 'assets/ranks', 'templates/hud', 'templates/statistics', 'templates/combat-outcomes'):
+            for folder in ('assets/legends', 'assets/ranks', 'assets/counters', 'templates/hud', 'templates/statistics', 'templates/combat-outcomes'):
                 path = root / folder
                 path.mkdir(parents=True)
                 (path / 'test.png').write_bytes(b'pixel-test')
+            (root / 'assets/counters/hud_digits_v1.onnx').write_bytes(b'real-test-model')
             (root / 'models').mkdir()
             models = {}
             for name in ('weapon_rec_v5.onnx', 'name_rec_japanese_v4.onnx', 'name_rec_en_v5.onnx',
-                    'numeric_rec_en_v4.onnx', 'name_rec_v5_server.onnx', 'rapidocr_rec', 'rapidocr_det'):
+                    'numeric_rec_en_v4.onnx', 'ppocrv6_rec_small.onnx', 'name_rec_v5_server.onnx', 'rapidocr_rec', 'rapidocr_det'):
                 path = root / 'models' / name
                 path.write_bytes(b'real-test-model')
                 models[name] = path

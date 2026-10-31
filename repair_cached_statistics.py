@@ -119,7 +119,7 @@ def recheck_event_names(source,events,profile,force,on_activity,selected_keys=No
 
 def native_verified_fields(endpoint):
     from outcome_reader import SELF_VIEW_VERSION
-    from numeric_reader import METHOD
+    from hud_digit_reader import METHOD
     if endpoint.get('native_view_version')!=SELF_VIEW_VERSION or endpoint.get('native_numeric_method')!=METHOD:return []
     fields=[]
     for key in ['kills','assists','damage']:
@@ -201,14 +201,79 @@ def exported_view(clips,segment,profile):
     return None
 
 
-def exported_endpoint(clips,segment,profile):
+COUNTER_FIELDS=('kills','assists','damage')
+# 片尾计分栏读不到时（阵亡后观战、开箱、地图），先在片尾这几秒里找最后一帧仍能定位计分图标的本人画面，
+# 在它和稍早几个时刻读数；那里读不到，再按较远的固定距离回看。
+TAIL_SCAN_SECONDS=8.
+TAIL_SCAN_STEP=.25
+TAIL_REFINE_OFFSETS=(0.,.3,.6,1.,1.5,2.5)
+LOOKBACK_OFFSETS=(1.5,3.,6.,12.,24.,48.,96.)
+
+
+def native_rows(times):
+    return [{'frame':f'native:export:{second:.5f}','time':second,'counter_marker_score':1.,'inactive_view':False} for second in times]
+
+
+def last_counter_time(source,origin,duration,profile):
+    """片尾 TAIL_SCAN_SECONDS 秒内最后一帧本人画面里找得到计分图标的时刻；只定位图标，不识别数字。"""
+    from hud_enrichment import native_frames
+    from apex_clipper import BASE,counter_offset,inactive_view
+    from outcome_reader import spectator_view
+    from image_io import read_image
+    end=origin+duration
+    times=[second for second in (end-.04-index*TAIL_SCAN_STEP for index in range(round(TAIL_SCAN_SECONDS/TAIL_SCAN_STEP),-1,-1)) if second>=origin+.24]
+    if not times:return None
+    marker=read_image(str(BASE/profile['counter_marker']),0);latest=None
+    for second,image in native_frames(source,0,end+1,times):
+        # 观战画面里的计分栏是别人的，不能当作本人片尾。
+        if spectator_view(image,inactive_view(image)):continue
+        if counter_offset(image,profile,marker)[0] is not None:latest=second
+    return latest
+
+
+def lookback_moments(latest,origin,duration):
+    end=origin+duration
+    moments=[latest-offset for offset in TAIL_REFINE_OFFSETS] if latest is not None else []
+    floor=min(moments) if moments else end
+    moments+=[end-distance for distance in LOOKBACK_OFFSETS if end-distance<floor-.2]
+    return [second for second in moments if second>=origin+.24]
+
+
+def lookback_terminal(cache,source,origin,duration,profile):
+    """片尾读不到计数时回看此前的本人读数，返回 (末值, 更新时刻, 未确认读数, 读数帧)；一项都没读到时返回 None。
+
+    计分栏数字增加时会滚动，回看的时刻正好在滚动中时只读到未确认的值；这些字段再往前找一个稳定读数，
+    较近时刻读到的未确认值保留，计数因此只作下限。从未读到的字段（例如还没有击杀图标）不再继续回看。
+    """
+    from combat_statistics import counter_endpoints
+    found,updates,unconfirmed,pending,frames={},{},{},{},[]
+    for second in lookback_moments(last_counter_time(source,origin,duration,profile),origin,duration):
+        checked=counter_endpoints({**cache,'rows':native_rows([second-.08,second])},source.parent,[{'start':origin+.12,'end':origin+duration}],profile)[0]
+        hits=[key for key in COUNTER_FIELDS if key not in found and checked['last_hud'].get(key) is not None]
+        if not found and not hits:continue
+        for key in COUNTER_FIELDS:
+            if key in found:continue
+            if key in hits:
+                found[key]=checked['last_hud'][key];updates[key]=checked['last_hud_update'].get(key)
+                latest=pending.get(key,checked['unconfirmed_latest'].get(key))
+                if latest is not None and latest!=found[key]:unconfirmed[key]=latest
+            elif checked['unconfirmed_latest'].get(key) is not None:pending.setdefault(key,checked['unconfirmed_latest'][key])
+        frames.extend(checked['end_frames'])
+        if all(key in found or key not in pending for key in COUNTER_FIELDS):break
+    if not found:return None
+    for key,value in pending.items():
+        if key not in found:unconfirmed[key]=value
+    return {key:found.get(key) for key in COUNTER_FIELDS},{key:updates.get(key) for key in COUNTER_FIELDS},unconfirmed,frames
+
+
+def exported_endpoint(clips,segment,profile,lead_fields=()):
     from apex_clipper import fingerprint
     from combat_statistics import counter_endpoints
     view=exported_view(clips,segment,profile)
     if view is None:return None
     source,identity,origin,duration,selected_profile=view
     moments=[origin,origin+.04,origin+.08]+sorted({origin+max(.16,duration-.04-i*.25) for i in range(5)})
-    cache={'source':fingerprint(source),'profile':selected_profile,'fps':2.,'rows':[{'frame':f'native:export:{second:.5f}','time':second,'counter_marker_score':1.,'inactive_view':False} for second in moments]}
+    cache={'source':fingerprint(source),'profile':selected_profile,'fps':2.,'rows':native_rows(moments)}
     endpoint=counter_endpoints(cache,source.parent,[{'start':origin+.12,'end':origin+duration}],selected_profile)[0]
     excluded=[row for row in endpoint['end_frames'] if row.get('excluded_view')]
     if excluded:
@@ -217,21 +282,122 @@ def exported_endpoint(clips,segment,profile):
     # 保留全部不可读片尾证据，不能把较早值冒充完整结尾。
     if all(value is None for value in endpoint['last_hud'].values()):
         terminal=list(endpoint['end_frames'])
-        for distance in [1.5,3.,6.,12.,24.,48.,96.]:
-            second=origin+duration-distance
-            if second<origin+.24:continue
-            prior={**cache,'rows':[{'frame':f'native:export:{time:.5f}','time':time,'counter_marker_score':1.,'inactive_view':False} for time in [second-.08,second]]}
-            checked=counter_endpoints(prior,source.parent,[{'start':origin+.12,'end':origin+duration}],selected_profile)[0]
-            if any(value is not None for value in checked['last_hud'].values()):
-                for key in ['last_hud','last_hud_update','unconfirmed_latest']:endpoint[key]=checked[key]
-                endpoint['end_frames']=checked['end_frames']+terminal
-                endpoint['terminal_hud_hidden']=True
-                break
+        recovered=lookback_terminal(cache,source,origin,duration,selected_profile)
+        if recovered:
+            endpoint['last_hud'],endpoint['last_hud_update'],endpoint['unconfirmed_latest'],frames=recovered
+            endpoint['end_frames']=frames+terminal
+            endpoint['terminal_hud_hidden']=True
     endpoint['export_baseline_fields']=early_export_baseline_fields(endpoint,origin)
+    zero_exported_counters(endpoint,source,origin,duration,selected_profile)
+    exported_lead_baseline(endpoint,source,origin,duration,selected_profile,lead_fields)
     for rows in ['baseline_frames','end_frames']:
         for row in endpoint[rows]:row['time']+=segment['start']-origin
     endpoint.update(native_counter_scope='exported_visible_delta',exported_video_identity=identity,native_profile=selected_profile,native_video_origin=origin)
     return endpoint
+
+# 成片开头/片尾找不到计分图标时核对小队数行的时刻（距片头、片尾的秒数）。核对遇到计分栏就停，
+# 所以靠后的时刻只在计分栏一直没出现时才会读到。
+ZERO_START_OFFSETS=(.3,.8,1.4,2.2,3.2,4.6,6.5,9.,13.,18.,25.,35.,50.,70.,95.)
+ZERO_END_OFFSETS=(.04,.3,.7,1.2,2.,3.,4.5,6.5,9.,13.)
+ZERO_LOOKBACK_OFFSETS=(1.5,3.,6.,12.,24.,48.,96.)
+
+
+def exported_zero_frames(source,times,profile,descending=False):
+    """成片指定时刻的原生画面里找「三项计数都是 0」的证据；时刻按核对顺序给出。"""
+    from hud_enrichment import native_frames
+    from apex_clipper import inactive_view
+    from outcome_reader import spectator_view
+    import squads_panel
+    times=sorted(times,reverse=descending)
+    def frames(decoded):
+        for second,image in decoded:
+            provenance={'frame':f'native:export:{second:.5f}','native_verified':True,'native_time':second,'image_size':[image.shape[1],image.shape[0]]}
+            if spectator_view(image,inactive_view(image)):yield second,None,{**provenance,'native_verified':False,'excluded_view':True}
+            else:yield second,image,provenance
+    if not times:return []
+    decoded=native_frames(source,0,max(times)+1,sorted(times))
+    # 段首按时间顺序边读边核对，遇到计分栏即停；段尾要由近到远，先解码这几帧再倒序核对。
+    if descending:decoded=sorted(decoded,key=lambda item:item[0],reverse=True)
+    from combat_statistics import END_TOLERANCE
+    return squads_panel.zero_frames(frames(decoded),profile,latest=END_TOLERANCE if descending else None)
+
+
+def zero_exported_counters(endpoint,source,origin,duration,profile):
+    """成片首尾读不到计数且找不到计分图标时，用小队数行确认三项计数是否为 0。
+
+    段首确认为 0 后记入 export_baseline_fields，与开头 80 毫秒内的原生读数同等作为成片起点；
+    段尾只在回看此前本人画面也读不到计数时才核对。
+    """
+    import squads_panel
+    fields=['kills','assists','damage'];zero_start=zero_end=[]
+    hidden=all((row.get('marker_score') or 0)<.78 for row in endpoint['baseline_frames'])
+    if not endpoint['export_baseline_fields'] and hidden and all(endpoint['baseline'].get(key) is None for key in fields):
+        zero_start=exported_zero_frames(source,[origin+offset for offset in ZERO_START_OFFSETS if offset<duration-.3],profile)
+        if zero_start:
+            endpoint['baseline']=dict.fromkeys(fields,0);endpoint['baseline_frames']=endpoint['baseline_frames']+zero_start
+            endpoint['export_baseline_fields']=fields;endpoint['initial_hidden_zero']=True
+    if all(endpoint['last_hud'].get(key) is None for key in fields):
+        offsets=ZERO_LOOKBACK_OFFSETS if endpoint.get('excluded_terminal_view') else ZERO_END_OFFSETS
+        zero_end=exported_zero_frames(source,[origin+duration-offset for offset in offsets if duration-offset>.12],profile,descending=True)
+        if zero_end:
+            endpoint['last_hud']=dict.fromkeys(fields,0);endpoint['unconfirmed_latest']={}
+            ordered=sorted(zero_end,key=lambda row:row['native_time'])
+            # 片尾仍是本人画面时，原先那几帧只是计分栏未出现，不能留作「片尾读不到」；观战片尾保留，计数仍按下限。
+            endpoint['end_frames']=endpoint['end_frames']+ordered if endpoint.get('excluded_terminal_view') else ordered
+    if zero_start or zero_end:endpoint['zero_evidence']={'method':squads_panel.VERSION,'start':len(zero_start),'end':len(zero_end)}
+
+
+# 成片开头读不到起点时，再读开头这些时刻（距片头的秒数）找最早的稳定读数。
+LEAD_OFFSETS=(.12,.2,.3,.4,.5,.6,.8,1.,1.2,1.4,1.7,2.,2.4,2.8,3.3,4.,5.,6.,8.,10.,13.,16.,20.)
+LEAD_RUN=3
+LEAD_SPAN=.6
+
+
+def stable_lead_run(rows,key):
+    """最早一段同一数值连续读出的原生画面：至少 LEAD_RUN 帧、首尾跨度不少于 LEAD_SPAN 秒，中间没有读出别的数。
+
+    计分栏刚出现（淡入、从地图或背包切回）时数字会读错，例如 771 读成 71，可能连续两帧都错，
+    所以比段尾确认要求更多帧、更长时间。计数只增不减，比此前读数小的一段不能当起点。
+    读不到的帧不打断这一段，读出不同数值才算结束。返回 (数值, 帧)，没有时返回 (None, [])。
+    """
+    unique={}
+    for row in rows:
+        stamp=row.get('native_time')
+        if row.get('native_verified') is True and not row.get('excluded_view') and isinstance(stamp,(int,float)) and not isinstance(stamp,bool) and math.isfinite(stamp) and row.get(key) is not None:
+            unique.setdefault(stamp,row)
+    reads=[unique[stamp] for stamp in sorted(unique)];highest=None;index=0
+    while index<len(reads):
+        end=index
+        while end+1<len(reads) and reads[end+1][key]==reads[index][key]:end+=1
+        run=reads[index:end+1];value=run[0][key]
+        if len(run)>=LEAD_RUN and run[-1]['native_time']-run[0]['native_time']>=LEAD_SPAN and (highest is None or value>=highest):return value,run
+        highest=value if highest is None else max(highest,value)
+        index=end+1
+    return None,[]
+
+
+def exported_lead_baseline(endpoint,source,origin,duration,profile,fields):
+    """成片开头 80 毫秒内读不到、也没有零计数证据的字段，取开头最早一段稳定读数作起点。
+
+    只用于导出时也没有统计结果的字段（fields）。计数只增不减，片头之后的读数不小于片头，
+    用它作起点只会少算，所以记入 baseline_lower_bound_fields，界面显示为下限。
+    """
+    from apex_clipper import fingerprint
+    from combat_statistics import counter_endpoints
+    wanted=[key for key in COUNTER_FIELDS if key in fields and key not in endpoint['export_baseline_fields']]
+    times=[origin+offset for offset in LEAD_OFFSETS if offset<duration-.3]
+    if not wanted or len(times)<LEAD_RUN:return
+    cache={'source':fingerprint(source),'profile':profile,'fps':2.,'rows':native_rows(times)}
+    rows=counter_endpoints(cache,source.parent,[{'start':origin+.1,'end':origin+duration}],profile,lead_rows=len(times))[0]['baseline_frames']
+    added=[]
+    for key in wanted:
+        value,run=stable_lead_run(rows,key)
+        if value is None:continue
+        endpoint['baseline'][key]=value;added.append(key)
+        endpoint['baseline_frames']=endpoint['baseline_frames']+[{**{name:row[name] for name in ['frame','time','native_time','native_verified','marker_score'] if name in row},key:value,'lead_baseline':True} for row in run]
+    if added:
+        endpoint['export_baseline_fields']=[key for key in COUNTER_FIELDS if key in endpoint['export_baseline_fields'] or key in added]
+        endpoint['baseline_lower_bound_fields']=[key for key in COUNTER_FIELDS if key in endpoint.get('baseline_lower_bound_fields',[]) or key in added]
 
 def early_export_baseline_fields(endpoint,origin):
     """逐项使用80毫秒内最早的有效原生读数；首个坏帧不能遮掉随后已确认的数字。"""
@@ -403,7 +569,12 @@ def _repair(record,on_activity=None,*,deferred=False):
     segments=[report['segments'][index] for index in selected]
     if not counters:endpoints=[copy.deepcopy(segment['endpoint']) for segment in segments]
     elif native_exports and (not source_available or not cache['rows']):
-        endpoints=[exported_endpoint(clips,segment,cache.get('profile') or profile) or counter_endpoints(cache,record.get('sample_directory',destination),[segment],profile)[0] for segment in segments]
+        # 导出时也没有结果、导出记录里也没有段首读数的字段，才从成片开头之后的稳定读数取起点下限；
+        # 已有导出统计的字段仍按下面的规则沿用，不能被较弱的成片证据替换。
+        def lead_fields(segment):
+            key=(segment['start'],segment['end'])
+            return [field for field in COUNTER_FIELDS if original_counts.get(key,{}).get(field) is None and original_baseline(original_endpoints.get(key,{}),field) is None]
+        endpoints=[exported_endpoint(clips,segment,cache.get('profile') or profile,lead_fields(segment)) or counter_endpoints(cache,record.get('sample_directory',destination),[segment],profile)[0] for segment in segments]
     else:endpoints=counter_endpoints(cache,record.get('sample_directory',destination),segments,profile)
     changed=0
     for index,segment,fresh in zip(selected,segments,endpoints):
@@ -494,10 +665,11 @@ def _repair(record,on_activity=None,*,deferred=False):
                 if segment['counts'].get(key)!=result['counts'][key] or segment['partial'].get(key)!=result['partial'][key]:changed+=1
                 segment['counts'][key]=result['counts'][key];segment['partial'][key]=result['partial'][key]
                 if verified_delta:segment['native_repaired_fields']=sorted(set(segment.get('native_repaired_fields',[]))|{key})
-        # 原片已删（含导出后删除原片）时，本次只能核对成片首尾；未能验证的计数沿用导出时的完整统计，
-        # 只作为已确认下限，不能当作「未知」把原有数字清空。原片仍在时照旧以本次读数为准。
+        # 本次只能核对成片首尾时（原片已删，或原片仍在但采样缓存已清理），未能验证的计数沿用导出时由完整原片
+        # 得到的统计，只作为已确认下限，不能当作「未知」把原有数字清空。用原片和采样缓存重读时照旧以本次读数为准。
         source_lower=set()
-        if counters and not source_available:
+        export_only=fresh.get('native_counter_scope')=='exported_visible_delta'
+        if counters and (not source_available or export_only):
             # 成片开头读不到计数时，用导出时由完整原片确定的起点：对局开局隐藏计分栏判为 0，
             # 或段前多帧一致的计数。终点必须是本次成片片尾至少两帧原生一致的读数，且不小于起点。
             prior=original_endpoints.get((segment['start'],segment['end']),{})
@@ -547,7 +719,7 @@ def _repair(record,on_activity=None,*,deferred=False):
         if counters:
             segment['notes']=result['notes']
             if fresh.get('native_counter_scope')=='exported_visible_delta':segment['notes'].append('按现有成片首尾原生 HUD 可见增量复核；原片或采样缓存不可用')
-            if source_lower:segment['notes'].append('原片已删除，未能复核的计数沿用导出时统计，仅为已确认下限')
+            if source_lower:segment['notes'].append(('原片已删除' if not source_available else '采样缓存已清理')+'，未能复核的计数沿用导出时统计，仅为已确认下限')
         segment['repair_applied']=True;segment['repair_fields']=sorted(set(segment.get('repair_fields',[]))|requested)
         if counters:
             recipes=segment.setdefault('native_field_recipes',{})

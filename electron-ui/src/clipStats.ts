@@ -2,7 +2,7 @@ import type {OutcomeEvidence} from './shared';
 import {withProcessStarts,type PlaybackAnalysis} from './combatPlayback';
 
 const count=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null;
-const nativeNumericMethods=new Set(['numeric-three-model-v3','numeric-three-model-v4','numeric-three-model-v5']);
+const nativeNumericMethods=new Set(['numeric-three-model-v3','numeric-three-model-v4','numeric-three-model-v5','hud-digits-v1']);
 const eventCompletionVersion='native-event-completion-v1';
 const nativeTargetNameVersions=new Set(['target-name-v14','target-name-v15']);
 const resultPrefix=/^(?:(?:ASSIST|助攻)\s*[,.:，：]*\s*|KN[O0]CK(?:ED)?\s*D[O0]WN\s*|ELIMINAT(?:ED|ION)\s*|(?:已)?[擊击撃擎驛驿]倒\s*|(?:已)?消[滅灭減减]\s*)/i;
@@ -271,6 +271,12 @@ export function recordingTime(source:string):string|null{
 export function recordingTimeLabel(value:string|null|undefined):string{
  if(!value)return'—';const m=value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}(?::\d{2})?)/);
  return m?`${m[1]}年${Number(m[2])}月${Number(m[3])}日 ${m[4]}`:'—';
+}
+/** 导入片段的统计写在 statistics 下；只有记录了 partial 的字段才标「≥」，旧记录没有时保持原样显示。 */
+export function importedStatisticsPartial(statistics:any):{kills:boolean;assists:boolean;knockdowns:boolean;damage:boolean}|undefined{
+ const partial=statistics?.partial;
+ if(!partial||typeof partial!=='object'||!['kills','assists','knockdowns','damage'].every(key=>typeof partial[key]==='boolean'))return undefined;
+ return {kills:partial.kills,assists:partial.assists,knockdowns:partial.knockdowns,damage:partial.damage};
 }
 /** 新统计完整扫描本段提示；旧缓存可能只保留正例下限，按字段状态展示。 */
 export function clipStatistics(clip:any,candidates:any[]=[],analysis:PlaybackAnalysis={},fileIdentity?:VideoIdentity){

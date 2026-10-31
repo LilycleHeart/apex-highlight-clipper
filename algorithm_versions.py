@@ -165,7 +165,7 @@ def current_registry(root=None, semantic_config=None, model_paths=None):
     paths = dict(model_paths or {})
     constants = {name: module_constants(root / (name + '.py')) for name in [
         'hud_enrichment', 'japanese_name_reader', 'hero_portrait_reader', 'rank_reader',
-        'hud_layout', 'combat_statistics', 'combat_outcome_reader', 'numeric_reader',
+        'hud_layout', 'combat_statistics', 'combat_outcome_reader', 'numeric_reader', 'hud_digit_reader',
         'outcome_reader', 'event_weapon_reader', 'combat_candidate_completion']}
     if 'rapidocr_rec' not in paths:
         try:
@@ -193,14 +193,15 @@ def current_registry(root=None, semantic_config=None, model_paths=None):
     hud = {**layout, 'hud_enrichment': version('hud_enrichment')}
     names = {**hud, 'japanese_names': version('japanese_name_reader')}
     name_weights = {name: model(name) for name in ['weapon_rec_v5.onnx', 'name_rec_japanese_v4.onnx', 'name_rec_en_v5.onnx', 'numeric_rec_en_v4.onnx', 'rapidocr_rec']}
-    numeric_weights = {name: model(name) for name in ['weapon_rec_v5.onnx', 'numeric_rec_en_v4.onnx', 'rapidocr_rec']}
+    numeric_weights = {**{name: model(name) for name in ['weapon_rec_v5.onnx', 'numeric_rec_en_v4.onnx', 'ppocrv6_rec_small.onnx', 'rapidocr_rec']},
+                       'hud_digits_v1.onnx': resource(root / 'assets/counters/hud_digits_v1.onnx')}
     definitions = {
         'account': (names, name_weights, tree('templates/hud')),
         'teammates': (names, name_weights, tree('templates/hud')),
         'weapons': (hud, {'weapon_rec_v5.onnx': model('weapon_rec_v5.onnx')}, {'weapon-catalog.json': resource(root / 'weapon-catalog.json')}),
         'hero': ({**hud, 'hero_portrait': version('hero_portrait_reader')}, {}, tree('assets/legends')),
         'rank': ({**hud, 'rank': version('rank_reader')}, {}, {**tree('assets/ranks'), **(tree('assets/modes') if (root / 'assets/modes').is_dir() else {})}),
-        'statistics': ({**layout, 'statistics': version('combat_statistics'), 'numeric': version('numeric_reader', 'METHOD'), 'self_view': version('outcome_reader', 'SELF_VIEW_VERSION'), **({'toast_confirmation': version('combat_outcome_reader', 'CONFIRMATION_VERSION')} if version('combat_outcome_reader', 'CONFIRMATION_VERSION') else {})}, numeric_weights, tree('templates/statistics')),
+        'statistics': ({**layout, 'statistics': version('combat_statistics'), 'numeric': version('numeric_reader', 'METHOD'), 'counter_digits': version('hud_digit_reader', 'METHOD'), 'self_view': version('outcome_reader', 'SELF_VIEW_VERSION'), **({'toast_confirmation': version('combat_outcome_reader', 'CONFIRMATION_VERSION')} if version('combat_outcome_reader', 'CONFIRMATION_VERSION') else {})}, numeric_weights, tree('templates/statistics')),
         'opponents': ({**layout, 'parser': version('combat_outcome_reader', 'PARSER_VERSION'), 'combat_rules': version('combat_outcome_reader', 'RULE_VERSION'), **({'toast_confirmation': version('combat_outcome_reader', 'CONFIRMATION_VERSION')} if version('combat_outcome_reader', 'CONFIRMATION_VERSION') else {}), 'event_completion': version('combat_candidate_completion')}, {**numeric_weights, **{name: model(name) for name in ['name_rec_v5_server.onnx', 'name_rec_en_v5.onnx']}}, tree('templates/combat-outcomes')),
         'event_weapons': ({**layout, 'event_weapons': version('event_weapon_reader')}, numeric_weights, {'weapon-catalog.json': resource(root / 'weapon-catalog.json')}),
     }

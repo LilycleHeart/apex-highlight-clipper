@@ -14,7 +14,7 @@ import {JsonLines,safeOptions,safeHudFiles,videoExtensions} from './protocol';
 import {defaults,Options,ThemePreferences,WorkerEvent,TaskInfo,Result,FileItem,SystemTheme,UpdateInfo,HudEnrichmentResult} from '../src/shared';
 import {animationDefaults,normalizeAnimationPreferences} from '../src/animationPreferences';
 import {normalizePlayerAudio,defaultPlayerAudio,type PlayerAudioPreferences} from '../src/audioPreferences';
-import {clipStatistics,recordingTime,applyStatisticsCorrection,weaponContextFor} from '../src/clipStats';
+import {clipStatistics,recordingTime,applyStatisticsCorrection,weaponContextFor,importedStatisticsPartial} from '../src/clipStats';
 import {UpdateChecker,shouldAutoCheck,releasePage,restoreUpdateInfo,RELEASES_API} from './updates';
 import {downloadInstaller,pruneUpdates,installationPaths,pruneLegacyLauncher} from './updateInstaller';
 import {VideoRegistry} from './media';
@@ -267,7 +267,7 @@ async function collectImported():Promise<Result|null>{
   allowedPaths.add(normalized(target));allowedClips.add(normalized(target));importedClips.add(normalized(target));clipDirectories.set(normalized(target),importedRoot);
   const duration=Number(c.metadata?.format?.duration)||Number(c.segment?.end)||0;clipDurations.set(normalized(target),duration);
   const {matchKey:_matchKey,...statistics}=clipStatistics(c,[],{},{path:target,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)});
-  const importedCounts=(c.statistics&&c.statistics.counts)||{};const importedFieldsStatus=((c.recognition||{}).hud_info||{}).field_status;const importedIdentity={path:target,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)};const importedEvidence=((c.statistics&&c.statistics.events)||[]).filter((e:any)=>e&&Number.isFinite(e.time)&&['knock','assist','elimination'].includes(e.kind)).map((e:any)=>({kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:e.target,weaponContext:weaponContextFor(e,c,importedIdentity)}));result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,fieldStatus:importedFieldsStatus,...statistics,kills:importedCounts.kills??null,damage:importedCounts.damage??null,assists:importedCounts.assists??null,knockdowns:importedCounts.knockdowns??null,evidence:importedEvidence});
+  const importedCounts=(c.statistics&&c.statistics.counts)||{};const importedFieldsStatus=((c.recognition||{}).hud_info||{}).field_status;const importedIdentity={path:target,size:stat.size,mtime_ms:Math.floor(stat.mtimeMs),aliases:movedFrom(c)};const importedEvidence=((c.statistics&&c.statistics.events)||[]).filter((e:any)=>e&&Number.isFinite(e.time)&&['knock','assist','elimination'].includes(e.kind)).map((e:any)=>({kind:e.kind,time:e.time,text:e.text,confidence:e.confidence,target:e.target,weaponContext:weaponContextFor(e,c,importedIdentity)}));result.clips.push({media:mediaGeometry(c.metadata),exportedAt:stat.mtime.toISOString(),path:target,name:path.basename(target),recordedAt:recordingTime(path.basename(target)),duration,start:0,end:duration,imported:true,fieldStatus:importedFieldsStatus,...statistics,statisticsPartial:importedStatisticsPartial(c.statistics)??statistics.statisticsPartial,kills:importedCounts.kills??null,damage:importedCounts.damage??null,assists:importedCounts.assists??null,knockdowns:importedCounts.knockdowns??null,evidence:importedEvidence});
  }
  return result.clips.length?result:null;
 }
@@ -626,7 +626,8 @@ function safeCollectionName(value:unknown){
 async function addToCollection(files:unknown,name:unknown,syncFolder:unknown){
  if(!Array.isArray(files)||!files.length)throw new Error('请选择要收藏的片段');
  if(libraryBusy())throw new Error('请先等待当前处理结束');
- const list=files.filter((file):file is string=>typeof file==='string'&&existsSync(file));
+ // 只接受片段库已载入的成片，渲染进程不能借收藏移动任意文件。
+ const list=files.filter((file):file is string=>typeof file==='string'&&allowedClips.has(normalized(file))&&existsSync(file));
  if(!list.length)throw new Error('所选片段不存在');
  const folder=safeCollectionName(name);
  const collections=await loadCollections();
@@ -637,16 +638,21 @@ async function addToCollection(files:unknown,name:unknown,syncFolder:unknown){
  if(syncFolder){
   const wants=list.map(file=>({from:file,to:path.join(path.dirname(file),folder,path.basename(file))}))
     .filter(pair=>normalized(pair.from)!==normalized(pair.to));
+  for(const pair of wants)if(existsSync(pair.to))throw new Error(`分类文件夹里已有同名文件：${path.basename(pair.to)}`);
   for(const pair of wants){
-   if(existsSync(pair.to)){finalPaths.push(pair.to);continue;}
+   // 播放器可能仍占用文件句柄；先释放再移动。
+   await videos.release(pair.from);
    await fs.mkdir(path.dirname(pair.to),{recursive:true});
    await fs.rename(pair.from,pair.to);
    moved++;finalPaths.push(pair.to);
   }
+  // 已经在同名分类文件夹里的片段原样收藏。
+  finalPaths.push(...list.filter(file=>!wants.some(pair=>pair.from===file)));
  }else{finalPaths.push(...list);}
  row.files=[...new Set([...row.files,...finalPaths])];
  await saveCollections(collections);
- if(moved)await maintainLibrary({autoImport:false});
+ // 移动后由片段库认领新位置并通知界面重载，旧路径不会残留在列表里。
+ if(moved){await maintainLibrary({autoImport:false});send({type:'library-changed',message:`已移动 ${moved} 个片段到「${folder}」`});}
  return {collection:row,moved};
 }
 async function removeFromCollection(id:unknown,files:unknown){

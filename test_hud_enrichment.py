@@ -238,7 +238,7 @@ class HudEnrichmentTests(unittest.TestCase):
             root=Path(tmp);files,manifest=self.fixture(root)
             segment={'start':0,'end':10,'counts':{'kills':0,'assists':0,'damage':196},'partial':{'kills':False,'assists':False,'damage':False},'native_repaired_fields':['kills','assists','damage'],'events':[]}
             from outcome_reader import SELF_VIEW_VERSION
-            from numeric_reader import METHOD
+            from hud_digit_reader import METHOD
             baseline={'kills':0,'assists':0,'damage':0}
             segment['endpoint']={'native_view_version':SELF_VIEW_VERSION,'native_numeric_method':METHOD,
                 'native_counter_scope':'exported_visible_delta','export_baseline_fields':['kills','assists','damage'],

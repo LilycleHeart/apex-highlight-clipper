@@ -275,4 +275,91 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(result[0]['kills'],3)
         with self.assertRaises(ValueError):overlay_summaries([{}],[{'start':1,'end':3}],stats)
 
+    def test_start_reading_uses_earliest_confirmed_value_and_flags_lower_bounds(self):
+        from combat_statistics import earliest_consistent
+        rows=lambda values,first=.25:[{'frame':str(i),'time':first+i*.5,**({'damage':v} if v is not None else {})} for i,v in enumerate(values)]
+        self.assertEqual(earliest_consistent(rows([481,461,461]),'damage',0),(461,False))  # 偏大的早期读数是误读
+        self.assertEqual(earliest_consistent(rows([461,None,461]),'damage',0),(461,False))
+        self.assertEqual(earliest_consistent(rows([100,150,150]),'damage',0),(150,True))   # 开头已有增量
+        self.assertEqual(earliest_consistent(rows([300,300],first=20.),'damage',0),(300,True))  # 晚于段首才回到本人视角
+        same=[{'frame':'a','time':1.,'native_time':1.,'damage':5},{'frame':'b','time':1.,'native_time':1.,'damage':5}]
+        self.assertEqual(earliest_consistent(same,'damage',0),(None,False))
+
+    def test_zero_window_follows_own_hidden_view_only(self):
+        from combat_statistics import zero_window,probe_rows
+        row=lambda t,**flags:{'frame':f'{t}','time':t,'counter_marker_score':flags.pop('score',.5),**flags}
+        rows=[row(0,inactive_view=True),row(.5),row(1.),row(1.5,score=.9),row(2.)]
+        self.assertEqual([r['time'] for r in zero_window(rows,0,10)],[.5,1.])
+        # 观战、阵亡、大厅等非本人画面里不会造成伤害，跳过后继续看之后的本人画面。
+        rows=[row(0),row(.5,inactive_view=True),row(1.)]
+        self.assertEqual([r['time'] for r in zero_window(rows,0,10)],[0,1.])
+        tail=[row(5.),row(6.),row(7.,inactive_view=True),row(8.,friend_spectate=True)]
+        self.assertEqual([r['time'] for r in zero_window(tail,0,10,reverse=True)],[6.,5.])
+        self.assertEqual(zero_window([row(0,round_ended=True),row(1.,score=.9)],0,10),[])
+        self.assertEqual([r['time'] for r in zero_window([row(1.),row(2.,round_ended=True),row(3.)],0,10)],[1.])
+        lobby=[row(float(t),inactive_view=t<40) for t in range(400)]
+        window=zero_window(lobby,0,400)
+        self.assertEqual((window[0]['time'],window[-1]['time']),(40.,340.))
+        picked=probe_rows([row(t*.5) for t in range(40)])
+        self.assertEqual([r['time'] for r in picked],[0,.5,1.,6.,11.,16.])
+        late=[r['time'] for r in probe_rows(window)]
+        self.assertTrue(all(b-a>=10 for a,b in zip(late,late[1:]) if a>=100))
+
+    def test_hidden_counter_is_zero_only_with_squads_row_evidence(self):
+        import tempfile
+        from pathlib import Path
+        from hud_layout import make_profile
+        from combat_statistics import counter_endpoints
+        rows=[{'frame':f'{i+1:06d}.jpg','time':i*.5+.25,'counter_marker_score':.5,'inactive_view':False} for i in range(40)]
+        cache={'source':{'path':'missing.mp4'},'fps':2.,'rows':rows}
+        evidence=[{'frame':rows[i]['frame'],'time':rows[i]['time'],'native_verified':False,'kills':0,'assists':0,'damage':0,'zero_evidence':{'method':'test'}} for i in (0,1)]
+        calls=[]
+        def zero(frames,profile,**options):
+            calls.append(options);return evidence if len(calls)==1 and found else []
+        with tempfile.TemporaryDirectory() as temporary:
+            for found in [False,True]:
+                calls.clear()
+                with patch('squads_panel.zero_frames',side_effect=zero),patch('combat_statistics.counter_digit_reader',return_value=lambda images:([],0.)):
+                    endpoint=counter_endpoints(cache,Path(temporary),[{'start':0.,'end':20.}],make_profile(2560,1080))[0]
+                if not found:
+                    # 录像开头、计分栏一直没出现，但没有小队数行证据：不再凭时间位置当作 0。
+                    self.assertTrue(all(value is None for value in endpoint['baseline'].values()))
+                    self.assertFalse(endpoint['initial_hidden_zero']);self.assertNotIn('zero_evidence',endpoint)
+                else:
+                    self.assertEqual(endpoint['baseline'],{'kills':0,'assists':0,'damage':0})
+                    self.assertTrue(endpoint['initial_hidden_zero']);self.assertEqual(endpoint['zero_evidence']['start'],2)
+                    self.assertEqual([row['time'] for row in endpoint['baseline_frames']],[.25,.75])
+                self.assertEqual(calls[-1],{'latest':1.5})  # 段内一直没出现计分栏，段尾也要核对
+
+    def test_lower_bound_start_and_zero_notes_reach_counts(self):
+        endpoint=self.endpoint();endpoint['baseline_lower_bound_fields']=['damage'];endpoint['zero_evidence']={'start':0,'end':2}
+        result=reconciled_counts(endpoint,[],self.coverage())
+        self.assertEqual(result['counts']['damage'],1030);self.assertTrue(result['partial']['damage']);self.assertFalse(result['partial']['kills'])
+        self.assertTrue(any('起点取之后' in note for note in result['notes']));self.assertTrue(any('段尾右上角' in note for note in result['notes']))
+
+    def test_terminal_reading_lower_than_an_earlier_one_is_only_a_lower_bound(self):
+        # 段尾两帧都读成 426，此前两帧是 428：计数不会减少，末值 426 只能当下限。
+        import tempfile
+        from pathlib import Path
+        import cv2,numpy as np
+        from hud_layout import make_profile
+        from combat_statistics import counter_endpoints
+        values=[0,0,0,0,428,428,426,426]
+        with tempfile.TemporaryDirectory() as temporary:
+            rows=[]
+            for index,value in enumerate(values):
+                name=f'{index+1:06d}.jpg';cv2.imwrite(str(Path(temporary)/name),np.full((40,40,3),index*20,np.uint8))
+                rows.append({'frame':name,'time':index*5+1.,'counter_marker_score':.95,'inactive_view':False})
+            cache={'source':{'path':'missing.mp4'},'fps':.2,'rows':rows}
+            read=lambda images:([(str(values[round(float(image.mean())/20)]),1.) for image in images],0.)
+            with patch('combat_statistics.counter_offset',return_value=((0,0),.95)),\
+                 patch('stat_counter_fallback.CounterFallback.regions',side_effect=lambda image,profile,delta:{'damage':image}),\
+                 patch('combat_statistics.counter_digit_reader',return_value=read):
+                endpoint=counter_endpoints(cache,Path(temporary),[{'start':0.,'end':40.}],make_profile(2560,1080))[0]
+        self.assertEqual(endpoint['last_hud']['damage'],426);self.assertEqual(endpoint['unconfirmed_latest'],{'damage':428})
+        self.assertEqual(endpoint['terminal_regression_fields'],['damage'])
+        result=reconciled_counts(endpoint,[],self.coverage())
+        self.assertEqual(result['counts']['damage'],426);self.assertTrue(result['partial']['damage'])
+        self.assertTrue(any('段尾较早读数大于末值' in note for note in result['notes']))
+
 if __name__=='__main__':unittest.main()

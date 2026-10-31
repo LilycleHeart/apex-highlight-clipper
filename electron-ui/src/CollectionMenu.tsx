@@ -18,6 +18,7 @@ export default function CollectionMenu({files,onClose,onDone}:{files:string[];on
   setBusy(true);setError('');
   try{
    const result=await window.apex.addToCollection(files,target.trim(),sync);
+   window.dispatchEvent(new Event('apex-collections-changed'));
    onDone(result.moved?`已收藏到「${result.collection.name}」，并移动 ${result.moved} 个文件`:`已收藏到「${result.collection.name}」`);
    onClose();
   }catch(reason){setError(String(reason).replace(/^Error:\s*/,''));}

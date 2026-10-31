@@ -108,7 +108,7 @@ def assemble_runtime(target, sources, python_archive, bootstrap):
             ('runtime/shared' if p.split('/')[0] in shared else f'runtime/{mode}') + '/Lib/site-packages/' + p for p in [
                 'numpy/__init__.py', 'cv2/__init__.py', 'av/__init__.py',
                 'rapidocr_onnxruntime/__init__.py', 'pywin32.pth']
-        } | {'models/numeric_rec_en_v4.onnx', 'models/weapon_rec_v5.onnx'} |
+        } | {'models/numeric_rec_en_v4.onnx', 'models/weapon_rec_v5.onnx', 'assets/counters/hud_digits_v1.onnx', 'models/ppocrv6_rec_small.onnx'} |
             {p.relative_to(target).as_posix() for root in [common, private] for p in root.rglob('*.onnx')})
     layout = {'version': 1, 'shared_units': shared, 'private_units': private_units,
               'shared_bytes_saved': saved, 'required': required, 'dll_dirs': dll_dirs}

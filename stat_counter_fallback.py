@@ -10,10 +10,11 @@ BASE=Path(__file__).resolve().parent
 @lru_cache(maxsize=1)
 def counter_recipe():
     digest=hashlib.sha256(Path(__file__).read_bytes())
-    for name in ['combat_statistics.py','hud_enrichment.py','repair_cached_statistics.py','outcome_reader.py','numeric_reader.py','gpu_ocr_backend.py','ocr_cache.py']:digest.update((BASE/name).read_bytes())
+    for name in ['combat_statistics.py','hud_enrichment.py','repair_cached_statistics.py','outcome_reader.py','numeric_reader.py','gpu_ocr_backend.py','ocr_cache.py','squads_panel.py','hud_digit_reader.py']:digest.update((BASE/name).read_bytes())
     import rapidocr_onnxruntime
     digest.update((Path(rapidocr_onnxruntime.__file__).parent/'models/ch_PP-OCRv4_rec_infer.onnx').read_bytes())
-    for model in ['weapon_rec_v5.onnx','numeric_rec_en_v4.onnx']:digest.update((BASE/'models'/model).read_bytes())
+    for model in ['weapon_rec_v5.onnx','numeric_rec_en_v4.onnx','ppocrv6_rec_small.onnx']:digest.update((BASE/'models'/model).read_bytes())
+    digest.update((BASE/'assets/counters/hud_digits_v1.onnx').read_bytes())
     for file in sorted((BASE/'templates/statistics').glob('*.png')):digest.update(file.read_bytes())
     return digest.hexdigest()
 

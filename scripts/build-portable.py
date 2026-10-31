@@ -21,7 +21,7 @@ PRODUCT_MODULES = '''adaptive_evidence apex_clipper app_cancel app_options app_t
     build_weapon_catalog clip_quality_filter combat_candidate_completion combat_outcome_reader combat_statistics continuous_sampler imported_statistics
     damage_bisection early_round_end engine_pool event_weapon_reader evidence_completion gpu_load gpu_ocr_backend hardware_decode hero_reader hero_portrait_reader hud_layout hud_enrichment hud_batch hud_read_queue resource_budget queue_policy pipeline_metrics hud_recovery hud_recovery_snapshot hud_job_store library_records algorithm_versions image_io indexed_coarse
     inspect_video japanese_name_reader latin_word_boundaries name_reader native_frame_reader numeric_reader ocr_cache outcome_reader player_names performance_options planning_evidence rank_reader rename_exports repair_cached_statistics
-    resume_io resume_media sample_locations sample_pipeline setup_weapon_model smart_scan sparse_pipeline
+    resume_io resume_media sample_locations sample_pipeline setup_weapon_model smart_scan sparse_pipeline squads_panel hud_digit_reader
     stat_counter_fallback target_name_reader ui_observer verify_export weapon_reader'''.split()
 
 def copy_tree(source, destination):
@@ -165,7 +165,7 @@ def build(args):
         p=ROOT/name
         if not p.is_file(): raise RuntimeError('缺少白名单产品文件：'+name)
         shutil.copy2(p,target/name)
-    for name in ['templates', 'models', 'assets/ranks', 'assets/legends', 'assets/modes']:
+    for name in ['templates', 'models', 'assets/ranks', 'assets/legends', 'assets/modes', 'assets/counters']:
         copy_tree(ROOT/name, target/name)
     (target/'experimental').mkdir(exist_ok=True)
     for name in ['__init__.py','indexed_reader.py','in_memory_hud.py']:
